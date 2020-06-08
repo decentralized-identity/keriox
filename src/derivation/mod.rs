@@ -123,9 +123,14 @@ impl std::fmt::Display for Derivation {
     }
 }
 
+/// Derivation Procedures Module
 pub mod procedures {
     use super::Derivative;
 
+    /// Basic Derivations
+    ///
+    /// Basic prefix derivation is just a public key (2.3.1)
+    ///
     pub mod basic {
         use super::Derivative;
         use ursa::keys::PublicKey;
@@ -135,6 +140,10 @@ pub mod procedures {
         }
     }
 
+    /// Self Signing Derivations
+    ///
+    /// A self signing prefix derivation outputs a signature as its derivative (2.3.5)
+    ///
     pub mod self_signing {
         use super::Derivative;
 
@@ -143,6 +152,12 @@ pub mod procedures {
         }
     }
 
+    /// Self Addressing Derivations
+    ///
+    /// Self-addressing is a digest/hash of some inception data (2.3.2)
+    ///   Multi-sig Self-addressing is a self-addressing where the inception data is the public key info of the multisig set (2.3.3)
+    ///   Delegated Self-addressing uses the Dip event data for the inception data (2.3.4)
+    ///
     pub mod self_addressing {
         use super::Derivative;
         use ursa::hash::{
