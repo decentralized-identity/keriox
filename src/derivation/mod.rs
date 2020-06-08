@@ -1,3 +1,7 @@
+use core::{
+    fmt::{Error, Formatter},
+    str::FromStr,
+};
 use ursa::keys::PublicKey;
 
 // TODO consider how the length info can be encoded in this type, i.e.
@@ -47,5 +51,42 @@ impl Derivation {
             Self::SHA2_512Digest(_) => "0F",
             _ => "",
         }
+    }
+}
+
+impl FromStr for Derivation {
+    type Err = Error;
+    fn from_str(str: &str) -> Result<Self, Self::Err> {
+        match str {
+            "A" => Ok(Derivation::Ed25519PublicKeyNT(|key| key.0.clone())),
+            "B" => Ok(Derivation::X25519PublicKey(|key| key.0.clone())),
+            "C" => Ok(Derivation::Ed25519PublicKey(|key| key.0.clone())),
+            "D" => Ok(Derivation::Blake3_256Digest(|_input| todo!())),
+            "E" => Ok(Derivation::Blake2S256Digest(|_input| todo!())),
+            "F" => Ok(Derivation::Blake2B256Digest(|_input| todo!())),
+            "G" => Ok(Derivation::ECDSAsecp256k1PublicKeyNT(|key| key.0.clone())),
+            "H" => Ok(Derivation::ECDSAsecp256k1PublicKey(|key| key.0.clone())),
+            "I" => Ok(Derivation::SHA3_256Digest(|_input| todo!())),
+            "J" => Ok(Derivation::SHA2_256Digest(|_input| todo!())),
+            "0A" => Ok(Derivation::Ed25519Signature(|_input| todo!())),
+            "0B" => Ok(Derivation::ECDSAsecp256k1Signature(|_input| todo!())),
+            "0C" => Ok(Derivation::Blake3_512Digest(|_input| todo!())),
+            "0D" => Ok(Derivation::SHA3_512Digest(|_input| todo!())),
+            "0E" => Ok(Derivation::Blake2B256Digest(|_input| todo!())),
+            "0F" => Ok(Derivation::SHA2_512Digest(|_input| todo!())),
+            _ => Err(Error),
+        }
+    }
+}
+
+impl std::cmp::PartialEq for Derivation {
+    fn eq(&self, other: &Self) -> bool {
+        self.to_str() == other.to_str()
+    }
+}
+
+impl std::fmt::Display for Derivation {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f, "{}", self.to_str())
     }
 }
