@@ -145,6 +145,12 @@ pub mod procedures {
 
     pub mod self_addressing {
         use super::Derivative;
+        use ursa::hash::{
+            blake2::Blake2,
+            sha2::{Sha256, Sha512},
+            sha3::{Sha3_256, Sha3_512},
+            Digest,
+        };
 
         pub fn blake3_256_digest(input: &[u8]) -> Derivative {
             todo!()
@@ -155,7 +161,7 @@ pub mod procedures {
         }
 
         pub fn blake2b_256_digest(input: &[u8]) -> Derivative {
-            todo!()
+            Blake2::digest(input).to_vec()
         }
 
         pub fn blake3_512_digest(input: &[u8]) -> Derivative {
@@ -167,19 +173,27 @@ pub mod procedures {
         }
 
         pub fn sha3_256_digest(input: &[u8]) -> Derivative {
-            todo!()
+            let mut h = Sha3_256::new();
+            h.input(input);
+            h.result().to_vec()
         }
 
         pub fn sha2_256_digest(input: &[u8]) -> Derivative {
-            todo!()
+            let mut h = Sha256::new();
+            h.input(input);
+            h.result().to_vec()
         }
 
         pub fn sha3_512_digest(input: &[u8]) -> Derivative {
-            todo!()
+            let mut h = Sha3_512::new();
+            h.input(input);
+            h.result().to_vec()
         }
 
         pub fn sha2_512_digest(input: &[u8]) -> Derivative {
-            todo!()
+            let mut h = Sha512::new();
+            h.input(input);
+            h.result().to_vec()
         }
     }
 }
