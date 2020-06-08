@@ -58,22 +58,54 @@ impl FromStr for Derivation {
     type Err = Error;
     fn from_str(str: &str) -> Result<Self, Self::Err> {
         match str {
-            "A" => Ok(Derivation::Ed25519PublicKeyNT(|key| key.0.clone())),
-            "B" => Ok(Derivation::X25519PublicKey(|key| key.0.clone())),
-            "C" => Ok(Derivation::Ed25519PublicKey(|key| key.0.clone())),
-            "D" => Ok(Derivation::Blake3_256Digest(|_input| todo!())),
-            "E" => Ok(Derivation::Blake2S256Digest(|_input| todo!())),
-            "F" => Ok(Derivation::Blake2B256Digest(|_input| todo!())),
-            "G" => Ok(Derivation::ECDSAsecp256k1PublicKeyNT(|key| key.0.clone())),
-            "H" => Ok(Derivation::ECDSAsecp256k1PublicKey(|key| key.0.clone())),
-            "I" => Ok(Derivation::SHA3_256Digest(|_input| todo!())),
-            "J" => Ok(Derivation::SHA2_256Digest(|_input| todo!())),
-            "0A" => Ok(Derivation::Ed25519Signature(|_input| todo!())),
-            "0B" => Ok(Derivation::ECDSAsecp256k1Signature(|_input| todo!())),
-            "0C" => Ok(Derivation::Blake3_512Digest(|_input| todo!())),
-            "0D" => Ok(Derivation::SHA3_512Digest(|_input| todo!())),
-            "0E" => Ok(Derivation::Blake2B256Digest(|_input| todo!())),
-            "0F" => Ok(Derivation::SHA2_512Digest(|_input| todo!())),
+            "A" => Ok(Derivation::Ed25519PublicKeyNT(
+                procedures::basic::basic_key_derivation,
+            )),
+            "B" => Ok(Derivation::X25519PublicKey(
+                procedures::basic::basic_key_derivation,
+            )),
+            "C" => Ok(Derivation::Ed25519PublicKey(
+                procedures::basic::basic_key_derivation,
+            )),
+            "D" => Ok(Derivation::Blake3_256Digest(
+                procedures::self_addressing::blake3_256_digest,
+            )),
+            "E" => Ok(Derivation::Blake2S256Digest(
+                procedures::self_addressing::blake2s_256_digest,
+            )),
+            "F" => Ok(Derivation::Blake2B256Digest(
+                procedures::self_addressing::blake2b_256_digest,
+            )),
+            "G" => Ok(Derivation::ECDSAsecp256k1PublicKeyNT(
+                procedures::basic::basic_key_derivation,
+            )),
+            "H" => Ok(Derivation::ECDSAsecp256k1PublicKey(
+                procedures::basic::basic_key_derivation,
+            )),
+            "I" => Ok(Derivation::SHA3_256Digest(
+                procedures::self_addressing::sha3_256_digest,
+            )),
+            "J" => Ok(Derivation::SHA2_256Digest(
+                procedures::self_addressing::sha2_256_digest,
+            )),
+            "0A" => Ok(Derivation::Ed25519Signature(
+                procedures::self_signing::self_signing_derivation,
+            )),
+            "0B" => Ok(Derivation::ECDSAsecp256k1Signature(
+                procedures::self_signing::self_signing_derivation,
+            )),
+            "0C" => Ok(Derivation::Blake3_512Digest(
+                procedures::self_addressing::blake3_512_digest,
+            )),
+            "0D" => Ok(Derivation::SHA3_512Digest(
+                procedures::self_addressing::sha3_512_digest,
+            )),
+            "0E" => Ok(Derivation::Blake2B256Digest(
+                procedures::self_addressing::blake2b_512_digest,
+            )),
+            "0F" => Ok(Derivation::SHA2_512Digest(
+                procedures::self_addressing::sha2_512_digest,
+            )),
             _ => Err(Error),
         }
     }
@@ -88,5 +120,66 @@ impl std::cmp::PartialEq for Derivation {
 impl std::fmt::Display for Derivation {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         write!(f, "{}", self.to_str())
+    }
+}
+
+pub mod procedures {
+    use super::Derivative;
+
+    pub mod basic {
+        use super::Derivative;
+        use ursa::keys::PublicKey;
+
+        pub fn basic_key_derivation(key: &PublicKey) -> Derivative {
+            key.0.clone()
+        }
+    }
+
+    pub mod self_signing {
+        use super::Derivative;
+
+        pub fn self_signing_derivation(sig: &[u8]) -> Derivative {
+            sig.to_vec()
+        }
+    }
+
+    pub mod self_addressing {
+        use super::Derivative;
+
+        pub fn blake3_256_digest(input: &[u8]) -> Derivative {
+            todo!()
+        }
+
+        pub fn blake2s_256_digest(input: &[u8]) -> Derivative {
+            todo!()
+        }
+
+        pub fn blake2b_256_digest(input: &[u8]) -> Derivative {
+            todo!()
+        }
+
+        pub fn blake3_512_digest(input: &[u8]) -> Derivative {
+            todo!()
+        }
+
+        pub fn blake2b_512_digest(input: &[u8]) -> Derivative {
+            todo!()
+        }
+
+        pub fn sha3_256_digest(input: &[u8]) -> Derivative {
+            todo!()
+        }
+
+        pub fn sha2_256_digest(input: &[u8]) -> Derivative {
+            todo!()
+        }
+
+        pub fn sha3_512_digest(input: &[u8]) -> Derivative {
+            todo!()
+        }
+
+        pub fn sha2_512_digest(input: &[u8]) -> Derivative {
+            todo!()
+        }
     }
 }
