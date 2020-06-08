@@ -123,6 +123,12 @@ impl std::fmt::Display for Derivation {
     }
 }
 
+impl std::fmt::Debug for Derivation {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f, "{}", self.to_str())
+    }
+}
+
 /// Derivation Procedures Module
 pub mod procedures {
     use super::Derivative;
