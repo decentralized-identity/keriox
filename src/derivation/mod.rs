@@ -1,5 +1,5 @@
 use core::{
-    fmt::{Error, Formatter},
+    fmt::{Debug, Display, Error, Formatter},
     str::FromStr,
 };
 use ursa::keys::PublicKey;
@@ -111,19 +111,19 @@ impl FromStr for Derivation {
     }
 }
 
-impl std::cmp::PartialEq for Derivation {
+impl PartialEq for Derivation {
     fn eq(&self, other: &Self) -> bool {
         self.to_str() == other.to_str()
     }
 }
 
-impl std::fmt::Display for Derivation {
+impl Display for Derivation {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         write!(f, "{}", self.to_str())
     }
 }
 
-impl std::fmt::Debug for Derivation {
+impl Debug for Derivation {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         write!(f, "{}", self.to_str())
     }
