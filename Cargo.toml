@@ -12,3 +12,4 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 ursa = { version = "0.3", default-features = false, features = ["portable"]}
 wasm-bindgen = { version = "0.2", features = ["nightly"] }
+base64 = "0.12"
