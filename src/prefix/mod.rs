@@ -20,7 +20,13 @@ impl Display for Prefix {
 impl FromStr for Prefix {
     type Err = Error;
     fn from_str(str: &str) -> Result<Self, Self::Err> {
-        todo!()
+        match parse_padded(str) {
+            Ok((drv, padding_length)) => Ok(Prefix {
+                derivation_code: drv,
+                derivative: decode_config(&str[padding_length..], base64::URL_SAFE).unwrap(), // TODO HACK
+            }),
+            Err(e) => Err(e),
+        }
     }
 }
 
@@ -28,3 +34,15 @@ impl Prefix {
     pub fn to_str(&self) -> String {
         todo!()
     }
+}
+
+fn parse_padded(padded_code: &str) -> Result<(Derivation, usize), Error> {
+    let head = &padded_code[..1];
+
+    match head {
+        "0" => Ok((Derivation::from_str(&padded_code[..2])?, 2)),
+        "1" => Ok((Derivation::from_str(&padded_code[..3])?, 3)),
+        "2" => Ok((Derivation::from_str(&padded_code[..4])?, 4)),
+        _ => Ok((Derivation::from_str(&head)?, 1)),
+    }
+}
