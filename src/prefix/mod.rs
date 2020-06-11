@@ -32,7 +32,13 @@ impl FromStr for Prefix {
 
 impl Prefix {
     pub fn to_str(&self) -> String {
-        todo!()
+        let encoded_derivative = encode_config(&self.derivative, base64::URL_SAFE);
+        let padding = get_prefix_length(&encoded_derivative);
+        [
+            pad_to_length(&self.derivation_code, padding).as_ref(),
+            &encoded_derivative[..encoded_derivative.len() - padding],
+        ]
+        .join("")
     }
 }
 
