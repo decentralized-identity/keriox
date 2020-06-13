@@ -8,6 +8,16 @@ use ursa::keys::PublicKey;
 // [u8; 32] | [u8; 64]
 pub type Derivative = Vec<u8>;
 
+/// Derivation Types
+///
+/// Derivation represents the enumerated set of derivation procedures defined in section 14 of the paper.
+/// Derivations may take varying types of data as input (for now, TODO consider a 'Derivable' trait), but all return a Derivative.
+///
+/// # Examples
+/// ```
+/// use crate::keriox::derivation::Derivation;
+/// let drv: Derivation = "A".parse().unwrap();
+/// ````
 pub enum Derivation {
     // length 1 derivations
     Ed25519PublicKeyNT(fn(key: &PublicKey) -> Derivative),
@@ -30,6 +40,9 @@ pub enum Derivation {
     SHA2_512Digest(fn(input: &[u8]) -> Derivative),
 }
 
+/// Derivation Codes
+///
+/// String codes for referencing derivation procedures, as defined in tables 14.2, 14.3 and 14.5
 impl Derivation {
     pub fn to_str(&self) -> &str {
         match self {
@@ -49,7 +62,6 @@ impl Derivation {
             Self::SHA3_512Digest(_) => "0D",
             Self::Blake2B512Digest(_) => "0E",
             Self::SHA2_512Digest(_) => "0F",
-            _ => "",
         }
     }
 }
