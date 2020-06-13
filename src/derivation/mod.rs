@@ -70,15 +70,15 @@ impl FromStr for Derivation {
     type Err = Error;
     fn from_str(str: &str) -> Result<Self, Self::Err> {
         match str {
-            "A" => Ok(Derivation::Ed25519PublicKeyNT(
-                procedures::basic::basic_key_derivation,
-            )),
-            "B" => Ok(Derivation::X25519PublicKey(
-                procedures::basic::basic_key_derivation,
-            )),
-            "C" => Ok(Derivation::Ed25519PublicKey(
-                procedures::basic::basic_key_derivation,
-            )),
+            "A" => Ok(Derivation::Ed25519PublicKeyNT(|key: &PublicKey| {
+                procedures::basic::basic_key_derivation(&key.0)
+            })),
+            "B" => Ok(Derivation::X25519PublicKey(|key: &PublicKey| {
+                procedures::basic::basic_key_derivation(&key.0)
+            })),
+            "C" => Ok(Derivation::Ed25519PublicKey(|key: &PublicKey| {
+                procedures::basic::basic_key_derivation(&key.0)
+            })),
             "D" => Ok(Derivation::Blake3_256Digest(
                 procedures::self_addressing::blake3_256_digest,
             )),
@@ -88,12 +88,12 @@ impl FromStr for Derivation {
             "F" => Ok(Derivation::Blake2B256Digest(
                 procedures::self_addressing::blake2b_256_digest,
             )),
-            "G" => Ok(Derivation::ECDSAsecp256k1PublicKeyNT(
-                procedures::basic::basic_key_derivation,
-            )),
-            "H" => Ok(Derivation::ECDSAsecp256k1PublicKey(
-                procedures::basic::basic_key_derivation,
-            )),
+            "G" => Ok(Derivation::ECDSAsecp256k1PublicKeyNT(|key: &PublicKey| {
+                procedures::basic::basic_key_derivation(&key.0)
+            })),
+            "H" => Ok(Derivation::ECDSAsecp256k1PublicKey(|key: &PublicKey| {
+                procedures::basic::basic_key_derivation(&key.0)
+            })),
             "I" => Ok(Derivation::SHA3_256Digest(
                 procedures::self_addressing::sha3_256_digest,
             )),
@@ -151,10 +151,11 @@ pub mod procedures {
     ///
     pub mod basic {
         use super::Derivative;
-        use ursa::keys::PublicKey;
+        use wasm_bindgen::prelude::*;
 
-        pub fn basic_key_derivation(key: &PublicKey) -> Derivative {
-            key.0.clone()
+        #[wasm_bindgen]
+        pub fn basic_key_derivation(key: &[u8]) -> Derivative {
+            key.to_vec()
         }
     }
 
@@ -164,7 +165,9 @@ pub mod procedures {
     ///
     pub mod self_signing {
         use super::Derivative;
+        use wasm_bindgen::prelude::*;
 
+        #[wasm_bindgen]
         pub fn self_signing_derivation(sig: &[u8]) -> Derivative {
             sig.to_vec()
         }
@@ -184,45 +187,55 @@ pub mod procedures {
             sha3::{Sha3_256, Sha3_512},
             Digest,
         };
+        use wasm_bindgen::prelude::*;
 
+        #[wasm_bindgen]
         pub fn blake3_256_digest(input: &[u8]) -> Derivative {
             todo!()
         }
 
+        #[wasm_bindgen]
         pub fn blake2s_256_digest(input: &[u8]) -> Derivative {
             todo!()
         }
 
+        #[wasm_bindgen]
         pub fn blake2b_256_digest(input: &[u8]) -> Derivative {
             Blake2::digest(input).to_vec()
         }
 
+        #[wasm_bindgen]
         pub fn blake3_512_digest(input: &[u8]) -> Derivative {
             todo!()
         }
 
+        #[wasm_bindgen]
         pub fn blake2b_512_digest(input: &[u8]) -> Derivative {
             todo!()
         }
 
+        #[wasm_bindgen]
         pub fn sha3_256_digest(input: &[u8]) -> Derivative {
             let mut h = Sha3_256::new();
             h.input(input);
             h.result().to_vec()
         }
 
+        #[wasm_bindgen]
         pub fn sha2_256_digest(input: &[u8]) -> Derivative {
             let mut h = Sha256::new();
             h.input(input);
             h.result().to_vec()
         }
 
+        #[wasm_bindgen]
         pub fn sha3_512_digest(input: &[u8]) -> Derivative {
             let mut h = Sha3_512::new();
             h.input(input);
             h.result().to_vec()
         }
 
+        #[wasm_bindgen]
         pub fn sha2_512_digest(input: &[u8]) -> Derivative {
             let mut h = Sha512::new();
             h.input(input);
