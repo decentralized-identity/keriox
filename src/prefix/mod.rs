@@ -19,6 +19,8 @@ impl Display for Prefix {
 
 impl FromStr for Prefix {
     type Err = Error;
+
+    // TODO enforce derivative length assumptions for each derivation procedure
     fn from_str(str: &str) -> Result<Self, Self::Err> {
         match parse_padded(str) {
             Ok((drv, padding_length)) => Ok(Prefix {
@@ -44,13 +46,11 @@ impl Prefix {
 }
 
 fn parse_padded(padded_code: &str) -> Result<(Derivation, usize), Error> {
-    let head = &padded_code[..1];
-
-    match head {
+    match &padded_code[..1] {
         "0" => Ok((Derivation::from_str(&padded_code[..2])?, 2)),
         "1" => Ok((Derivation::from_str(&padded_code[..3])?, 3)),
         "2" => Ok((Derivation::from_str(&padded_code[..4])?, 4)),
-        _ => Ok((Derivation::from_str(&head)?, 1)),
+        _ => Ok((Derivation::from_str(&padded_code[..1])?, 1)),
     }
 }
 
@@ -60,4 +60,37 @@ fn parse_padded(padded_code: &str) -> Result<(Derivation, usize), Error> {
 
 pub fn get_prefix_length(value: &str) -> usize {
     return value.matches('=').count();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn simple_deserialise() -> Result<(), Error> {
+        let pref: Prefix = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".parse()?;
+
+        assert_eq!(pref.derivation_code, Derivation::from_str("A")?);
+
+        assert_eq!(pref.derivative.len(), 32);
+
+        assert_eq!(pref.derivative, vec![0u8; 32]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn simple_serialise() -> Result<(), Error> {
+        let pref = Prefix {
+            derivation_code: Derivation::from_str("A")?,
+            derivative: vec![0u8; 32],
+        };
+
+        assert_eq!(
+            pref.to_str(),
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        );
+
+        Ok(())
+    }
 }
