@@ -4,11 +4,28 @@ use core::{
     fmt::{Display, Error, Formatter},
     str::FromStr,
 };
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+/// Prefix
+///
+/// A Prefix provides a piece of qualified cryptographic material.
+/// This is the raw material and a code describing how it was generated.
 #[derive(Debug, PartialEq)]
 pub struct Prefix {
     pub derivation_code: Derivation,
     pub derivative: Derivative,
+}
+
+impl Prefix {
+    pub fn to_str(&self) -> String {
+        let encoded_derivative = encode_config(&self.derivative, base64::URL_SAFE);
+        let padding = get_prefix_length(&encoded_derivative);
+        [
+            self.derivation_code.to_str(),
+            &encoded_derivative[..encoded_derivative.len() - padding],
+        ]
+        .join("")
+    }
 }
 
 impl Display for Prefix {
@@ -33,15 +50,26 @@ impl FromStr for Prefix {
     }
 }
 
-impl Prefix {
-    pub fn to_str(&self) -> String {
-        let encoded_derivative = encode_config(&self.derivative, base64::URL_SAFE);
-        let padding = get_prefix_length(&encoded_derivative);
-        [
-            self.derivation_code.to_str(),
-            &encoded_derivative[..encoded_derivative.len() - padding],
-        ]
-        .join("")
+/// Serde compatible Serialize
+impl Serialize for Prefix {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_str())
+    }
+}
+
+/// Serde compatible Deerialize
+impl<'de> Deserialize<'de> for Prefix {
+    fn deserialize<D>(deserializer: D) -> Result<Prefix, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        // TODO change from .unwrap()
+        let prefix = Prefix::from_str(&s).unwrap();
+        Ok(prefix)
     }
 }
 
