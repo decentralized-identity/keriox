@@ -95,7 +95,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn simple_deserialise() -> Result<(), Error> {
+    fn simple_deserialize() -> Result<(), Error> {
         let pref: Prefix = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".parse()?;
 
         assert_eq!(pref.derivation_code, Derivation::from_str("A")?);
@@ -108,7 +108,7 @@ mod tests {
     }
 
     #[test]
-    fn simple_serialise() -> Result<(), Error> {
+    fn simple_serialize() -> Result<(), Error> {
         let pref = Prefix {
             derivation_code: Derivation::from_str("A")?,
             derivative: vec![0u8; 32],
