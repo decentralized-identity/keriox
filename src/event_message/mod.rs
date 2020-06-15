@@ -1,4 +1,5 @@
-use crate::events::Event;
+use crate::event::Event;
+use crate::prefix::Prefix;
 use serde::{Deserialize, Serialize};
 
 /// Event Message

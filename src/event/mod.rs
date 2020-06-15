@@ -23,6 +23,8 @@ pub struct Event {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(tag = "ilk")]
+#[serde(rename_all = "lowercase")]
 pub enum EventData {
     Icp(InceptionEvent),
     Rot(RotationEvent),
