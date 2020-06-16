@@ -1,14 +1,16 @@
+pub mod delegated;
 pub mod signatory;
+
 use crate::event::Event;
 use crate::event_message::EventMessage;
 use crate::prefix::Prefix;
+use delegated::DelegatedIdentifierState;
 use signatory::Signatory;
 use ursa::CryptoError;
 
 /// Identifier State
 ///
 /// represents the accumulated state after applying events, based on section 13 of the paper
-/// TODO implement the delegated version
 #[derive(Default, PartialEq)]
 pub struct IdentifierState {
     pub prefix: Prefix,
@@ -16,6 +18,7 @@ pub struct IdentifierState {
     pub last: Prefix,
     pub current: Signatory,
     pub next: Signatory, // Prefix??
+    pub delegated_keys: Vec<DelegatedIdentifierState>,
     pub tally: u64,
     pub witnesses: Vec<Prefix>,
 }

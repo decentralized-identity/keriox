@@ -73,6 +73,15 @@ impl<'de> Deserialize<'de> for Prefix {
     }
 }
 
+impl Default for Prefix {
+    fn default() -> Self {
+        Self {
+            derivation_code: "A".parse().unwrap(),
+            derivative: vec![],
+        }
+    }
+}
+
 fn parse_padded(padded_code: &str) -> Result<(Derivation, usize), Error> {
     match &padded_code[..1] {
         "0" => Ok((Derivation::from_str(&padded_code[..2])?, 2)),
