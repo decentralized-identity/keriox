@@ -1,6 +1,8 @@
+pub mod signatory;
 use crate::event::Event;
 use crate::event_message::EventMessage;
 use crate::prefix::Prefix;
+use signatory::Signatory;
 use ursa::CryptoError;
 
 /// Identifier State
@@ -12,10 +14,8 @@ pub struct IdentifierState {
     pub prefix: Prefix,
     pub sn: u64,
     pub last: Prefix,
-    pub current_threshold: u64,
-    pub current_signers: Vec<Prefix>,
-    pub next_threshold: u64,
-    pub next_signers: Vec<Prefix>,
+    pub current: Signatory,
+    pub next: Signatory, // Prefix??
     pub tally: u64,
     pub witnesses: Vec<Prefix>,
 }
