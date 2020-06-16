@@ -34,6 +34,7 @@ impl IdentifierState {
     /// Apply
     ///
     /// validates and applies the semantic rules of the event to the event state
+    /// TODO error types for semantic errors
     fn apply(&self, event: Event) -> Result<Self, CryptoError> {
         todo!()
     }

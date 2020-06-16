@@ -18,9 +18,9 @@ pub struct WitnessConfig {
     #[serde(rename(serialize = "toad", deserialize = "toad"))]
     pub tally: u64,
 
-    #[serde(rename(serialize = "wits", deserialize = "wits"))]
+    #[serde(rename(serialize = "adds", deserialize = "adds"))]
     pub graft: Vec<Prefix>,
 
-    #[serde(rename(serialize = "wits", deserialize = "wits"))]
+    #[serde(rename(serialize = "cuts", deserialize = "cuts"))]
     pub prune: Vec<Prefix>,
 }
