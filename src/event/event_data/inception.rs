@@ -1,4 +1,5 @@
 use super::super::sections::{KeyConfig, WitnessConfig};
+use super::EventSemantics;
 use serde::{Deserialize, Serialize};
 
 /// Inception Event
@@ -12,3 +13,5 @@ pub struct InceptionEvent {
     #[serde(flatten)]
     pub witness_config: WitnessConfig,
 }
+
+impl EventSemantics for InceptionEvent {}

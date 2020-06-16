@@ -1,4 +1,5 @@
 use super::super::sections::{KeyConfig, WitnessConfig};
+use super::EventSemantics;
 use serde::{Deserialize, Serialize};
 
 /// Rotation Event
@@ -12,3 +13,5 @@ pub struct RotationEvent {
     #[serde(flatten)]
     pub witness_config: WitnessConfig,
 }
+
+impl EventSemantics for RotationEvent {}

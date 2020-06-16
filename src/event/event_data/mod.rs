@@ -24,3 +24,22 @@ pub enum EventData {
     Drt(DelegatedRotationEvent),
     Rct(EventReceipt),
 }
+
+pub trait EventSemantics {
+    fn apply_to(&self, state: AccumulatedEventState) -> Result<AccumulatedEventState, &str> {
+        Ok(state)
+    }
+}
+
+impl EventSemantics for EventData {
+    fn apply_to(&self, state: AccumulatedEventState) -> Result<AccumulatedEventState, &str> {
+        match self {
+            Self::Icp(e) => e.apply_to(state),
+            Self::Rot(e) => e.apply_to(state),
+            Self::Ixn(e) => e.apply_to(state),
+            Self::Dip(e) => e.apply_to(state),
+            Self::Drt(e) => e.apply_to(state),
+            Self::Rct(e) => e.apply_to(state),
+        }
+    }
+}
