@@ -3,12 +3,12 @@ use crate::event_message::EventMessage;
 use crate::prefix::Prefix;
 use ursa::CryptoError;
 
-/// Accumulated Event State
+/// Identifier State
 ///
 /// represents the accumulated state after applying events, based on section 13 of the paper
 /// TODO implement the delegated version
 #[derive(Default, PartialEq)]
-pub struct AccumulatedEventState {
+pub struct IdentifierState {
     pub prefix: Prefix,
     pub sn: u64,
     pub last: Prefix,
@@ -20,7 +20,7 @@ pub struct AccumulatedEventState {
     pub witnesses: Vec<Prefix>,
 }
 
-impl AccumulatedEventState {
+impl IdentifierState {
     /// Verify
     ///
     /// ensures that the signatures of the event message are correct

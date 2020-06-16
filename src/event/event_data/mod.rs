@@ -4,6 +4,7 @@ pub mod interaction;
 pub mod receipt;
 pub mod rotation;
 
+use crate::state::IdentifierState;
 use serde::{Deserialize, Serialize};
 
 use self::{
@@ -26,13 +27,13 @@ pub enum EventData {
 }
 
 pub trait EventSemantics {
-    fn apply_to(&self, state: AccumulatedEventState) -> Result<AccumulatedEventState, &str> {
+    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, &str> {
         Ok(state)
     }
 }
 
 impl EventSemantics for EventData {
-    fn apply_to(&self, state: AccumulatedEventState) -> Result<AccumulatedEventState, &str> {
+    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, &str> {
         match self {
             Self::Icp(e) => e.apply_to(state),
             Self::Rot(e) => e.apply_to(state),
