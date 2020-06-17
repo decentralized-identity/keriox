@@ -2,6 +2,15 @@ use crate::event::Event;
 use crate::prefix::Prefix;
 use serde::{Deserialize, Serialize};
 
+/// Versioned Event Message
+///
+/// A VersionedEventMessage represents any signed message involved in any version of the KERI protocol
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "vs")]
+pub enum VersionedEventMessage {
+    V0(EventMessage),
+}
+
 /// Event Message
 ///
 /// An EventMessage represents any signed message involved in the KERI protocol
