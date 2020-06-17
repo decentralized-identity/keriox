@@ -4,7 +4,6 @@ pub mod interaction;
 pub mod receipt;
 pub mod rotation;
 
-use crate::state::AccumulatedEventState;
 use serde::{Deserialize, Serialize};
 
 use self::{
