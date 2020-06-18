@@ -4,6 +4,7 @@ pub mod interaction;
 pub mod receipt;
 pub mod rotation;
 
+use crate::error::Error;
 use crate::state::IdentifierState;
 use serde::{Deserialize, Serialize};
 
@@ -27,13 +28,13 @@ pub enum EventData {
 }
 
 pub trait EventSemantics {
-    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, &str> {
+    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         Ok(state)
     }
 }
 
 impl EventSemantics for EventData {
-    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, &str> {
+    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         match self {
             Self::Icp(e) => e.apply_to(state),
             Self::Rot(e) => e.apply_to(state),

@@ -6,6 +6,7 @@ pub mod sections;
 
 use self::event_data::EventData;
 use self::event_data::EventSemantics;
+use crate::error::Error;
 
 #[derive(Serialize, Deserialize)]
 pub struct Event {
@@ -20,12 +21,17 @@ pub struct Event {
 }
 
 impl EventSemantics for Event {
-    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, &str> {
+    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         // prefix must equal. sn must be incremented unless it is 0 (default state, should remain 0 after icp)
-        if state.prefix != self.prefix
-            || (self.sn != state.sn + 1 && !(self.sn == 0 && state.sn == 0))
-        {
-            return Err("dang");
+        if state.prefix != self.prefix {
+            return Err(Error::SemanticError("Prefix does not match".to_string()));
+        }
+
+        if match self.event_data {
+            EventData::Icp(_) => self.sn != 0 || self.sn != state.sn,
+            _ => self.sn != state.sn + 1,
+        } {
+            return Err(Error::SemanticError("SN is not correct".to_string()));
         }
 
         Ok(IdentifierState {

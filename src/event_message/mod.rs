@@ -1,3 +1,4 @@
+use crate::error::Error;
 use crate::event::{event_data::EventSemantics, Event};
 use crate::prefix::Prefix;
 use crate::state::IdentifierState;
@@ -31,13 +32,13 @@ pub struct EventMessage {
 }
 
 impl EventSemantics for EventMessage {
-    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, &str> {
+    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         self.event.apply_to(state)
     }
 }
 
 impl EventSemantics for VersionedEventMessage {
-    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, &str> {
+    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         match self {
             Self::V0(e) => e.apply_to(state),
         }
