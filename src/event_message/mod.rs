@@ -1,5 +1,6 @@
-use crate::event::Event;
+use crate::event::{event_data::EventSemantics, Event};
 use crate::prefix::Prefix;
+use crate::state::IdentifierState;
 use serde::{Deserialize, Serialize};
 
 /// Versioned Event Message
@@ -27,4 +28,18 @@ pub struct EventMessage {
     /// TODO in the recommended JSON encoding, the signatures are appended to the json body.
     #[serde(skip_serializing)]
     pub signatures: Vec<Prefix>,
+}
+
+impl EventSemantics for EventMessage {
+    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, &str> {
+        self.event.apply_to(state)
+    }
+}
+
+impl EventSemantics for VersionedEventMessage {
+    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, &str> {
+        match self {
+            Self::V0(e) => e.apply_to(state),
+        }
+    }
 }

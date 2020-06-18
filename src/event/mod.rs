@@ -1,19 +1,38 @@
 use crate::prefix::Prefix;
+use crate::state::IdentifierState;
 use serde::{Deserialize, Serialize};
 pub mod event_data;
 pub mod sections;
 
 use self::event_data::EventData;
+use self::event_data::EventSemantics;
 
 #[derive(Serialize, Deserialize)]
 pub struct Event {
     #[serde(rename(serialize = "id", deserialize = "id"))]
     pub prefix: Prefix,
 
+    // TODO a backhash/digest of previous message?
     pub sn: u64,
 
     #[serde(flatten)]
     pub event_data: EventData,
+}
+
+impl EventSemantics for Event {
+    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, &str> {
+        // prefix must equal. sn must be incremented unless it is 0 (default state, should remain 0 after icp)
+        if state.prefix != self.prefix
+            || (self.sn != state.sn + 1 && !(self.sn == 0 && state.sn == 0))
+        {
+            return Err("dang");
+        }
+
+        Ok(IdentifierState {
+            sn: self.sn,
+            ..self.event_data.apply_to(state)?
+        })
+    }
 }
 
 #[cfg(test)]

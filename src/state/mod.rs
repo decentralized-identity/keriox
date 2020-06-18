@@ -1,6 +1,7 @@
 pub mod delegated;
 pub mod signatory;
 
+use crate::event::event_data::EventSemantics;
 use crate::event::Event;
 use crate::event_message::EventMessage;
 use crate::prefix::Prefix;
@@ -35,7 +36,8 @@ impl IdentifierState {
     ///
     /// validates and applies the semantic rules of the event to the event state
     /// TODO error types for semantic errors
-    fn apply(&self, event: Event) -> Result<Self, CryptoError> {
+    fn apply<T: EventSemantics>(&self, event: T) -> Result<Self, CryptoError> {
+        // event.apply_to(self)
         todo!()
     }
 
