@@ -1,3 +1,4 @@
+use crate::error::Error;
 use serde::{ser, Serialize};
 use std::fmt;
 
@@ -6,24 +7,9 @@ pub struct Serializer {
     output: String,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Error {
-    message: String,
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.message)
-    }
-}
-
-impl std::error::Error for Error {}
-
 impl ser::Error for Error {
     fn custom<T: fmt::Display>(msg: T) -> Self {
-        Error {
-            message: msg.to_string(),
-        }
+        Error::SerializationError(msg.to_string())
     }
 }
 
