@@ -1,13 +1,11 @@
 pub mod delegated;
 pub mod signatory;
 
-use crate::event::event_data::EventSemantics;
-use crate::event::Event;
+use crate::error::Error;
 use crate::event_message::EventMessage;
 use crate::prefix::Prefix;
 use delegated::DelegatedIdentifierState;
 use signatory::Signatory;
-use ursa::CryptoError;
 
 /// Identifier State
 ///
@@ -35,10 +33,8 @@ impl IdentifierState {
     /// Apply
     ///
     /// validates and applies the semantic rules of the event to the event state
-    /// TODO error types for semantic errors
-    fn apply<T: EventSemantics>(&self, event: T) -> Result<Self, CryptoError> {
-        // event.apply_to(self)
-        todo!()
+    fn apply<T: EventSemantics>(self, event: &T) -> Result<Self, Error> {
+        event.apply_to(self)
     }
 
     /// Verify and Apply
@@ -47,5 +43,11 @@ impl IdentifierState {
     pub fn verify_and_apply(&self, event_message: EventMessage) -> Result<Self, CryptoError> {
         self.verify(event_message)
             .and_then(|event| self.apply(event))
+    }
+}
+
+pub trait EventSemantics {
+    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
+        Ok(state)
     }
 }

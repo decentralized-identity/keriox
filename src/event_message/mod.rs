@@ -1,7 +1,8 @@
 use crate::error::Error;
-use crate::event::{event_data::EventSemantics, Event};
+use crate::event::Event;
 use crate::prefix::Prefix;
-use crate::state::IdentifierState;
+use crate::state::Verifiable;
+use crate::state::{EventSemantics, IdentifierState};
 use serde::{Deserialize, Serialize};
 
 /// Versioned Event Message
@@ -42,5 +43,11 @@ impl EventSemantics for VersionedEventMessage {
         match self {
             Self::V0(e) => e.apply_to(state),
         }
+    }
+}
+
+impl Verifiable for VersionedEventMessage {
+    fn verify_against(&self, state: &IdentifierState) -> Result<(), Error> {
+        Ok(())
     }
 }

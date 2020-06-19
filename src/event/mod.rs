@@ -5,8 +5,8 @@ pub mod event_data;
 pub mod sections;
 
 use self::event_data::EventData;
-use self::event_data::EventSemantics;
 use crate::error::Error;
+use crate::state::EventSemantics;
 
 #[derive(Serialize, Deserialize)]
 pub struct Event {

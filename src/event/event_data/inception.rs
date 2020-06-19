@@ -1,5 +1,5 @@
 use super::super::sections::{InceptionWitnessConfig, KeyConfig};
-use super::EventSemantics;
+use crate::state::EventSemantics;
 use crate::error::Error;
 use crate::state::signatory::Signatory;
 use crate::state::IdentifierState;

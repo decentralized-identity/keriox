@@ -5,7 +5,7 @@ pub mod receipt;
 pub mod rotation;
 
 use crate::error::Error;
-use crate::state::IdentifierState;
+use crate::state::{EventSemantics, IdentifierState};
 use serde::{Deserialize, Serialize};
 
 use self::{
@@ -25,12 +25,6 @@ pub enum EventData {
     Dip(DelegatedInceptionEvent),
     Drt(DelegatedRotationEvent),
     Rct(EventReceipt),
-}
-
-pub trait EventSemantics {
-    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
-        Ok(state)
-    }
 }
 
 impl EventSemantics for EventData {

@@ -1,5 +1,5 @@
 use super::super::sections::{KeyConfig, WitnessConfig};
-use super::EventSemantics;
+use crate::state::EventSemantics;
 use serde::{Deserialize, Serialize};
 
 /// Rotation Event
