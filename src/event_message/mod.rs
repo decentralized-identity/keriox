@@ -11,7 +11,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "vs")]
 pub enum VersionedEventMessage {
-    V0(EventMessage),
+    #[serde(rename = "KERI_0.1")]
+    V0_0(EventMessage),
 }
 
 /// Event Message
@@ -22,8 +23,8 @@ pub struct EventMessage {
     #[serde(flatten)]
     pub event: Event,
 
-    #[serde(rename(serialize = "sigs", deserialize = "sigs"))]
-    pub sig_config: Vec<u64>,
+    #[serde(rename = "sigs")]
+    pub sig_config: Vec<usize>,
 
     /// Appended Signatures
     ///
@@ -41,7 +42,7 @@ impl EventSemantics for EventMessage {
 impl EventSemantics for VersionedEventMessage {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         match self {
-            Self::V0(e) => e.apply_to(state),
+            Self::V0_0(e) => e.apply_to(state),
         }
     }
 }
