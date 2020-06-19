@@ -26,7 +26,7 @@ impl IdentifierState {
     /// Verify
     ///
     /// ensures that the signatures of the event message are correct
-    pub fn verify(&self, event_message: EventMessage) -> Result<Event, CryptoError> {
+    pub fn verify<T: Verifiable>(&self, event_message: &T) -> Result<T, Error> {
         todo!()
     }
 
@@ -40,9 +40,13 @@ impl IdentifierState {
     /// Verify and Apply
     ///
     /// Verifies the message and applies the event
-    pub fn verify_and_apply(&self, event_message: EventMessage) -> Result<Self, CryptoError> {
-        self.verify(event_message)
-            .and_then(|event| self.apply(event))
+    pub fn verify_and_apply<T: EventSemantics + Verifiable>(
+        self,
+        event_message: &T,
+    ) -> Result<Self, Error> {
+        let next = self.apply(event_message)?;
+        next.verify(event_message)?;
+        Ok(next)
     }
 }
 
@@ -50,4 +54,8 @@ pub trait EventSemantics {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         Ok(state)
     }
+}
+
+pub trait Verifiable {
+    fn verify_against(&self, state: &IdentifierState) -> Result<(), Error>;
 }
