@@ -22,20 +22,26 @@ pub struct Event {
 
 impl EventSemantics for Event {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
-        // prefix must equal. sn must be incremented unless it is 0 (default state, should remain 0 after icp)
-        if state.prefix != self.prefix {
-            return Err(Error::SemanticError("Prefix does not match".to_string()));
-        }
-
-        if match self.event_data {
-            EventData::Icp(_) => self.sn != 0 || self.sn != state.sn,
-            _ => self.sn != state.sn + 1,
-        } {
-            return Err(Error::SemanticError("SN is not correct".to_string()));
-        }
+        match self.event_data {
+            EventData::Icp(_) => {
+                // ICP events require the state to be uninitialized
+                if state != IdentifierState::default() || self.sn != 0 {
+                    return Err(Error::SemanticError("SN is not correct".to_string()));
+                }
+            }
+            _ => {
+                // prefix must equal. sn must be incremented
+                if self.prefix != state.prefix {
+                    return Err(Error::SemanticError("Prefix does not match".to_string()));
+                } else if self.sn != state.sn + 1 {
+                    return Err(Error::SemanticError("SN is not correct".to_string()));
+                }
+            }
+        };
 
         Ok(IdentifierState {
             sn: self.sn,
+            prefix: self.prefix.clone(),
             ..self.event_data.apply_to(state)?
         })
     }
@@ -61,13 +67,12 @@ mod tests {
   ],
   \"next\": \"EWoNZsa88VrTkep6HQt27fTh-4HA8tr54sHON1vWl6FE\",
   \"toad\": 2,
-  \"adds\":
+  \"wits\":
   [
     \"AVrTkep6H-Qt27fThWoNZsa884HA8tr54sHON1vWl6FE\",
     \"AHON1vWl6FEQt27fThWoNZsa88VrTkep6H-4HA8tr54s\",
     \"AThWoNZsa88VrTkeQt27fp6H-4HA8tr54sHON1vWl6FE\"
-  ],
-  \"cuts\": []
+  ]
 }";
 
         let event: Event = serde_json::from_str(event_str)?;

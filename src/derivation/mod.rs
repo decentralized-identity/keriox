@@ -18,6 +18,7 @@ pub type Derivative = Vec<u8>;
 /// use crate::keriox::derivation::Derivation;
 /// let drv: Derivation = "A".parse().unwrap();
 /// ````
+#[derive(Clone, Copy)]
 pub enum Derivation {
     // length 1 derivations
     Ed25519PublicKeyNT(fn(key: &PublicKey) -> Derivative),

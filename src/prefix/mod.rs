@@ -10,7 +10,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 ///
 /// A Prefix provides a piece of qualified cryptographic material.
 /// This is the raw material and a code describing how it was generated.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Prefix {
     pub derivation_code: Derivation,
     pub derivative: Derivative,

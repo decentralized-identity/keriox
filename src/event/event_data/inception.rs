@@ -1,5 +1,8 @@
-use super::super::sections::{KeyConfig, WitnessConfig};
+use super::super::sections::{InceptionWitnessConfig, KeyConfig};
 use super::EventSemantics;
+use crate::error::Error;
+use crate::state::signatory::Signatory;
+use crate::state::IdentifierState;
 use serde::{Deserialize, Serialize};
 
 /// Inception Event
@@ -11,7 +14,20 @@ pub struct InceptionEvent {
     pub key_config: KeyConfig,
 
     #[serde(flatten)]
-    pub witness_config: WitnessConfig,
+    pub witness_config: InceptionWitnessConfig,
 }
 
-impl EventSemantics for InceptionEvent {}
+impl EventSemantics for InceptionEvent {
+    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
+        Ok(IdentifierState {
+            current: Signatory {
+                threshold: self.key_config.threshold,
+                signers: self.key_config.public_keys.clone(),
+            },
+            next: self.key_config.threshold_key_digest.clone(),
+            witnesses: self.witness_config.initial_witnesses.clone(),
+            tally: self.witness_config.tally,
+            ..state
+        })
+    }
+}

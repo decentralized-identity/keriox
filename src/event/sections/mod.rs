@@ -24,3 +24,12 @@ pub struct WitnessConfig {
     #[serde(rename(serialize = "cuts", deserialize = "cuts"))]
     pub prune: Vec<Prefix>,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct InceptionWitnessConfig {
+    #[serde(rename = "toad")]
+    pub tally: u64,
+
+    #[serde(rename = "wits")]
+    pub initial_witnesses: Vec<Prefix>,
+}
