@@ -1,4 +1,5 @@
 use thiserror::Error;
+use ursa::CryptoError;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -7,4 +8,7 @@ pub enum Error {
 
     #[error("Error while applying event: {0}")]
     SemanticError(String),
+
+    #[error("validation error")]
+    CryptoError(CryptoError),
 }
