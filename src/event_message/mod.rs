@@ -3,6 +3,7 @@ use crate::event::Event;
 use crate::prefix::Prefix;
 use crate::state::Verifiable;
 use crate::state::{EventSemantics, IdentifierState};
+use crate::util::dfs_serializer::to_string;
 use serde::{Deserialize, Serialize};
 
 /// Versioned Event Message
@@ -48,7 +49,20 @@ impl EventSemantics for VersionedEventMessage {
 }
 
 impl Verifiable for VersionedEventMessage {
-    fn verify_against(&self, state: &IdentifierState) -> Result<(), Error> {
-        Ok(())
+    fn verify_against(&self, state: &IdentifierState) -> Result<bool, Error> {
+        let serialized_data_extract = to_string(self);
+
+        // extract relevant keys from state
+        Ok(match self {
+            Self::V0_0(e) => e
+                .sig_config
+                .iter()
+                // get the signing keys indexed by event sig_config
+                .map(|&index| &state.current.signers[index])
+                // match them with the signatures
+                .zip(&e.signatures)
+                // check that each is valid
+                .fold(true, |acc, (key, sig)| acc), // && key.verify(serialized_data_extract, sig)?)
+        })
     }
 }

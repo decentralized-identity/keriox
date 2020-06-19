@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug)]
 pub struct KeyConfig {
     #[serde(rename = "sith")]
-    pub threshold: u64,
+    pub threshold: usize,
 
     #[serde(rename = "keys")]
     pub public_keys: Vec<Prefix>,
@@ -16,7 +16,7 @@ pub struct KeyConfig {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WitnessConfig {
     #[serde(rename = "toad")]
-    pub tally: u64,
+    pub tally: usize,
 
     #[serde(rename = "adds")]
     pub graft: Vec<Prefix>,
@@ -28,7 +28,7 @@ pub struct WitnessConfig {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct InceptionWitnessConfig {
     #[serde(rename = "toad")]
-    pub tally: u64,
+    pub tally: usize,
 
     #[serde(rename = "wits")]
     pub initial_witnesses: Vec<Prefix>,

@@ -2,7 +2,6 @@ pub mod delegated;
 pub mod signatory;
 
 use crate::error::Error;
-use crate::event_message::EventMessage;
 use crate::prefix::Prefix;
 use delegated::DelegatedIdentifierState;
 use signatory::Signatory;
@@ -18,7 +17,7 @@ pub struct IdentifierState {
     pub current: Signatory,
     pub next: Prefix,
     pub delegated_keys: Vec<DelegatedIdentifierState>,
-    pub tally: u64,
+    pub tally: usize,
     pub witnesses: Vec<Prefix>,
 }
 
@@ -26,8 +25,8 @@ impl IdentifierState {
     /// Verify
     ///
     /// ensures that the signatures of the event message are correct
-    pub fn verify<T: Verifiable>(&self, event_message: &T) -> Result<T, Error> {
-        todo!()
+    pub fn verify<T: Verifiable>(&self, message: &T) -> Result<bool, Error> {
+        message.verify_against(self)
     }
 
     /// Apply
@@ -40,22 +39,34 @@ impl IdentifierState {
     /// Verify and Apply
     ///
     /// Verifies the message and applies the event
+    /// NOTE that, for many events, the event must be applied semantically before the state is able
+    /// to verify the message (e.g. rotation events), consuming the state.
+    /// this could be optimised later perhaps.
     pub fn verify_and_apply<T: EventSemantics + Verifiable>(
         self,
         event_message: &T,
     ) -> Result<Self, Error> {
         let next = self.apply(event_message)?;
-        next.verify(event_message)?;
-        Ok(next)
+        if next.verify(event_message)? {
+            Ok(next)
+        } else {
+            Err(Error::SemanticError("Verification Failure".to_string()))
+        }
     }
 }
 
+/// EventSemantics
+///
+/// Describes an interface for applying the semantic rule of an event to the state of an Identifier
 pub trait EventSemantics {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         Ok(state)
     }
 }
 
+/// Verifiable
+///
+/// Describes an interface for using an IdentifierState to verify a message
 pub trait Verifiable {
-    fn verify_against(&self, state: &IdentifierState) -> Result<(), Error>;
+    fn verify_against(&self, state: &IdentifierState) -> Result<bool, Error>;
 }

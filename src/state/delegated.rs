@@ -3,8 +3,8 @@ use crate::prefix::Prefix;
 
 #[derive(Default, PartialEq)]
 pub struct DelegatedIdentifierState {
-    prefix: Prefix,
-    sn: u64,
-    perms: String,
-    signatory: Signatory,
+    pub prefix: Prefix,
+    pub sn: u64,
+    pub perms: String,
+    pub signatory: Signatory,
 }
