@@ -11,4 +11,7 @@ pub enum Error {
 
     #[error("validation error")]
     CryptoError(CryptoError),
+
+    #[error("Deserialization error")]
+    DeserializationError(#[from] core::fmt::Error),
 }

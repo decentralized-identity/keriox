@@ -1,7 +1,11 @@
-use crate::derivation::{Derivation, Derivative};
+use crate::{
+    derivation::{Derivation, Derivative},
+    error::Error,
+};
+
 use base64::{decode_config, encode_config};
 use core::{
-    fmt::{Display, Error, Formatter},
+    fmt::{Display, Formatter},
     str::FromStr,
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -10,7 +14,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 ///
 /// A Prefix provides a piece of qualified cryptographic material.
 /// This is the raw material and a code describing how it was generated.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Default)]
 pub struct Prefix {
     pub derivation_code: Derivation,
     pub derivative: Derivative,
@@ -29,7 +33,7 @@ impl Prefix {
 }
 
 impl Display for Prefix {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), core::fmt::Error> {
         write!(f, "{}", self.to_str())
     }
 }
@@ -43,7 +47,7 @@ impl FromStr for Prefix {
             Ok((drv, padding_length)) => Ok(Prefix {
                 derivation_code: drv,
                 derivative: decode_config(&str[padding_length..], base64::URL_SAFE)
-                    .map_err(|_| Error)?,
+                    .map_err(|_| Error::DeserializationError(core::fmt::Error))?,
             }),
             Err(e) => Err(e),
         }
@@ -73,12 +77,6 @@ impl<'de> Deserialize<'de> for Prefix {
     }
 }
 
-impl Default for Prefix {
-    fn default() -> Self {
-        Self {
-            derivation_code: "A".parse().unwrap(),
-            derivative: vec![],
-        }
     }
 }
 
