@@ -1,3 +1,4 @@
+use crate::derivation::{procedures::self_addressing::sha3_256_digest, Derivation};
 use crate::error::Error;
 use crate::event::Event;
 use crate::prefix::Prefix;
@@ -50,10 +51,14 @@ impl EventSemantics for VersionedEventMessage {
 
 impl Verifiable for VersionedEventMessage {
     fn verify_against(&self, state: &IdentifierState) -> Result<bool, Error> {
-        let serialized_data_extract = to_string(self);
+        // TODO better way of getting digest prefixes, also this always assumes SHA3-256 digests
+        let serialized_data_extract = Prefix {
+            derivation_code: Derivation::default(),
+            derivative: sha3_256_digest(to_string(self)?.as_bytes()),
+        };
 
         // extract relevant keys from state
-        Ok(match self {
+        match self {
             Self::V0_0(e) => e
                 .sig_config
                 .iter()
@@ -62,7 +67,9 @@ impl Verifiable for VersionedEventMessage {
                 // match them with the signatures
                 .zip(&e.signatures)
                 // check that each is valid
-                .fold(true, |acc, (key, sig)| acc), // && key.verify(serialized_data_extract, sig)?)
-        })
+                .fold(Ok(true), |acc, (key, sig)| {
+                    Ok(acc? && key.verify(&serialized_data_extract, sig)?)
+                }), // && key.verify(serialize_data_extract, sig)?)
+        }
     }
 }

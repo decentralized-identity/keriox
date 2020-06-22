@@ -16,6 +16,9 @@ pub struct Event {
     // TODO a backhash/digest of previous message?
     pub sn: u64,
 
+    #[serde(rename = "prev")]
+    pub previous_event_hash: Prefix,
+
     #[serde(flatten)]
     pub event_data: EventData,
 }

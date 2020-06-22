@@ -3,6 +3,7 @@ use core::{
     fmt::{Debug, Display, Formatter},
     str::FromStr,
 };
+use ursa::signatures::{ed25519::Ed25519Sha512, secp256k1::EcdsaSecp256k1Sha256};
 
 pub mod basic;
 pub mod self_addressing;
@@ -33,6 +34,11 @@ pub enum Derivation {
     Signature(SelfSigningDerivations),
 }
 
+pub enum SignatureSchemes {
+    Ed25519Sha512(Ed25519Sha512),
+    ECDSAsecp256k1Sha256(EcdsaSecp256k1Sha256),
+}
+
 /// Derivation Codes
 ///
 /// String codes for referencing derivation procedures, as defined in tables 14.2, 14.3 and 14.5
@@ -48,7 +54,7 @@ impl Derivation {
 
 impl Default for Derivation {
     fn default() -> Self {
-        Self::Digest(SelfAddressingDerivations::Blake3_256)
+        Self::Digest(SelfAddressingDerivations::SHA3_256)
     }
 }
 

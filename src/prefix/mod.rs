@@ -1,7 +1,11 @@
 use crate::{
-    derivation::{Derivation, Derivative},
+    derivation::{
+        basic::PublicKeyDerivations, self_signing::SelfSigningDerivations, Derivation, Derivative,
+        SignatureSchemes,
+    },
     error::Error,
 };
+use ursa::{keys::PublicKey, signatures::SignatureScheme};
 
 use base64::{decode_config, encode_config};
 use core::{
@@ -29,6 +33,13 @@ impl Prefix {
             &encoded_derivative[..encoded_derivative.len() - padding],
         ]
         .join("")
+    }
+
+    /// verify
+    ///
+    /// casts the prefix to a key and uses it to verify a signature against some data
+    pub fn verify(&self, data: &Prefix, signature: &Prefix) -> Result<bool, Error> {
+        verify(data, signature, self)
     }
 }
 
@@ -77,6 +88,55 @@ impl<'de> Deserialize<'de> for Prefix {
     }
 }
 
+pub fn verify(data: &Prefix, signature: &Prefix, key: &Prefix) -> Result<bool, Error> {
+    match data.derivation_code {
+        // ensure data is a digest
+        Derivation::Digest(d) => {
+            // ensure sig is a signature
+            let scheme = get_signing_scheme(key, signature)?;
+            match scheme {
+                SignatureSchemes::Ed25519Sha512(s) => s
+                    .verify(
+                        &data.derivative,
+                        &signature.derivative,
+                        &PublicKey(key.derivative.clone()),
+                    )
+                    .map_err(|e| Error::CryptoError(e)),
+                SignatureSchemes::ECDSAsecp256k1Sha256(s) => s
+                    .verify(
+                        &data.derivative,
+                        &signature.derivative,
+                        &PublicKey(key.derivative.clone()),
+                    )
+                    .map_err(|e| Error::CryptoError(e)),
+            }
+        }
+        _ => Err(Error::SemanticError(
+            "incorrect prefix type for Data".to_string(),
+        )),
+    }
+}
+
+fn get_signing_scheme(key: &Prefix, signature: &Prefix) -> Result<SignatureSchemes, Error> {
+    match key.derivation_code {
+        Derivation::PublicKey(pk) => match signature.derivation_code {
+            Derivation::Signature(sig) => match pk {
+                PublicKeyDerivations::ECDSAsecp256k1 | PublicKeyDerivations::ECDSAsecp256k1NT => {
+                    match sig {
+                        SelfSigningDerivations::ECDSAsecp256k1 => Ok(pk.to_scheme()),
+                        _ => Err(Error::SemanticError("wrong sig type".to_string())),
+                    }
+                }
+                PublicKeyDerivations::Ed25519
+                | PublicKeyDerivations::Ed25519NT
+                | PublicKeyDerivations::X25519 => match sig {
+                    SelfSigningDerivations::Ed25519 => Ok(pk.to_scheme()),
+                    _ => Err(Error::SemanticError("wrong sig type".to_string())),
+                },
+            },
+            _ => Err(Error::SemanticError("wrong sig type".to_string())),
+        },
+        _ => Err(Error::SemanticError("wrong key type".to_string())),
     }
 }
 
