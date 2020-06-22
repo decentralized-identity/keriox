@@ -88,6 +88,9 @@ impl<'de> Deserialize<'de> for Prefix {
     }
 }
 
+// TODO currently this assumes signatures being made over the data prefix. URSA actually hashes the
+// message itself (sha512 for secp256k1, sha256 for ed25519), so verification (if we take this in to account)
+// will require the vanilla message
 pub fn verify(data: &Prefix, signature: &Prefix, key: &Prefix) -> Result<bool, Error> {
     match data.derivation_code {
         // ensure data is a digest
@@ -160,6 +163,8 @@ pub fn get_prefix_length(value: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::derivation;
+    use ursa::{keys, signatures};
 
     #[test]
     fn simple_deserialize() -> Result<(), Error> {
@@ -185,6 +190,41 @@ mod tests {
             pref.to_str(),
             "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn verify() -> Result<(), Error> {
+        let data_string = "hello there";
+        let data_prefix = Prefix {
+            derivative: derivation::procedures::self_addressing::sha3_256_digest(
+                data_string.as_bytes(),
+            ),
+            derivation_code: derivation::Derivation::default(),
+        };
+
+        let ed = signatures::ed25519::Ed25519Sha512::new();
+
+        let (pub_key, priv_key) = ed
+            .keypair(Some(keys::KeyGenOption::UseSeed(vec![0u8; 32])))
+            .map_err(|e| Error::CryptoError(e))?;
+
+        let key_prefix = Prefix {
+            derivative: pub_key.0.clone(),
+            derivation_code: derivation::Derivation::PublicKey(PublicKeyDerivations::Ed25519NT),
+        };
+
+        let sig = ed
+            .sign(&data_prefix.to_str().as_bytes(), &priv_key)
+            .map_err(|e| Error::CryptoError(e))?;
+
+        let sig_prefix = Prefix {
+            derivative: sig,
+            derivation_code: derivation::Derivation::Signature(SelfSigningDerivations::Ed25519),
+        };
+
+        assert!(true, key_prefix.verify(&data_prefix, &sig_prefix)?);
 
         Ok(())
     }

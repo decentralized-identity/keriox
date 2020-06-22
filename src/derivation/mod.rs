@@ -54,7 +54,7 @@ impl Derivation {
 
 impl Default for Derivation {
     fn default() -> Self {
-        Self::Digest(SelfAddressingDerivations::SHA3_256)
+        Self::Digest(SelfAddressingDerivations::SHA3_512)
     }
 }
 
