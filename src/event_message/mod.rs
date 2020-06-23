@@ -51,7 +51,7 @@ impl EventSemantics for VersionedEventMessage {
 
 impl Verifiable for VersionedEventMessage {
     fn verify_against(&self, state: &IdentifierState) -> Result<bool, Error> {
-        // TODO better way of getting digest prefixes, also this always assumes SHA3-256 digests
+        // TODO better way of getting digest prefixes, also this always assumes SHA3-512 digests
         let serialized_data_extract = Prefix {
             derivation_code: Derivation::default(),
             derivative: sha3_512_digest(to_string(self)?.as_bytes()),

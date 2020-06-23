@@ -7,6 +7,7 @@ use crate::{
 };
 use ursa::{keys::PublicKey, signatures::SignatureScheme};
 
+pub mod p2;
 use base64::{decode_config, encode_config};
 use core::{
     fmt::{Display, Formatter},
