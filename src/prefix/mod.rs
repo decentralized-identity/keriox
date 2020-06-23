@@ -100,14 +100,14 @@ pub fn verify(data: &Prefix, signature: &Prefix, key: &Prefix) -> Result<bool, E
             match scheme {
                 SignatureSchemes::Ed25519Sha512(s) => s
                     .verify(
-                        &data.derivative,
+                        data.to_str().as_bytes(),
                         &signature.derivative,
                         &PublicKey(key.derivative.clone()),
                     )
                     .map_err(|e| Error::CryptoError(e)),
                 SignatureSchemes::ECDSAsecp256k1Sha256(s) => s
                     .verify(
-                        &data.derivative,
+                        data.to_str().as_bytes(),
                         &signature.derivative,
                         &PublicKey(key.derivative.clone()),
                     )
@@ -126,14 +126,14 @@ fn get_signing_scheme(key: &Prefix, signature: &Prefix) -> Result<SignatureSchem
             Derivation::Signature(sig) => match pk {
                 PublicKeyDerivations::ECDSAsecp256k1 | PublicKeyDerivations::ECDSAsecp256k1NT => {
                     match sig {
-                        SelfSigningDerivations::ECDSAsecp256k1 => Ok(pk.to_scheme()),
+                        SelfSigningDerivations::ECDSAsecp256k1Sha256 => Ok(pk.to_scheme()),
                         _ => Err(Error::SemanticError("wrong sig type".to_string())),
                     }
                 }
                 PublicKeyDerivations::Ed25519
                 | PublicKeyDerivations::Ed25519NT
                 | PublicKeyDerivations::X25519 => match sig {
-                    SelfSigningDerivations::Ed25519 => Ok(pk.to_scheme()),
+                    SelfSigningDerivations::Ed25519Sha512 => Ok(pk.to_scheme()),
                     _ => Err(Error::SemanticError("wrong sig type".to_string())),
                 },
             },
@@ -221,7 +221,9 @@ mod tests {
 
         let sig_prefix = Prefix {
             derivative: sig,
-            derivation_code: derivation::Derivation::Signature(SelfSigningDerivations::Ed25519),
+            derivation_code: derivation::Derivation::Signature(
+                SelfSigningDerivations::Ed25519Sha512,
+            ),
         };
 
         assert!(true, key_prefix.verify(&data_prefix, &sig_prefix)?);

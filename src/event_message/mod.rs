@@ -1,4 +1,4 @@
-use crate::derivation::{procedures::self_addressing::sha3_256_digest, Derivation};
+use crate::derivation::{procedures::self_addressing::sha3_512_digest, Derivation};
 use crate::error::Error;
 use crate::event::Event;
 use crate::prefix::Prefix;
@@ -54,7 +54,7 @@ impl Verifiable for VersionedEventMessage {
         // TODO better way of getting digest prefixes, also this always assumes SHA3-256 digests
         let serialized_data_extract = Prefix {
             derivation_code: Derivation::default(),
-            derivative: sha3_256_digest(to_string(self)?.as_bytes()),
+            derivative: sha3_512_digest(to_string(self)?.as_bytes()),
         };
 
         // extract relevant keys from state
@@ -80,7 +80,9 @@ mod tests {
     use super::*;
     use crate::{
         derivation::{
-            basic::PublicKeyDerivations, procedures, self_addressing::SelfAddressingDerivations,
+            basic::PublicKeyDerivations,
+            procedures::self_addressing::{sha3_256_digest, sha3_512_digest},
+            self_addressing::SelfAddressingDerivations,
             self_signing::SelfSigningDerivations,
         },
         event::{
@@ -90,16 +92,14 @@ mod tests {
         },
     };
     use serde_json;
-    use ursa::{
-        keys::{PrivateKey, PublicKey},
-        signatures::{ed25519, SignatureScheme, Signer},
-    };
+    use ursa::signatures::{ed25519, SignatureScheme};
 
     #[test]
     fn create() -> Result<(), Error> {
         // hi Ed!
         let ed = ed25519::Ed25519Sha512::new();
 
+        // get two ed25519 keypairs
         let (pub_key0, priv_key0) = ed
             .keypair(Option::None)
             .map_err(|e| Error::CryptoError(e))?;
@@ -107,16 +107,19 @@ mod tests {
             .keypair(Option::None)
             .map_err(|e| Error::CryptoError(e))?;
 
+        // initial signing key prefix
         let pref0 = Prefix {
             derivative: pub_key0.0.clone(),
             derivation_code: Derivation::PublicKey(PublicKeyDerivations::Ed25519),
         };
 
+        // initial control key hash prefix
         let pref1 = Prefix {
-            derivative: procedures::self_addressing::sha3_256_digest(&pub_key1.0),
-            derivation_code: Derivation::Digest(SelfAddressingDerivations::SHA3_256),
+            derivative: sha3_512_digest(&pub_key1.0),
+            derivation_code: Derivation::default(),
         };
 
+        // create a simple inception event
         let icp = VersionedEventMessage::V0_0(EventMessage {
             event: Event {
                 prefix: pref0.clone(),
@@ -137,33 +140,21 @@ mod tests {
             signatures: vec![],
         });
 
+        // serialised extracted data, hashed and made into a prefix
         let sed = Prefix {
-            derivative: procedures::self_addressing::sha3_256_digest(
+            derivative: sha3_512_digest(
                 dfs_serializer::to_string(&icp)
                     .map_err(|_| Error::SerializationError("bad serialize".to_string()))?
                     .as_bytes(),
             ),
-            derivation_code: Derivation::Digest(SelfAddressingDerivations::SHA3_256),
+            derivation_code: Derivation::default(),
         };
 
-        print!("\n{}\n", sed);
+        let str_event = serde_json::to_string(&icp)
+            .map_err(|_| Error::SerializationError("bad serialize".to_string()))?;
 
-        print!(
-            "\n{}\n",
-            serde_json::to_string(&icp)
-                .map_err(|_| Error::SerializationError("bad serialize".to_string()))?
-        );
-
-        let devent: VersionedEventMessage = serde_json::from_str(
-            &serde_json::to_string(&icp)
-                .map_err(|_| Error::SerializationError("bad serialize".to_string()))?,
-        )
-        .map_err(|e| {
-            print!("{:}", e);
-            Error::DeserializationError(std::fmt::Error)
-        })?;
-
-        print!("\n{}\n", sed);
+        let devent: VersionedEventMessage = serde_json::from_str(&str_event)
+            .map_err(|_| Error::DeserializationError(std::fmt::Error))?;
 
         // sign
         let sig = ed
@@ -171,8 +162,10 @@ mod tests {
             .map_err(|e| Error::CryptoError(e))?;
         let sig_pref = Prefix {
             derivative: sig,
-            derivation_code: Derivation::Signature(SelfSigningDerivations::Ed25519),
+            derivation_code: Derivation::Signature(SelfSigningDerivations::Ed25519Sha512),
         };
+
+        assert!(true, pref0.verify(&sed, &sig_pref)?);
 
         let signed_event = match devent {
             VersionedEventMessage::V0_0(ev) => VersionedEventMessage::V0_0(EventMessage {
@@ -185,7 +178,16 @@ mod tests {
 
         let s0 = s_.verify_and_apply(&signed_event)?;
 
-        print!("{:?}", s0);
+        assert_eq!(s0.prefix, pref0);
+        assert_eq!(s0.sn, 0);
+        assert_eq!(s0.last, Prefix::default());
+        assert_eq!(s0.current.signers.len(), 1);
+        assert_eq!(s0.current.signers[0], pref0);
+        assert_eq!(s0.current.threshold, 1);
+        assert_eq!(s0.next, pref1);
+        assert_eq!(s0.witnesses, vec![]);
+        assert_eq!(s0.tally, 0);
+        assert_eq!(s0.delegated_keys, vec![]);
 
         Ok(())
     }

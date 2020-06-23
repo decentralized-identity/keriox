@@ -60,6 +60,7 @@ impl IdentifierState {
 /// Describes an interface for applying the semantic rule of an event to the state of an Identifier
 pub trait EventSemantics {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
+        // default impl is the identity transition
         Ok(state)
     }
 }
