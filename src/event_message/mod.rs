@@ -73,3 +73,120 @@ impl Verifiable for VersionedEventMessage {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::util::dfs_serializer;
+    use super::*;
+    use crate::{
+        derivation::{
+            basic::PublicKeyDerivations, procedures, self_addressing::SelfAddressingDerivations,
+            self_signing::SelfSigningDerivations,
+        },
+        event::{
+            event_data::{inception::InceptionEvent, EventData},
+            sections::InceptionWitnessConfig,
+            sections::KeyConfig,
+        },
+    };
+    use serde_json;
+    use ursa::{
+        keys::{PrivateKey, PublicKey},
+        signatures::{ed25519, SignatureScheme, Signer},
+    };
+
+    #[test]
+    fn create() -> Result<(), Error> {
+        // hi Ed!
+        let ed = ed25519::Ed25519Sha512::new();
+
+        let (pub_key0, priv_key0) = ed
+            .keypair(Option::None)
+            .map_err(|e| Error::CryptoError(e))?;
+        let (pub_key1, priv_key1) = ed
+            .keypair(Option::None)
+            .map_err(|e| Error::CryptoError(e))?;
+
+        let pref0 = Prefix {
+            derivative: pub_key0.0.clone(),
+            derivation_code: Derivation::PublicKey(PublicKeyDerivations::Ed25519),
+        };
+
+        let pref1 = Prefix {
+            derivative: procedures::self_addressing::sha3_256_digest(&pub_key1.0),
+            derivation_code: Derivation::Digest(SelfAddressingDerivations::SHA3_256),
+        };
+
+        let icp = VersionedEventMessage::V0_0(EventMessage {
+            event: Event {
+                prefix: pref0.clone(),
+                sn: 0,
+                event_data: EventData::Icp(InceptionEvent {
+                    key_config: KeyConfig {
+                        threshold: 1,
+                        public_keys: vec![pref0.clone()],
+                        threshold_key_digest: pref1.clone(),
+                    },
+                    witness_config: InceptionWitnessConfig {
+                        tally: 0,
+                        initial_witnesses: vec![],
+                    },
+                }),
+            },
+            sig_config: vec![0],
+            signatures: vec![],
+        });
+
+        let sed = Prefix {
+            derivative: procedures::self_addressing::sha3_256_digest(
+                dfs_serializer::to_string(&icp)
+                    .map_err(|_| Error::SerializationError("bad serialize".to_string()))?
+                    .as_bytes(),
+            ),
+            derivation_code: Derivation::Digest(SelfAddressingDerivations::SHA3_256),
+        };
+
+        print!("\n{}\n", sed);
+
+        print!(
+            "\n{}\n",
+            serde_json::to_string(&icp)
+                .map_err(|_| Error::SerializationError("bad serialize".to_string()))?
+        );
+
+        let devent: VersionedEventMessage = serde_json::from_str(
+            &serde_json::to_string(&icp)
+                .map_err(|_| Error::SerializationError("bad serialize".to_string()))?,
+        )
+        .map_err(|e| {
+            print!("{:}", e);
+            Error::DeserializationError(std::fmt::Error)
+        })?;
+
+        print!("\n{}\n", sed);
+
+        // sign
+        let sig = ed
+            .sign(sed.to_str().as_bytes(), &priv_key0)
+            .map_err(|e| Error::CryptoError(e))?;
+        let sig_pref = Prefix {
+            derivative: sig,
+            derivation_code: Derivation::Signature(SelfSigningDerivations::Ed25519),
+        };
+
+        let signed_event = match devent {
+            VersionedEventMessage::V0_0(ev) => VersionedEventMessage::V0_0(EventMessage {
+                signatures: vec![sig_pref],
+                ..ev
+            }),
+        };
+
+        let s_ = IdentifierState::default();
+
+        let s0 = s_.verify_and_apply(&signed_event)?;
+
+        print!("{:?}", s0);
+
+        Ok(())
+    }
+}
