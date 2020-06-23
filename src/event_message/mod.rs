@@ -31,7 +31,7 @@ pub struct EventMessage {
     /// Appended Signatures
     ///
     /// TODO in the recommended JSON encoding, the signatures are appended to the json body.
-    #[serde(skip_serializing)]
+    #[serde(skip)]
     pub signatures: Vec<Prefix>,
 }
 

@@ -1,7 +1,7 @@
 use super::signatory::Signatory;
 use crate::prefix::Prefix;
 
-#[derive(Default, PartialEq)]
+#[derive(Default, PartialEq, Debug)]
 pub struct DelegatedIdentifierState {
     pub prefix: Prefix,
     pub sn: u64,

@@ -16,6 +16,9 @@ use self::{
     rotation::RotationEvent,
 };
 
+/// Event Data
+///
+/// Event Data conveys the semantic content of a KERI event.
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "ilk", rename_all = "lowercase")]
 pub enum EventData {

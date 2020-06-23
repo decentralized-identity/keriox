@@ -9,7 +9,7 @@ use signatory::Signatory;
 /// Identifier State
 ///
 /// represents the accumulated state after applying events, based on section 13 of the paper
-#[derive(Default, PartialEq)]
+#[derive(Default, PartialEq, Debug)]
 pub struct IdentifierState {
     pub prefix: Prefix,
     pub sn: u64,
