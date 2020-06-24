@@ -1,5 +1,5 @@
 use crate::{
-    derivation::procedures::self_addressing::sha3_512_digest,
+    derivation::sha3_512_digest,
     error::Error,
     event::Event,
     prefix::Prefix,
@@ -78,7 +78,7 @@ mod tests {
     use super::super::util::dfs_serializer;
     use super::*;
     use crate::{
-        derivation::procedures::self_addressing::sha3_512_digest,
+        derivation::sha3_512_digest,
         event::{
             event_data::{inception::InceptionEvent, EventData},
             sections::InceptionWitnessConfig,

@@ -229,9 +229,7 @@ mod tests {
     #[test]
     fn verify() -> Result<(), Error> {
         let data_string = "hello there";
-        let data_prefix = Prefix::SHA3_256(
-            derivation::procedures::self_addressing::sha3_256_digest(data_string.as_bytes()),
-        );
+        let data_prefix = Prefix::SHA3_256(derivation::sha3_256_digest(data_string.as_bytes()));
 
         let ed = signatures::ed25519::Ed25519Sha512::new();
 
