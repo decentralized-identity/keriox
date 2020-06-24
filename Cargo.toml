@@ -1,0 +1,10 @@
+[package]
+name = "keriox"
+version = "0.1.0"
+authors = ["Decentralized Identity Foundation"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ursa = { version = "0.3", default-features = false, features = ["portable"]}
