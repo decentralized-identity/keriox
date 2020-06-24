@@ -131,10 +131,10 @@ impl FromStr for Prefix {
             "A" => Ok(Self::PubKeyEd25519NT(PublicKey(decode_derivative(
                 &str[1..],
             )?))),
-            "B" => Ok(Self::PubKeyEd25519(PublicKey(decode_derivative(
+            "B" => Ok(Self::PubKeyX25519(PublicKey(decode_derivative(&str[1..])?))),
+            "C" => Ok(Self::PubKeyEd25519(PublicKey(decode_derivative(
                 &str[1..],
             )?))),
-            "C" => Ok(Self::PubKeyX25519(PublicKey(decode_derivative(&str[1..])?))),
             "D" => Ok(Self::Blake3_256(decode_derivative(&str[1..])?)),
             "E" => Ok(Self::Blake2B256(decode_derivative(&str[1..])?)),
             "F" => Ok(Self::Blake2S256(decode_derivative(&str[1..])?)),
@@ -154,6 +154,7 @@ impl FromStr for Prefix {
                 "D" => Ok(Self::SHA3_512(decode_derivative(&str[2..])?)),
                 "E" => Ok(Self::Blake2B512(decode_derivative(&str[2..])?)),
                 "F" => Ok(Self::SHA2_512(decode_derivative(&str[2..])?)),
+                _ => Err(Error::DeserializationError(core::fmt::Error)),
             },
             // no derivation codes longer than 2 chars yet
             _ => Err(Error::DeserializationError(core::fmt::Error)),
