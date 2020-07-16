@@ -163,13 +163,14 @@ const SIG_DELIMITER: &str = "\n";
 
 pub fn parse_signed_message(message: String) -> Result<VersionedEventMessage, Error> {
     let parts: Vec<&str> = message.split("\r\n\r\n").collect();
-    let sigs: Vec<&str> = parts[0].split(SIG_DELIMITER).collect();
+
+    let sigs: Vec<Prefix> = parts[1]
+        .split(SIG_DELIMITER)
+        .map(|sig| Prefix::from_str(sig))
+        .collect::<Result<Vec<Prefix>, Error>>()?;
 
     Ok(VersionedEventMessage::V0_0(EventMessage {
-        signatures: sigs
-            .iter()
-            .map(|sig| Prefix::from_str(sig))
-            .collect::<Result<Vec<Prefix>, Error>>()?,
+        signatures: sigs,
         ..serde_json::from_str(parts[0])
             .map_err(|_| Error::DeserializationError(core::fmt::Error))?
     }))
@@ -182,7 +183,7 @@ pub fn serialize_signed_message(message: VersionedEventMessage) -> String {
             VersionedEventMessage::V0_0(ev) => ev
                 .signatures
                 .iter()
-                .map(|sig| ["\"".to_string(), sig.to_string(), "\"".to_string()].join(""))
+                .map(|sig| sig.to_string())
                 .collect::<Vec<String>>()
                 .join(SIG_DELIMITER),
         },
