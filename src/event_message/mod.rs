@@ -76,9 +76,9 @@ impl Verifiable for VersionedEventMessage {
 
 #[derive(Serialize, Deserialize)]
 pub struct IcpWithKeys {
-    icp: String,
-    sk0: String,
-    sk1: String,
+    pub icp: String,
+    pub sk0: String,
+    pub sk1: String,
 }
 
 pub fn get_icp() -> Result<IcpWithKeys, Error> {
