@@ -31,7 +31,7 @@ pub enum Prefix {
 }
 
 impl Prefix {
-    fn derivative(&self) -> &[u8] {
+    pub fn derivative(&self) -> &[u8] {
         match self {
             Self::PubKeyEd25519NT(p) => &p.0,
             Self::PubKeyX25519(p) => &p.0,
@@ -53,7 +53,7 @@ impl Prefix {
         }
     }
 
-    fn derivation_code(&self) -> &str {
+    pub fn derivation_code(&self) -> &str {
         match self {
             Self::PubKeyEd25519NT(_) => "A",
             Self::PubKeyX25519(_) => "B",
@@ -76,7 +76,7 @@ impl Prefix {
         }
     }
 
-    fn to_str(&self) -> String {
+    pub fn to_str(&self) -> String {
         let encoded = encode_config(self.derivative(), base64::URL_SAFE);
         [
             self.derivation_code(),

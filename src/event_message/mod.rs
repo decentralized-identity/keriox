@@ -6,6 +6,7 @@ use crate::{
     state::{EventSemantics, IdentifierState, Verifiable},
     util::dfs_serializer::to_string,
 };
+use core::str::FromStr;
 use serde::{Deserialize, Serialize};
 
 /// Versioned Event Message
@@ -71,6 +72,145 @@ impl Verifiable for VersionedEventMessage {
                 }),
         }
     }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct IcpWithKeys {
+    icp: String,
+    sk0: String,
+    sk1: String,
+}
+
+pub fn get_icp() -> Result<IcpWithKeys, Error> {
+    use crate::{
+        event::{
+            event_data::{inception::InceptionEvent, EventData},
+            sections::{InceptionWitnessConfig, KeyConfig},
+        },
+        util::dfs_serializer,
+    };
+    use ursa::signatures::{ed25519::Ed25519Sha512, SignatureScheme};
+
+    let ed = Ed25519Sha512::new();
+
+    // get two ed25519 keypairs
+    let (pub_key0, priv_key0) = ed
+        .keypair(Option::None)
+        .map_err(|e| Error::CryptoError(e))?;
+
+    let (pub_key1, priv_key1) = ed
+        .keypair(Option::None)
+        .map_err(|e| Error::CryptoError(e))?;
+
+    // initial signing key prefix
+    let pref0 = Prefix::PubKeyEd25519(pub_key0);
+
+    // initial control key hash prefix
+    let pref1 = Prefix::SHA3_512(sha3_512_digest(&pub_key1.0));
+
+    let icp = VersionedEventMessage::V0_0(EventMessage {
+        event: Event {
+            prefix: pref0.clone(),
+            sn: 0,
+            event_data: EventData::Icp(InceptionEvent {
+                key_config: KeyConfig {
+                    threshold: 1,
+                    public_keys: vec![pref0.clone()],
+                    threshold_key_digest: pref1.clone(),
+                },
+                witness_config: InceptionWitnessConfig {
+                    tally: 0,
+                    initial_witnesses: vec![],
+                },
+            }),
+        },
+        sig_config: vec![0],
+        signatures: vec![],
+    });
+
+    let serialized = dfs_serializer::to_string(&icp)?;
+    //
+    // serialised extracted data, hashed and made into a prefix
+    let sed = Prefix::SHA3_512(sha3_512_digest(serialized.as_bytes()));
+
+    let str_event =
+        serde_json::to_string(&icp).map_err(|e| Error::SerializationError(e.to_string()))?;
+
+    let devent: VersionedEventMessage = serde_json::from_str(&str_event)
+        .map_err(|e| Error::DeserializationError(core::fmt::Error))?;
+
+    let sig = ed
+        .sign(sed.to_string().as_bytes(), &priv_key0)
+        .map_err(|e| Error::CryptoError(e))?;
+
+    let sig_pref = Prefix::SigEd25519Sha512(sig);
+
+    let signed_event = match devent {
+        VersionedEventMessage::V0_0(ev) => VersionedEventMessage::V0_0(EventMessage {
+            signatures: vec![sig_pref],
+            ..ev
+        }),
+    };
+
+    Ok(IcpWithKeys {
+        icp: serialize_signed_message(signed_event),
+        sk0: base64::encode_config(&priv_key0.0, base64::URL_SAFE),
+        sk1: base64::encode_config(&priv_key1.0, base64::URL_SAFE),
+    })
+}
+
+const SIG_DELIMITER: &str = "\n";
+
+pub fn parse_signed_message(message: String) -> Result<VersionedEventMessage, Error> {
+    let parts: Vec<&str> = message.split("\r\n\r\n").collect();
+    let sigs: Vec<&str> = parts[0].split(SIG_DELIMITER).collect();
+
+    Ok(VersionedEventMessage::V0_0(EventMessage {
+        signatures: sigs
+            .iter()
+            .map(|sig| Prefix::from_str(sig))
+            .collect::<Result<Vec<Prefix>, Error>>()?,
+        ..serde_json::from_str(parts[0])
+            .map_err(|_| Error::DeserializationError(core::fmt::Error))?
+    }))
+}
+
+pub fn serialize_signed_message(message: VersionedEventMessage) -> String {
+    [
+        serde_json::to_string(&message).unwrap_or("HELL".to_string()),
+        match message {
+            VersionedEventMessage::V0_0(ev) => ev
+                .signatures
+                .iter()
+                .map(|sig| ["\"".to_string(), sig.to_string(), "\"".to_string()].join(""))
+                .collect::<Vec<String>>()
+                .join(SIG_DELIMITER),
+        },
+    ]
+    .join("\r\n\r\n")
+}
+
+pub fn validate_events(kel_string: String) -> String {
+    use crate::util::did_doc::DIDDocument;
+
+    let str_events: Vec<String> = match serde_json::from_str(&kel_string) {
+        Ok(k) => k,
+        Err(e) => return e.to_string(),
+    };
+    let kel: Vec<VersionedEventMessage> = match str_events
+        .iter()
+        .map(|e| parse_signed_message(e.to_string()))
+        .collect::<Result<Vec<VersionedEventMessage>, Error>>()
+    {
+        Ok(k) => k,
+        Err(e) => return e.to_string(),
+    };
+
+    let sn = kel.iter().fold(IdentifierState::default(), |s, e| {
+        s.verify_and_apply(e).unwrap()
+    });
+    let dd: DIDDocument = sn.into();
+    serde_json::to_string(&dd).unwrap()
 }
 
 #[cfg(test)]
