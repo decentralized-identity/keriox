@@ -190,22 +190,8 @@ pub fn serialize_signed_message(message: VersionedEventMessage) -> String {
     .join("\r\n\r\n")
 }
 
-pub fn validate_events(kel_string: String) -> String {
+pub fn validate_events(kel: &[VersionedEventMessage]) -> String {
     use crate::util::did_doc::DIDDocument;
-
-    let str_events: Vec<String> = match serde_json::from_str(&kel_string) {
-        Ok(k) => k,
-        Err(e) => return e.to_string(),
-    };
-    let kel: Vec<VersionedEventMessage> = match str_events
-        .iter()
-        .map(|e| parse_signed_message(e.to_string()))
-        .collect::<Result<Vec<VersionedEventMessage>, Error>>()
-    {
-        Ok(k) => k,
-        Err(e) => return e.to_string(),
-    };
-
     let sn = kel.iter().fold(IdentifierState::default(), |s, e| {
         s.verify_and_apply(e).unwrap()
     });
