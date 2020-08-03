@@ -26,7 +26,7 @@ pub struct EventMessage {
     #[serde(flatten)]
     pub event: Event,
 
-    #[serde(rename = "sigs")]
+    #[serde(rename = "idxs")]
     pub sig_config: Vec<usize>,
 
     /// Appended Signatures
