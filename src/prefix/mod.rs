@@ -12,13 +12,21 @@ use ursa::{
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Prefix {
+    RandomSeed128(Vec<u8>),
+    RandomSeed256Ed25519(Vec<u8>),
+    RandomSeed256ECDSAsecp256k1(Vec<u8>),
+    RandomSeed448(Vec<u8>),
+
     PubKeyEd25519NT(PublicKey),
     PubKeyX25519(PublicKey),
+    PubKeyX448(PublicKey),
     PubKeyEd25519(PublicKey),
     PubKeyECDSAsecp256k1NT(PublicKey),
     PubKeyECDSAsecp256k1(PublicKey),
+
     SigEd25519Sha512(Vec<u8>),
     SigECDSAsecp256k1Sha256(Vec<u8>),
+
     Blake3_256(Vec<u8>),
     Blake2B256(Vec<u8>),
     Blake2S256(Vec<u8>),
@@ -31,16 +39,24 @@ pub enum Prefix {
 }
 
 impl Prefix {
-    fn derivative(&self) -> &[u8] {
+    pub fn derivative(&self) -> &[u8] {
         match self {
+            Self::RandomSeed128(s) => &s,
+            Self::RandomSeed256Ed25519(s) => &s,
+            Self::RandomSeed256ECDSAsecp256k1(s) => &s,
+            Self::RandomSeed448(s) => &s,
+
             Self::PubKeyEd25519NT(p) => &p.0,
             Self::PubKeyX25519(p) => &p.0,
+            Self::PubKeyX448(p) => &p.0,
             Self::PubKeyEd25519(p) => &p.0,
+
             Self::PubKeyECDSAsecp256k1NT(p) => &p.0,
             Self::PubKeyECDSAsecp256k1(p) => &p.0,
 
             Self::SigEd25519Sha512(s) => &s,
             Self::SigECDSAsecp256k1Sha256(s) => &s,
+
             Self::Blake3_256(d) => &d,
             Self::Blake2B256(d) => &d,
             Self::Blake2S256(d) => &d,
@@ -53,30 +69,35 @@ impl Prefix {
         }
     }
 
-    fn derivation_code(&self) -> &str {
+    pub fn derivation_code(&self) -> &str {
         match self {
-            Self::PubKeyEd25519NT(_) => "A",
-            Self::PubKeyX25519(_) => "B",
-            Self::PubKeyEd25519(_) => "C",
-            Self::PubKeyECDSAsecp256k1NT(_) => "G",
-            Self::PubKeyECDSAsecp256k1(_) => "H",
+            Self::RandomSeed256Ed25519(_) => "A",
+            Self::PubKeyEd25519NT(_) => "B",
+            Self::PubKeyX25519(_) => "C",
+            Self::PubKeyEd25519(_) => "D",
+            Self::Blake3_256(_) => "E",
+            Self::Blake2B256(_) => "F",
+            Self::Blake2S256(_) => "G",
+            Self::SHA3_256(_) => "H",
+            Self::SHA2_256(_) => "I",
+            Self::RandomSeed256ECDSAsecp256k1(_) => "J",
+            Self::RandomSeed448(_) => "K",
+            Self::PubKeyX448(_) => "L",
+            Self::RandomSeed128(_) => "0A",
+            Self::SigEd25519Sha512(_) => "0B",
+            Self::SigECDSAsecp256k1Sha256(_) => "0C",
+            Self::Blake3_512(_) => "0D",
+            Self::SHA3_512(_) => "0E",
+            Self::Blake2B512(_) => "0F",
+            Self::SHA2_512(_) => "0G",
 
-            Self::SigEd25519Sha512(_) => "0A",
-            Self::SigECDSAsecp256k1Sha256(_) => "0B",
-
-            Self::Blake3_256(_) => "D",
-            Self::Blake2B256(_) => "E",
-            Self::Blake2S256(_) => "F",
-            Self::SHA3_256(_) => "I",
-            Self::SHA2_256(_) => "J",
-            Self::Blake3_512(_) => "0C",
-            Self::SHA3_512(_) => "0D",
-            Self::Blake2B512(_) => "0E",
-            Self::SHA2_512(_) => "0F",
+            // TODO currently unassigned
+            Self::PubKeyECDSAsecp256k1NT(_) => "",
+            Self::PubKeyECDSAsecp256k1(_) => "",
         }
     }
 
-    fn to_str(&self) -> String {
+    pub fn to_str(&self) -> String {
         let encoded = encode_config(self.derivative(), base64::URL_SAFE);
         [
             self.derivation_code(),
@@ -128,32 +149,40 @@ impl FromStr for Prefix {
     fn from_str(str: &str) -> Result<Self, Self::Err> {
         match &str[..1] {
             // length 1 derivation codes
-            "A" => Ok(Self::PubKeyEd25519NT(PublicKey(decode_derivative(
+            "A" => Ok(Self::RandomSeed256Ed25519(decode_derivative(&str[1..])?)),
+            "B" => Ok(Self::PubKeyEd25519NT(PublicKey(decode_derivative(
                 &str[1..],
             )?))),
-            "B" => Ok(Self::PubKeyX25519(PublicKey(decode_derivative(&str[1..])?))),
-            "C" => Ok(Self::PubKeyEd25519(PublicKey(decode_derivative(
+            "C" => Ok(Self::PubKeyX25519(PublicKey(decode_derivative(&str[1..])?))),
+            "D" => Ok(Self::PubKeyEd25519(PublicKey(decode_derivative(
                 &str[1..],
             )?))),
-            "D" => Ok(Self::Blake3_256(decode_derivative(&str[1..])?)),
-            "E" => Ok(Self::Blake2B256(decode_derivative(&str[1..])?)),
-            "F" => Ok(Self::Blake2S256(decode_derivative(&str[1..])?)),
-            "G" => Ok(Self::PubKeyECDSAsecp256k1NT(PublicKey(decode_derivative(
+            "E" => Ok(Self::Blake3_256(decode_derivative(&str[1..])?)),
+            "F" => Ok(Self::Blake2B256(decode_derivative(&str[1..])?)),
+            "G" => Ok(Self::Blake2S256(decode_derivative(&str[1..])?)),
+            // "G" => Ok(Self::PubKeyECDSAsecp256k1NT(PublicKey(decode_derivative(
+            //     &str[1..],
+            // )?))),
+            // "H" => Ok(Self::PubKeyECDSAsecp256k1(PublicKey(decode_derivative(
+            //     &str[1..],
+            // )?))),
+            "H" => Ok(Self::SHA3_256(decode_derivative(&str[1..])?)),
+            "I" => Ok(Self::SHA2_256(decode_derivative(&str[1..])?)),
+            "J" => Ok(Self::RandomSeed256ECDSAsecp256k1(decode_derivative(
                 &str[1..],
-            )?))),
-            "H" => Ok(Self::PubKeyECDSAsecp256k1(PublicKey(decode_derivative(
-                &str[1..],
-            )?))),
-            "I" => Ok(Self::SHA3_256(decode_derivative(&str[1..])?)),
-            "J" => Ok(Self::SHA2_256(decode_derivative(&str[1..])?)),
+            )?)),
+            "K" => Ok(Self::RandomSeed448(decode_derivative(&str[1..])?)),
+            "L" => Ok(Self::PubKeyX448(PublicKey(decode_derivative(&str[1..])?))),
             // length 2 derivation codes
+            // TODO account for attached sig derivation codes
             "0" => match &str[1..2] {
-                "A" => Ok(Self::SigEd25519Sha512(decode_derivative(&str[2..])?)),
-                "B" => Ok(Self::SigECDSAsecp256k1Sha256(decode_derivative(&str[2..])?)),
-                "C" => Ok(Self::Blake3_512(decode_derivative(&str[2..])?)),
-                "D" => Ok(Self::SHA3_512(decode_derivative(&str[2..])?)),
-                "E" => Ok(Self::Blake2B512(decode_derivative(&str[2..])?)),
-                "F" => Ok(Self::SHA2_512(decode_derivative(&str[2..])?)),
+                "A" => Ok(Self::RandomSeed128(decode_derivative(&str[1..])?)),
+                "B" => Ok(Self::SigEd25519Sha512(decode_derivative(&str[2..])?)),
+                "C" => Ok(Self::SigECDSAsecp256k1Sha256(decode_derivative(&str[2..])?)),
+                "D" => Ok(Self::Blake3_512(decode_derivative(&str[2..])?)),
+                "E" => Ok(Self::SHA3_512(decode_derivative(&str[2..])?)),
+                "F" => Ok(Self::Blake2B512(decode_derivative(&str[2..])?)),
+                "G" => Ok(Self::SHA2_512(decode_derivative(&str[2..])?)),
                 _ => Err(Error::DeserializationError(core::fmt::Error)),
             },
             // no derivation codes longer than 2 chars yet
@@ -220,7 +249,7 @@ mod tests {
 
         assert_eq!(
             pref.to_str(),
-            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            "BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
         );
 
         Ok(())
