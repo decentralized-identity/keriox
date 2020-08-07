@@ -1,11 +1,11 @@
 use crate::{
-    derivation::sha3_512_digest,
     error::Error,
     event::Event,
     prefix::Prefix,
     state::{EventSemantics, IdentifierState, Verifiable},
     util::dfs_serializer::to_string,
 };
+use core::str::FromStr;
 use serde::{Deserialize, Serialize};
 
 /// Versioned Event Message
@@ -53,8 +53,7 @@ impl EventSemantics for VersionedEventMessage {
 impl Verifiable for VersionedEventMessage {
     fn verify_against(&self, state: &IdentifierState) -> Result<bool, Error> {
         // TODO better way of getting digest prefixes, also this always assumes SHA3-512 digests
-        let serialized_data_extract =
-            Prefix::SHA3_512(sha3_512_digest(to_string(self)?.as_bytes()));
+        let serialized_data_extract = to_string(self)?;
 
         // extract relevant keys from state
         match self {
@@ -67,10 +66,48 @@ impl Verifiable for VersionedEventMessage {
                 .zip(&e.signatures)
                 // check that each is valid
                 .fold(Ok(true), |acc, (key, sig)| {
-                    Ok(acc? && key.verify(&serialized_data_extract, sig)?)
+                    Ok(acc? && key.verify(&serialized_data_extract.as_bytes(), sig)?)
                 }),
         }
     }
+}
+
+const SIG_DELIMITER: &str = "\n";
+
+pub fn parse_signed_message(message: String) -> Result<VersionedEventMessage, Error> {
+    let parts: Vec<&str> = message.split("\r\n\r\n").collect();
+
+    let sigs: Vec<Prefix> = parts[1]
+        .split(SIG_DELIMITER)
+        .map(|sig| Prefix::from_str(sig))
+        .collect::<Result<Vec<Prefix>, Error>>()?;
+
+    Ok(VersionedEventMessage::V0_0(EventMessage {
+        signatures: sigs,
+        ..serde_json::from_str(parts[0])
+            .map_err(|_| Error::DeserializationError(core::fmt::Error))?
+    }))
+}
+
+pub fn serialize_signed_message(message: VersionedEventMessage) -> String {
+    [
+        serde_json::to_string(&message).unwrap_or("HELL".to_string()),
+        match message {
+            VersionedEventMessage::V0_0(ev) => ev
+                .signatures
+                .iter()
+                .map(|sig| sig.to_string())
+                .collect::<Vec<String>>()
+                .join(SIG_DELIMITER),
+        },
+    ]
+    .join("\r\n\r\n")
+}
+
+pub fn validate_events(kel: &[VersionedEventMessage]) -> Result<IdentifierState, Error> {
+    kel.iter().fold(Ok(IdentifierState::default()), |s, e| {
+        s?.verify_and_apply(e)
+    })
 }
 
 #[cfg(test)]
@@ -128,12 +165,9 @@ mod tests {
             signatures: vec![],
         });
 
-        // serialised extracted data, hashed and made into a prefix
-        let sed = Prefix::SHA3_512(sha3_512_digest(
-            dfs_serializer::to_string(&icp)
-                .map_err(|_| Error::SerializationError("bad serialize".to_string()))?
-                .as_bytes(),
-        ));
+        // serialised extracted dataset
+        let sed = dfs_serializer::to_string(&icp)
+            .map_err(|_| Error::SerializationError("bad serialize".to_string()))?;
 
         let str_event = serde_json::to_string(&icp)
             .map_err(|_| Error::SerializationError("bad serialize".to_string()))?;
@@ -143,11 +177,11 @@ mod tests {
 
         // sign
         let sig = ed
-            .sign(sed.to_string().as_bytes(), &priv_key0)
+            .sign(sed.as_bytes(), &priv_key0)
             .map_err(|e| Error::CryptoError(e))?;
         let sig_pref = Prefix::SigEd25519Sha512(sig);
 
-        assert!(true, pref0.verify(&sed, &sig_pref)?);
+        assert!(pref0.verify(sed.as_bytes(), &sig_pref)?);
 
         let signed_event = match devent {
             VersionedEventMessage::V0_0(ev) => VersionedEventMessage::V0_0(EventMessage {

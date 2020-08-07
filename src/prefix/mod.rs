@@ -106,20 +106,17 @@ impl Prefix {
         .join("")
     }
 
-    pub fn verify(&self, data: &Prefix, signature: &Prefix) -> Result<bool, Error> {
+    pub fn verify(&self, data: &[u8], signature: &Prefix) -> Result<bool, Error> {
         verify(data, self, signature)
     }
 }
 
-// TODO currently this assumes signatures being made over the data prefix. URSA actually hashes the
-// message itself (sha512 for secp256k1, sha256 for ed25519), so verification (if we take this in to account)
-// will require the vanilla message
-pub fn verify(data: &Prefix, key: &Prefix, signature: &Prefix) -> Result<bool, Error> {
+pub fn verify(data: &[u8], key: &Prefix, signature: &Prefix) -> Result<bool, Error> {
     match key {
         Prefix::PubKeyEd25519(pk) | Prefix::PubKeyEd25519NT(pk) => match signature {
             Prefix::SigEd25519Sha512(sig) => {
                 let ed = Ed25519Sha512::new();
-                ed.verify(data.to_str().as_bytes(), sig, &pk)
+                ed.verify(data.as_ref(), sig, &pk)
                     .map_err(|e| Error::CryptoError(e))
             }
             _ => Err(Error::SemanticError("wrong sig type".to_string())),
@@ -127,7 +124,7 @@ pub fn verify(data: &Prefix, key: &Prefix, signature: &Prefix) -> Result<bool, E
         Prefix::PubKeyECDSAsecp256k1(pk) | Prefix::PubKeyECDSAsecp256k1NT(pk) => match signature {
             Prefix::SigECDSAsecp256k1Sha256(sig) => {
                 let secp = EcdsaSecp256k1Sha256::new();
-                secp.verify(data.to_str().as_bytes(), sig, &pk)
+                secp.verify(data.as_ref(), sig, &pk)
                     .map_err(|e| Error::CryptoError(e))
             }
             _ => Err(Error::SemanticError("wrong sig type".to_string())),
@@ -227,7 +224,6 @@ impl Default for Prefix {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::derivation;
     use ursa::{keys, signatures};
 
     #[test]
@@ -258,7 +254,6 @@ mod tests {
     #[test]
     fn verify() -> Result<(), Error> {
         let data_string = "hello there";
-        let data_prefix = Prefix::SHA3_256(derivation::sha3_256_digest(data_string.as_bytes()));
 
         let ed = signatures::ed25519::Ed25519Sha512::new();
 
@@ -269,12 +264,15 @@ mod tests {
         let key_prefix = Prefix::PubKeyEd25519NT(pub_key);
 
         let sig = ed
-            .sign(&data_prefix.to_str().as_bytes(), &priv_key)
+            .sign(&data_string.as_bytes(), &priv_key)
             .map_err(|e| Error::CryptoError(e))?;
 
         let sig_prefix = Prefix::SigEd25519Sha512(sig);
 
-        assert!(true, key_prefix.verify(&data_prefix, &sig_prefix)?);
+        assert!(
+            true,
+            key_prefix.verify(&data_string.as_bytes(), &sig_prefix)?
+        );
 
         Ok(())
     }
