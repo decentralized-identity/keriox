@@ -74,7 +74,7 @@ impl Verifiable for VersionedEventMessage {
 
 const SIG_DELIMITER: &str = "\n";
 
-pub fn parse_signed_message(message: String) -> Result<VersionedEventMessage, Error> {
+pub fn parse_signed_message(message: &str) -> Result<VersionedEventMessage, Error> {
     let parts: Vec<&str> = message.split("\r\n\r\n").collect();
 
     let sigs: Vec<Prefix> = parts[1]
@@ -89,9 +89,9 @@ pub fn parse_signed_message(message: String) -> Result<VersionedEventMessage, Er
     }))
 }
 
-pub fn serialize_signed_message(message: VersionedEventMessage) -> String {
+pub fn serialize_signed_message(message: &VersionedEventMessage) -> String {
     [
-        serde_json::to_string(&message).unwrap_or("HELL".to_string()),
+        serde_json::to_string(message).unwrap_or("HELL".to_string()),
         match message {
             VersionedEventMessage::V0_0(ev) => ev
                 .signatures
