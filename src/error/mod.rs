@@ -1,3 +1,5 @@
+use base64::DecodeError;
+use serde::de;
 use thiserror::Error;
 use ursa::CryptoError;
 
@@ -13,5 +15,11 @@ pub enum Error {
     CryptoError(CryptoError),
 
     #[error("Deserialization error")]
-    DeserializationError(#[from] core::fmt::Error),
+    DeserializationError,
+
+    #[error("Base64 Decoding error")]
+    Base64DecodingError(#[from] DecodeError),
+
+    #[error("Improper Prefix Type")]
+    ImproperPrefixType,
 }
