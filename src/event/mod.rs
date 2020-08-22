@@ -1,4 +1,4 @@
-use crate::prefix::Prefix;
+use crate::prefix::IdentifierPrefix;
 use crate::state::IdentifierState;
 use serde::{Deserialize, Serialize};
 pub mod event_data;
@@ -11,7 +11,7 @@ use crate::state::EventSemantics;
 #[derive(Serialize, Deserialize)]
 pub struct Event {
     #[serde(rename = "id")]
-    pub prefix: Prefix,
+    pub prefix: IdentifierPrefix,
 
     // TODO a backhash/digest of previous message?
     pub sn: u64,

@@ -1,7 +1,7 @@
 use crate::{
     error::Error,
     event::Event,
-    prefix::Prefix,
+    prefix::{AttachedSignaturePrefix, Prefix},
     state::{EventSemantics, IdentifierState, Verifiable},
     util::dfs_serializer::to_string,
 };
@@ -33,7 +33,7 @@ pub struct EventMessage {
     ///
     /// TODO in the recommended JSON encoding, the signatures are appended to the json body.
     #[serde(skip)]
-    pub signatures: Vec<Prefix>,
+    pub signatures: Vec<AttachedSignaturePrefix>,
 }
 
 impl EventSemantics for EventMessage {
@@ -66,7 +66,7 @@ impl Verifiable for VersionedEventMessage {
                 .zip(&e.signatures)
                 // check that each is valid
                 .fold(Ok(true), |acc, (key, sig)| {
-                    Ok(acc? && key.verify(&serialized_data_extract.as_bytes(), sig)?)
+                    Ok(acc? && key.verify(&serialized_data_extract.as_bytes(), &sig.sig)?)
                 }),
         }
     }
@@ -77,15 +77,14 @@ const SIG_DELIMITER: &str = "\n";
 pub fn parse_signed_message(message: &str) -> Result<VersionedEventMessage, Error> {
     let parts: Vec<&str> = message.split("\r\n\r\n").collect();
 
-    let sigs: Vec<Prefix> = parts[1]
+    let sigs: Vec<AttachedSignaturePrefix> = parts[1]
         .split(SIG_DELIMITER)
-        .map(|sig| Prefix::from_str(sig))
-        .collect::<Result<Vec<Prefix>, Error>>()?;
+        .map(|sig| AttachedSignaturePrefix::from_str(sig))
+        .collect::<Result<Vec<AttachedSignaturePrefix>, Error>>()?;
 
     Ok(VersionedEventMessage::V0_0(EventMessage {
         signatures: sigs,
-        ..serde_json::from_str(parts[0])
-            .map_err(|_| Error::DeserializationError(core::fmt::Error))?
+        ..serde_json::from_str(parts[0]).map_err(|_| Error::DeserializationError)?
     }))
 }
 
@@ -96,7 +95,7 @@ pub fn serialize_signed_message(message: &VersionedEventMessage) -> String {
             VersionedEventMessage::V0_0(ev) => ev
                 .signatures
                 .iter()
-                .map(|sig| sig.to_string())
+                .map(|sig| sig.to_str())
                 .collect::<Vec<String>>()
                 .join(SIG_DELIMITER),
         },
@@ -121,6 +120,10 @@ mod tests {
             sections::InceptionWitnessConfig,
             sections::KeyConfig,
         },
+        prefix::{
+            AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
+            SelfSigningPrefix,
+        },
     };
     use serde_json;
     use ursa::signatures::{ed25519, SignatureScheme};
@@ -139,15 +142,15 @@ mod tests {
             .map_err(|e| Error::CryptoError(e))?;
 
         // initial signing key prefix
-        let pref0 = Prefix::PubKeyEd25519(pub_key0);
+        let pref0 = BasicPrefix::Ed25519(pub_key0);
 
         // initial control key hash prefix
-        let pref1 = Prefix::SHA3_512(sha3_512_digest(&pub_key1.0));
+        let pref1 = SelfAddressingPrefix::SHA3_512(sha3_512_digest(&pub_key1.0));
 
         // create a simple inception event
         let icp = VersionedEventMessage::V0_0(EventMessage {
             event: Event {
-                prefix: pref0.clone(),
+                prefix: IdentifierPrefix::Basic(pref0.clone()),
                 sn: 0,
                 event_data: EventData::Icp(InceptionEvent {
                     key_config: KeyConfig {
@@ -172,20 +175,23 @@ mod tests {
         let str_event = serde_json::to_string(&icp)
             .map_err(|_| Error::SerializationError("bad serialize".to_string()))?;
 
-        let devent: VersionedEventMessage = serde_json::from_str(&str_event)
-            .map_err(|_| Error::DeserializationError(std::fmt::Error))?;
+        let devent: VersionedEventMessage =
+            serde_json::from_str(&str_event).map_err(|_| Error::DeserializationError)?;
 
         // sign
         let sig = ed
             .sign(sed.as_bytes(), &priv_key0)
             .map_err(|e| Error::CryptoError(e))?;
-        let sig_pref = Prefix::SigEd25519Sha512(sig);
+        let attached_sig = AttachedSignaturePrefix {
+            index: 0,
+            sig: SelfSigningPrefix::Ed25519Sha512(sig),
+        };
 
-        assert!(pref0.verify(sed.as_bytes(), &sig_pref)?);
+        assert!(pref0.verify(sed.as_bytes(), &attached_sig.sig)?);
 
         let signed_event = match devent {
             VersionedEventMessage::V0_0(ev) => VersionedEventMessage::V0_0(EventMessage {
-                signatures: vec![sig_pref],
+                signatures: vec![attached_sig],
                 ..ev
             }),
         };
@@ -194,9 +200,9 @@ mod tests {
 
         let s0 = s_.verify_and_apply(&signed_event)?;
 
-        assert_eq!(s0.prefix, pref0);
+        assert_eq!(s0.prefix, IdentifierPrefix::Basic(pref0.clone()));
         assert_eq!(s0.sn, 0);
-        assert_eq!(s0.last, Prefix::default());
+        assert_eq!(s0.last, SelfAddressingPrefix::default());
         assert_eq!(s0.current.signers.len(), 1);
         assert_eq!(s0.current.signers[0], pref0);
         assert_eq!(s0.current.threshold, 1);

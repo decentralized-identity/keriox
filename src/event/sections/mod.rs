@@ -1,4 +1,4 @@
-use crate::prefix::Prefix;
+use crate::prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -7,10 +7,10 @@ pub struct KeyConfig {
     pub threshold: usize,
 
     #[serde(rename = "keys")]
-    pub public_keys: Vec<Prefix>,
+    pub public_keys: Vec<BasicPrefix>,
 
     #[serde(rename = "next")]
-    pub threshold_key_digest: Prefix,
+    pub threshold_key_digest: SelfAddressingPrefix,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -19,10 +19,10 @@ pub struct WitnessConfig {
     pub tally: usize,
 
     #[serde(rename = "adds")]
-    pub graft: Vec<Prefix>,
+    pub graft: Vec<IdentifierPrefix>,
 
     #[serde(rename = "cuts")]
-    pub prune: Vec<Prefix>,
+    pub prune: Vec<IdentifierPrefix>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -31,5 +31,5 @@ pub struct InceptionWitnessConfig {
     pub tally: usize,
 
     #[serde(rename = "wits")]
-    pub initial_witnesses: Vec<Prefix>,
+    pub initial_witnesses: Vec<IdentifierPrefix>,
 }
