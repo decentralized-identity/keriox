@@ -28,11 +28,19 @@ impl FromStr for BasicPrefix {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match &s[..1] {
+            "B" => Ok(Self::Ed25519NT(PublicKey(decode_config(
+                &s[1..],
+                base64::URL_SAFE,
+            )?))),
             "C" => Ok(Self::X25519(PublicKey(decode_config(
                 &s[1..],
                 base64::URL_SAFE,
             )?))),
-            "L" => Ok(Self::Ed25519NT(PublicKey(decode_config(
+            "D" => Ok(Self::Ed25519(PublicKey(decode_config(
+                &s[1..],
+                base64::URL_SAFE,
+            )?))),
+            "L" => Ok(Self::X448(PublicKey(decode_config(
                 &s[1..],
                 base64::URL_SAFE,
             )?))),
@@ -65,11 +73,11 @@ impl Prefix for BasicPrefix {
         match self {
             Self::ECDSAsecp256k1NT(pk) => &pk.0,
             Self::ECDSAsecp256k1(pk) => &pk.0,
+            Self::Ed25519NT(pk) => &pk.0,
+            Self::Ed25519(pk) => &pk.0,
             Self::Ed448NT(pk) => &pk.0,
             Self::Ed448(pk) => &pk.0,
-            Self::Ed25519NT(pk) => &pk.0,
             Self::X25519(pk) => &pk.0,
-            Self::Ed25519(pk) => &pk.0,
             Self::X448(pk) => &pk.0,
         }
     }
