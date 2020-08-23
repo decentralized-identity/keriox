@@ -10,7 +10,7 @@ use crate::state::EventSemantics;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Event {
-    #[serde(rename = "id")]
+    #[serde(rename = "pre")]
     pub prefix: IdentifierPrefix,
 
     // TODO a backhash/digest of previous message?
