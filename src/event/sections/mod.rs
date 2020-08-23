@@ -1,7 +1,7 @@
 use crate::prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct KeyConfig {
     #[serde(rename = "sith")]
     pub threshold: usize,
@@ -13,7 +13,7 @@ pub struct KeyConfig {
     pub threshold_key_digest: SelfAddressingPrefix,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct WitnessConfig {
     #[serde(rename = "toad")]
     pub tally: usize,
@@ -25,7 +25,7 @@ pub struct WitnessConfig {
     pub prune: Vec<IdentifierPrefix>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct InceptionWitnessConfig {
     #[serde(rename = "toad")]
     pub tally: usize,

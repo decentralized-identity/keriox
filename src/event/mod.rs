@@ -8,7 +8,7 @@ use self::event_data::EventData;
 use crate::error::Error;
 use crate::state::EventSemantics;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Event {
     #[serde(rename = "id")]
     pub prefix: IdentifierPrefix,
