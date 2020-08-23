@@ -7,8 +7,6 @@ use crate::{
 };
 use core::str::FromStr;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct EventMessage {
@@ -18,13 +16,12 @@ pub struct EventMessage {
     #[serde(flatten)]
     pub event: Event,
 
-    /// Additional Data for forwards compat
-    #[serde(flatten)]
-    pub extra: HashMap<String, Value>,
-
     /// Appended Signatures
     #[serde(skip)]
     pub signatures: Vec<AttachedSignaturePrefix>,
+    // Additional Data for forwards compat
+    // #[serde(flatten)]
+    // pub extra: HashMap<String, Value>,
 }
 
 impl EventSemantics for EventMessage {
@@ -129,7 +126,8 @@ mod tests {
         let pref1 = SelfAddressingPrefix::SHA3_512(sha3_512_digest(&pub_key1.0));
 
         // create a simple inception event
-        let icp = VersionedEventMessage::V0_0(EventMessage {
+        let icp = EventMessage {
+            version: "KERI_0_0".to_string(),
             event: Event {
                 prefix: IdentifierPrefix::Basic(pref0.clone()),
                 sn: 0,
@@ -145,10 +143,8 @@ mod tests {
                     },
                 }),
             },
-            sig_config: vec![0],
             signatures: vec![],
-            extra: HashMap::new(),
-        });
+        };
 
         // serialised extracted dataset
         let sed = dfs_serializer::to_string(&icp)
@@ -157,10 +153,8 @@ mod tests {
         let str_event = serde_json::to_string(&icp)
             .map_err(|_| Error::SerializationError("bad serialize".to_string()))?;
 
-        let devent: VersionedEventMessage =
+        let devent: EventMessage =
             serde_json::from_str(&str_event).map_err(|_| Error::DeserializationError)?;
-
-        println!("{:?}", devent);
 
         // sign
         let sig = ed
@@ -173,11 +167,9 @@ mod tests {
 
         assert!(pref0.verify(sed.as_bytes(), &attached_sig.sig)?);
 
-        let signed_event = match devent {
-            VersionedEventMessage::V0_0(ev) => VersionedEventMessage::V0_0(EventMessage {
-                signatures: vec![attached_sig],
-                ..ev
-            }),
+        let signed_event = EventMessage {
+            signatures: vec![attached_sig],
+            ..devent
         };
 
         let s_ = IdentifierState::default();
