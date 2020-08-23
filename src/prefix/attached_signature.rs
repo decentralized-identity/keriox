@@ -56,6 +56,10 @@ impl Prefix for AttachedSignaturePrefix {
     }
 }
 
+pub fn get_sig_count(num: u16) -> String {
+    ["-AA", &num_to_b64(num)].join("")
+}
+
 // returns the u16 from the lowest 2 bytes of the b64 string
 // currently only works for strings 4 chars or less
 fn b64_to_num(b64: &str) -> Result<u16, Error> {

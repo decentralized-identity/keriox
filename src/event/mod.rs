@@ -1,9 +1,9 @@
-use crate::prefix::IdentifierPrefix;
+use crate::event_message::EventMessage;
+use crate::prefix::{AttachedSignaturePrefix, IdentifierPrefix};
 use crate::state::IdentifierState;
 use serde::{Deserialize, Serialize};
 pub mod event_data;
 pub mod sections;
-
 use self::event_data::EventData;
 use crate::error::Error;
 use crate::state::EventSemantics;
@@ -14,10 +14,21 @@ pub struct Event {
     pub prefix: IdentifierPrefix,
 
     // TODO a backhash/digest of previous message?
+    // TODO write as hex string
     pub sn: u64,
 
     #[serde(flatten)]
     pub event_data: EventData,
+}
+
+impl Event {
+    pub fn sign(&self, sigs: Vec<AttachedSignaturePrefix>) -> Result<EventMessage, Error> {
+        EventMessage::new(self, sigs)
+    }
+
+    pub fn get_serialized_size(&self) -> Result<usize, Error> {
+        EventMessage::get_size(self)
+    }
 }
 
 impl EventSemantics for Event {

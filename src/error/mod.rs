@@ -1,5 +1,6 @@
 use base64::DecodeError;
 use serde::de;
+use serde_json;
 use thiserror::Error;
 use ursa::CryptoError;
 
@@ -7,6 +8,12 @@ use ursa::CryptoError;
 pub enum Error {
     #[error("Error during Serialization: {0}")]
     SerializationError(String),
+
+    #[error("JSON Serialization error")]
+    JSONSerializationError {
+        #[from]
+        source: serde_json::Error,
+    },
 
     #[error("Error while applying event: {0}")]
     SemanticError(String),

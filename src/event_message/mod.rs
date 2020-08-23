@@ -1,17 +1,21 @@
 use crate::{
     error::Error,
     event::Event,
-    prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix},
+    prefix::{attached_signature::get_sig_count, AttachedSignaturePrefix, BasicPrefix, Prefix},
     state::{EventSemantics, IdentifierState, Verifiable},
     util::dfs_serializer::to_string,
 };
 use core::str::FromStr;
 use serde::{Deserialize, Serialize};
+use std::convert::TryInto;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EventMessage {
+    /// Version and Size string
+    ///
+    /// TODO should be broken up into better types
     #[serde(rename = "vs")]
-    pub version: String,
+    version: String,
 
     #[serde(flatten)]
     pub event: Event,
@@ -22,6 +26,26 @@ pub struct EventMessage {
     // Additional Data for forwards compat
     // #[serde(flatten)]
     // pub extra: HashMap<String, Value>,
+}
+
+impl EventMessage {
+    pub fn new(event: &Event, sigs: Vec<AttachedSignaturePrefix>) -> Result<Self, Error> {
+        Ok(Self {
+            version: format!("KERI10JSON{:06x}_", event.get_serialized_size()?),
+            event: event.clone(),
+            signatures: sigs,
+        })
+    }
+
+    pub fn get_size(event: &Event) -> Result<usize, Error> {
+        Ok(serde_json::to_string(&Self {
+            version: "KERI10JSON000000_".to_string(),
+            event: event.clone(),
+            signatures: vec![],
+        })
+        .map_err(|_| Error::DeserializationError)?
+        .len())
+    }
 }
 
 impl EventSemantics for EventMessage {
@@ -52,13 +76,13 @@ impl Verifiable for EventMessage {
     }
 }
 
-const SIG_DELIMITER: &str = "\n";
+const JSON_SIG_DELIMITER: &str = "\n";
 
 pub fn parse_signed_message_json(message: &str) -> Result<EventMessage, Error> {
     let parts: Vec<&str> = message.split("\r\n\r\n").collect();
 
     let sigs: Vec<AttachedSignaturePrefix> = parts[1]
-        .split(SIG_DELIMITER)
+        .split(JSON_SIG_DELIMITER)
         .map(|sig| AttachedSignaturePrefix::from_str(sig))
         .collect::<Result<Vec<AttachedSignaturePrefix>, Error>>()?;
 
@@ -68,17 +92,18 @@ pub fn parse_signed_message_json(message: &str) -> Result<EventMessage, Error> {
     })
 }
 
-pub fn serialize_signed_message_json(message: &EventMessage) -> String {
-    [
-        serde_json::to_string(message).unwrap_or("HELL".to_string()),
+pub fn serialize_signed_message_json(message: &EventMessage) -> Result<String, Error> {
+    Ok([
+        serde_json::to_string(message)?,
+        get_sig_count(message.signatures.len().try_into().unwrap()),
         message
             .signatures
             .iter()
             .map(|sig| sig.to_str())
             .collect::<Vec<String>>()
-            .join(SIG_DELIMITER),
+            .join(JSON_SIG_DELIMITER),
     ]
-    .join("\r\n\r\n")
+    .join(JSON_SIG_DELIMITER))
 }
 
 pub fn validate_events(kel: &[EventMessage]) -> Result<IdentifierState, Error> {
@@ -126,35 +151,28 @@ mod tests {
         let pref1 = SelfAddressingPrefix::SHA3_512(sha3_512_digest(&pub_key1.0));
 
         // create a simple inception event
-        let icp = EventMessage {
-            version: "KERI_0_0".to_string(),
-            event: Event {
-                prefix: IdentifierPrefix::Basic(pref0.clone()),
-                sn: 0,
-                event_data: EventData::Icp(InceptionEvent {
-                    key_config: KeyConfig {
-                        threshold: 1,
-                        public_keys: vec![pref0.clone()],
-                        threshold_key_digest: pref1.clone(),
-                    },
-                    witness_config: InceptionWitnessConfig {
-                        tally: 0,
-                        initial_witnesses: vec![],
-                    },
-                }),
-            },
-            signatures: vec![],
+        let icp = Event {
+            prefix: IdentifierPrefix::Basic(pref0.clone()),
+            sn: 0,
+            event_data: EventData::Icp(InceptionEvent {
+                key_config: KeyConfig {
+                    threshold: 1,
+                    public_keys: vec![pref0.clone()],
+                    threshold_key_digest: pref1.clone(),
+                },
+                witness_config: InceptionWitnessConfig {
+                    tally: 0,
+                    initial_witnesses: vec![],
+                },
+            }),
         };
 
+        let icp_message = icp.sign(vec![])?;
+
         // serialised extracted dataset
-        let sed = dfs_serializer::to_string(&icp)
-            .map_err(|_| Error::SerializationError("bad serialize".to_string()))?;
+        let sed = dfs_serializer::to_string(&icp_message)?;
 
-        let str_event = serde_json::to_string(&icp)
-            .map_err(|_| Error::SerializationError("bad serialize".to_string()))?;
-
-        let devent: EventMessage =
-            serde_json::from_str(&str_event).map_err(|_| Error::DeserializationError)?;
+        let str_event = serde_json::to_string(&icp_message)?;
 
         // sign
         let sig = ed
@@ -167,10 +185,7 @@ mod tests {
 
         assert!(pref0.verify(sed.as_bytes(), &attached_sig.sig)?);
 
-        let signed_event = EventMessage {
-            signatures: vec![attached_sig],
-            ..devent
-        };
+        let signed_event = icp.sign(vec![attached_sig])?;
 
         let s_ = IdentifierState::default();
 
