@@ -15,16 +15,16 @@ impl FromStr for SelfSigningPrefix {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match &s[1..2] {
-            "B" => Ok(Self::ECDSAsecp256k1Sha256(decode_config(
+        match &s[..2] {
+            "0B" => Ok(Self::ECDSAsecp256k1Sha256(decode_config(
                 &s[2..],
                 base64::URL_SAFE,
             )?)),
-            "C" => Ok(Self::Ed25519Sha512(decode_config(
+            "0C" => Ok(Self::Ed25519Sha512(decode_config(
                 &s[2..],
                 base64::URL_SAFE,
             )?)),
-            "A" => match &s[2..4] {
+            "1A" => match &s[2..4] {
                 "AE" => Ok(Self::Ed448(decode_config(&s[4..], base64::URL_SAFE)?)),
                 _ => Err(Error::DeserializationError),
             },

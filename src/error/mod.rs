@@ -18,7 +18,10 @@ pub enum Error {
     DeserializationError,
 
     #[error("Base64 Decoding error")]
-    Base64DecodingError(#[from] DecodeError),
+    Base64DecodingError {
+        #[from]
+        source: DecodeError,
+    },
 
     #[error("Improper Prefix Type")]
     ImproperPrefixType,
