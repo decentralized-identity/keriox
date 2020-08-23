@@ -1,37 +1,28 @@
 use crate::{
     error::Error,
     event::Event,
-    prefix::{AttachedSignaturePrefix, Prefix},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix},
     state::{EventSemantics, IdentifierState, Verifiable},
     util::dfs_serializer::to_string,
 };
 use core::str::FromStr;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::HashMap;
 
-/// Versioned Event Message
-///
-/// A VersionedEventMessage represents any signed message involved in any version of the KERI protocol
-#[derive(Serialize, Deserialize)]
-#[serde(tag = "vs")]
-pub enum VersionedEventMessage {
-    #[serde(rename = "KERI_0.1")]
-    V0_0(EventMessage),
-}
-
-/// Event Message
-///
-/// An EventMessage represents any signed message involved in the KERI protocol
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct EventMessage {
+    #[serde(rename = "vs")]
+    pub version: String,
+
     #[serde(flatten)]
     pub event: Event,
 
-    #[serde(rename = "idxs")]
-    pub sig_config: Vec<usize>,
+    /// Additional Data for forwards compat
+    #[serde(flatten)]
+    pub extra: HashMap<String, Value>,
 
     /// Appended Signatures
-    ///
-    /// TODO in the recommended JSON encoding, the signatures are appended to the json body.
     #[serde(skip)]
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
@@ -42,39 +33,31 @@ impl EventSemantics for EventMessage {
     }
 }
 
-impl EventSemantics for VersionedEventMessage {
-    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
-        match self {
-            Self::V0_0(e) => e.apply_to(state),
-        }
-    }
-}
-
-impl Verifiable for VersionedEventMessage {
+impl Verifiable for EventMessage {
     fn verify_against(&self, state: &IdentifierState) -> Result<bool, Error> {
-        // TODO better way of getting digest prefixes, also this always assumes SHA3-512 digests
         let serialized_data_extract = to_string(self)?;
 
-        // extract relevant keys from state
-        match self {
-            Self::V0_0(e) => e
-                .sig_config
+        Ok(self.signatures.len() >= state.current.threshold
+            && self
+                .signatures
                 .iter()
-                // get the signing keys indexed by event sig_config
-                .map(|&index| &state.current.signers[index])
-                // match them with the signatures
-                .zip(&e.signatures)
-                // check that each is valid
-                .fold(Ok(true), |acc, (key, sig)| {
-                    Ok(acc? && key.verify(&serialized_data_extract.as_bytes(), &sig.sig)?)
-                }),
-        }
+                .fold(Ok(true), |acc: Result<bool, Error>, sig| {
+                    Ok(acc?
+                        && state
+                            .current
+                            .signers
+                            .get(sig.index as usize)
+                            .ok_or(Error::SemanticError("Key not present in state".to_string()))
+                            .and_then(|key: &BasicPrefix| {
+                                key.verify(serialized_data_extract.as_bytes(), &sig.sig)
+                            })?)
+                })?)
     }
 }
 
 const SIG_DELIMITER: &str = "\n";
 
-pub fn parse_signed_message(message: &str) -> Result<VersionedEventMessage, Error> {
+pub fn parse_signed_message_json(message: &str) -> Result<EventMessage, Error> {
     let parts: Vec<&str> = message.split("\r\n\r\n").collect();
 
     let sigs: Vec<AttachedSignaturePrefix> = parts[1]
@@ -82,28 +65,26 @@ pub fn parse_signed_message(message: &str) -> Result<VersionedEventMessage, Erro
         .map(|sig| AttachedSignaturePrefix::from_str(sig))
         .collect::<Result<Vec<AttachedSignaturePrefix>, Error>>()?;
 
-    Ok(VersionedEventMessage::V0_0(EventMessage {
+    Ok(EventMessage {
         signatures: sigs,
         ..serde_json::from_str(parts[0]).map_err(|_| Error::DeserializationError)?
-    }))
+    })
 }
 
-pub fn serialize_signed_message(message: &VersionedEventMessage) -> String {
+pub fn serialize_signed_message_json(message: &EventMessage) -> String {
     [
         serde_json::to_string(message).unwrap_or("HELL".to_string()),
-        match message {
-            VersionedEventMessage::V0_0(ev) => ev
-                .signatures
-                .iter()
-                .map(|sig| sig.to_str())
-                .collect::<Vec<String>>()
-                .join(SIG_DELIMITER),
-        },
+        message
+            .signatures
+            .iter()
+            .map(|sig| sig.to_str())
+            .collect::<Vec<String>>()
+            .join(SIG_DELIMITER),
     ]
     .join("\r\n\r\n")
 }
 
-pub fn validate_events(kel: &[VersionedEventMessage]) -> Result<IdentifierState, Error> {
+pub fn validate_events(kel: &[EventMessage]) -> Result<IdentifierState, Error> {
     kel.iter().fold(Ok(IdentifierState::default()), |s, e| {
         s?.verify_and_apply(e)
     })
@@ -166,6 +147,7 @@ mod tests {
             },
             sig_config: vec![0],
             signatures: vec![],
+            extra: HashMap::new(),
         });
 
         // serialised extracted dataset
@@ -177,6 +159,8 @@ mod tests {
 
         let devent: VersionedEventMessage =
             serde_json::from_str(&str_event).map_err(|_| Error::DeserializationError)?;
+
+        println!("{:?}", devent);
 
         // sign
         let sig = ed

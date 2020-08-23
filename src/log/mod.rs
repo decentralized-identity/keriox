@@ -1,14 +1,14 @@
 use crate::{
     error::Error,
-    event_message::VersionedEventMessage,
+    event_message::EventMessage,
     state::{EventSemantics, IdentifierState, Verifiable},
 };
 
-pub struct EventLog(Vec<VersionedEventMessage>);
+pub struct EventLog(Vec<EventMessage>);
 
 impl EventLog {
     pub fn new() -> Self {
-        EventLog(Vec::<VersionedEventMessage>::new())
+        EventLog(Vec::<EventMessage>::new())
     }
 
     // run the validation engine on this EventLog
@@ -17,12 +17,12 @@ impl EventLog {
     }
 
     // evaluate the application of the event on this EventLog (non-mutating)
-    pub fn apply(&self, event: &VersionedEventMessage) -> Result<IdentifierState, Error> {
+    pub fn apply(&self, event: &EventMessage) -> Result<IdentifierState, Error> {
         event.apply_to(self.replay()?)
     }
 
     // evaluate and APPEND the event to this EventLog
-    pub fn commit(&mut self, event: VersionedEventMessage) -> Result<IdentifierState, Error> {
+    pub fn commit(&mut self, event: EventMessage) -> Result<IdentifierState, Error> {
         let result = self.apply(&event)?;
         self.0.push(event);
         Ok(result)
