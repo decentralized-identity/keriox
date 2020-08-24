@@ -88,7 +88,7 @@ const JSON_SIG_DELIMITER: &str = "\n";
 pub fn parse_signed_message_json(message: &str) -> Result<EventMessage, Error> {
     let parts: Vec<&str> = message.split(JSON_SIG_DELIMITER).collect();
 
-    let sigs: Vec<AttachedSignaturePrefix> = parts[1..]
+    let sigs: Vec<AttachedSignaturePrefix> = parts[2..]
         .iter()
         .map(|sig| AttachedSignaturePrefix::from_str(sig))
         .collect::<Result<Vec<AttachedSignaturePrefix>, Error>>()?;
