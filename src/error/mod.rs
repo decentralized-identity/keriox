@@ -1,3 +1,5 @@
+use base64::DecodeError;
+use serde_json;
 use thiserror::Error;
 use ursa::CryptoError;
 
@@ -6,6 +8,12 @@ pub enum Error {
     #[error("Error during Serialization: {0}")]
     SerializationError(String),
 
+    #[error("JSON Serialization error")]
+    JSONSerializationError {
+        #[from]
+        source: serde_json::Error,
+    },
+
     #[error("Error while applying event: {0}")]
     SemanticError(String),
 
@@ -13,5 +21,14 @@ pub enum Error {
     CryptoError(CryptoError),
 
     #[error("Deserialization error")]
-    DeserializationError(#[from] core::fmt::Error),
+    DeserializationError,
+
+    #[error("Base64 Decoding error")]
+    Base64DecodingError {
+        #[from]
+        source: DecodeError,
+    },
+
+    #[error("Improper Prefix Type")]
+    ImproperPrefixType,
 }

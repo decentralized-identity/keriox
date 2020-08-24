@@ -2,7 +2,7 @@ pub mod delegated;
 pub mod signatory;
 
 use crate::error::Error;
-use crate::prefix::Prefix;
+use crate::prefix::{IdentifierPrefix, SelfAddressingPrefix};
 use delegated::DelegatedIdentifierState;
 use signatory::Signatory;
 
@@ -11,14 +11,14 @@ use signatory::Signatory;
 /// represents the accumulated state after applying events, based on section 13 of the paper
 #[derive(Default, PartialEq, Debug)]
 pub struct IdentifierState {
-    pub prefix: Prefix,
+    pub prefix: IdentifierPrefix,
     pub sn: u64,
-    pub last: Prefix,
+    pub last: SelfAddressingPrefix,
     pub current: Signatory,
-    pub next: Prefix,
+    pub next: SelfAddressingPrefix,
     pub delegated_keys: Vec<DelegatedIdentifierState>,
     pub tally: usize,
-    pub witnesses: Vec<Prefix>,
+    pub witnesses: Vec<IdentifierPrefix>,
 }
 
 impl IdentifierState {

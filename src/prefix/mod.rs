@@ -1,128 +1,118 @@
 use crate::error::Error;
-use base64::{decode_config, encode_config};
-use core::{
-    fmt::{Display, Formatter},
-    str::FromStr,
-};
+use base64::encode_config;
+use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use ursa::{
-    keys::PublicKey,
-    signatures::{ed25519::Ed25519Sha512, secp256k1::EcdsaSecp256k1Sha256, SignatureScheme},
-};
+use ursa::signatures::prelude::*;
+
+pub mod attached_signature;
+pub mod basic;
+pub mod seed;
+pub mod self_addressing;
+pub mod self_signing;
+
+pub use attached_signature::AttachedSignaturePrefix;
+pub use basic::BasicPrefix;
+pub use seed::SeedPrefix;
+pub use self_addressing::SelfAddressingPrefix;
+pub use self_signing::SelfSigningPrefix;
+
+pub trait Prefix: FromStr<Err = Error> {
+    fn derivative(&self) -> &[u8];
+    fn derivation_code(&self) -> String;
+    fn to_str(&self) -> String {
+        // empty data cannot be prefixed!
+        match self.derivative().len() {
+            0 => "".to_string(),
+            _ => [
+                self.derivation_code(),
+                encode_config(self.derivative(), base64::URL_SAFE_NO_PAD),
+            ]
+            .join(""),
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Prefix {
-    RandomSeed128(Vec<u8>),
-    RandomSeed256Ed25519(Vec<u8>),
-    RandomSeed256ECDSAsecp256k1(Vec<u8>),
-    RandomSeed448(Vec<u8>),
-
-    PubKeyEd25519NT(PublicKey),
-    PubKeyX25519(PublicKey),
-    PubKeyX448(PublicKey),
-    PubKeyEd25519(PublicKey),
-    PubKeyECDSAsecp256k1NT(PublicKey),
-    PubKeyECDSAsecp256k1(PublicKey),
-
-    SigEd25519Sha512(Vec<u8>),
-    SigECDSAsecp256k1Sha256(Vec<u8>),
-
-    Blake3_256(Vec<u8>),
-    Blake2B256(Vec<u8>),
-    Blake2S256(Vec<u8>),
-    SHA3_256(Vec<u8>),
-    SHA2_256(Vec<u8>),
-    Blake3_512(Vec<u8>),
-    SHA3_512(Vec<u8>),
-    Blake2B512(Vec<u8>),
-    SHA2_512(Vec<u8>),
+pub enum IdentifierPrefix {
+    Basic(BasicPrefix),
+    SelfAddressing(SelfAddressingPrefix),
+    SelfSigning(SelfSigningPrefix),
 }
 
-impl Prefix {
-    pub fn derivative(&self) -> &[u8] {
-        match self {
-            Self::RandomSeed128(s) => &s,
-            Self::RandomSeed256Ed25519(s) => &s,
-            Self::RandomSeed256ECDSAsecp256k1(s) => &s,
-            Self::RandomSeed448(s) => &s,
-
-            Self::PubKeyEd25519NT(p) => &p.0,
-            Self::PubKeyX25519(p) => &p.0,
-            Self::PubKeyX448(p) => &p.0,
-            Self::PubKeyEd25519(p) => &p.0,
-
-            Self::PubKeyECDSAsecp256k1NT(p) => &p.0,
-            Self::PubKeyECDSAsecp256k1(p) => &p.0,
-
-            Self::SigEd25519Sha512(s) => &s,
-            Self::SigECDSAsecp256k1Sha256(s) => &s,
-
-            Self::Blake3_256(d) => &d,
-            Self::Blake2B256(d) => &d,
-            Self::Blake2S256(d) => &d,
-            Self::SHA3_256(d) => &d,
-            Self::SHA2_256(d) => &d,
-            Self::Blake3_512(d) => &d,
-            Self::SHA3_512(d) => &d,
-            Self::Blake2B512(d) => &d,
-            Self::SHA2_512(d) => &d,
+impl FromStr for IdentifierPrefix {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match BasicPrefix::from_str(s) {
+            Ok(bp) => Ok(Self::Basic(bp)),
+            Err(_) => match SelfAddressingPrefix::from_str(s) {
+                Ok(sa) => Ok(Self::SelfAddressing(sa)),
+                Err(_) => Ok(Self::SelfSigning(SelfSigningPrefix::from_str(s)?)),
+            },
         }
-    }
-
-    pub fn derivation_code(&self) -> &str {
-        match self {
-            Self::RandomSeed256Ed25519(_) => "A",
-            Self::PubKeyEd25519NT(_) => "B",
-            Self::PubKeyX25519(_) => "C",
-            Self::PubKeyEd25519(_) => "D",
-            Self::Blake3_256(_) => "E",
-            Self::Blake2B256(_) => "F",
-            Self::Blake2S256(_) => "G",
-            Self::SHA3_256(_) => "H",
-            Self::SHA2_256(_) => "I",
-            Self::RandomSeed256ECDSAsecp256k1(_) => "J",
-            Self::RandomSeed448(_) => "K",
-            Self::PubKeyX448(_) => "L",
-            Self::RandomSeed128(_) => "0A",
-            Self::SigEd25519Sha512(_) => "0B",
-            Self::SigECDSAsecp256k1Sha256(_) => "0C",
-            Self::Blake3_512(_) => "0D",
-            Self::SHA3_512(_) => "0E",
-            Self::Blake2B512(_) => "0F",
-            Self::SHA2_512(_) => "0G",
-
-            // TODO currently unassigned
-            Self::PubKeyECDSAsecp256k1NT(_) => "",
-            Self::PubKeyECDSAsecp256k1(_) => "",
-        }
-    }
-
-    pub fn to_str(&self) -> String {
-        let encoded = encode_config(self.derivative(), base64::URL_SAFE);
-        [
-            self.derivation_code(),
-            &encoded[..encoded.len() - self.derivation_code().len()],
-        ]
-        .join("")
-    }
-
-    pub fn verify(&self, data: &[u8], signature: &Prefix) -> Result<bool, Error> {
-        verify(data, self, signature)
     }
 }
 
-pub fn verify(data: &[u8], key: &Prefix, signature: &Prefix) -> Result<bool, Error> {
+impl Prefix for IdentifierPrefix {
+    fn derivative(&self) -> &[u8] {
+        match self {
+            Self::Basic(bp) => bp.derivative(),
+            Self::SelfAddressing(sap) => sap.derivative(),
+            Self::SelfSigning(ssp) => ssp.derivative(),
+        }
+    }
+    fn derivation_code(&self) -> String {
+        match self {
+            Self::Basic(bp) => bp.derivation_code(),
+            Self::SelfAddressing(sap) => sap.derivation_code(),
+            Self::SelfSigning(ssp) => ssp.derivation_code(),
+        }
+    }
+}
+
+/// Serde compatible Serialize
+impl Serialize for IdentifierPrefix {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_str())
+    }
+}
+
+/// Serde compatible Deserialize
+impl<'de> Deserialize<'de> for IdentifierPrefix {
+    fn deserialize<D>(deserializer: D) -> Result<IdentifierPrefix, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+
+        IdentifierPrefix::from_str(&s).map_err(serde::de::Error::custom)
+    }
+}
+
+impl Default for IdentifierPrefix {
+    fn default() -> Self {
+        IdentifierPrefix::SelfAddressing(SelfAddressingPrefix::default())
+    }
+}
+
+pub fn verify(
+    data: &[u8],
+    key: &BasicPrefix,
+    signature: &SelfSigningPrefix,
+) -> Result<bool, Error> {
     match key {
-        Prefix::PubKeyEd25519(pk) | Prefix::PubKeyEd25519NT(pk) => match signature {
-            Prefix::SigEd25519Sha512(sig) => {
+        BasicPrefix::Ed25519(pk) | BasicPrefix::Ed25519NT(pk) => match signature {
+            SelfSigningPrefix::Ed25519Sha512(sig) => {
                 let ed = Ed25519Sha512::new();
                 ed.verify(data.as_ref(), sig, &pk)
                     .map_err(|e| Error::CryptoError(e))
             }
             _ => Err(Error::SemanticError("wrong sig type".to_string())),
         },
-        Prefix::PubKeyECDSAsecp256k1(pk) | Prefix::PubKeyECDSAsecp256k1NT(pk) => match signature {
-            Prefix::SigECDSAsecp256k1Sha256(sig) => {
+        BasicPrefix::ECDSAsecp256k1(pk) | BasicPrefix::ECDSAsecp256k1NT(pk) => match signature {
+            SelfSigningPrefix::ECDSAsecp256k1Sha256(sig) => {
                 let secp = EcdsaSecp256k1Sha256::new();
                 secp.verify(data.as_ref(), sig, &pk)
                     .map_err(|e| Error::CryptoError(e))
@@ -133,94 +123,6 @@ pub fn verify(data: &[u8], key: &Prefix, signature: &Prefix) -> Result<bool, Err
     }
 }
 
-impl Display for Prefix {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), core::fmt::Error> {
-        write!(f, "{}", self.to_str())
-    }
-}
-
-impl FromStr for Prefix {
-    type Err = Error;
-
-    // TODO enforce derivative length assumptions for each derivation procedure
-    fn from_str(str: &str) -> Result<Self, Self::Err> {
-        match &str[..1] {
-            // length 1 derivation codes
-            "A" => Ok(Self::RandomSeed256Ed25519(decode_derivative(&str[1..])?)),
-            "B" => Ok(Self::PubKeyEd25519NT(PublicKey(decode_derivative(
-                &str[1..],
-            )?))),
-            "C" => Ok(Self::PubKeyX25519(PublicKey(decode_derivative(&str[1..])?))),
-            "D" => Ok(Self::PubKeyEd25519(PublicKey(decode_derivative(
-                &str[1..],
-            )?))),
-            "E" => Ok(Self::Blake3_256(decode_derivative(&str[1..])?)),
-            "F" => Ok(Self::Blake2B256(decode_derivative(&str[1..])?)),
-            "G" => Ok(Self::Blake2S256(decode_derivative(&str[1..])?)),
-            // "G" => Ok(Self::PubKeyECDSAsecp256k1NT(PublicKey(decode_derivative(
-            //     &str[1..],
-            // )?))),
-            // "H" => Ok(Self::PubKeyECDSAsecp256k1(PublicKey(decode_derivative(
-            //     &str[1..],
-            // )?))),
-            "H" => Ok(Self::SHA3_256(decode_derivative(&str[1..])?)),
-            "I" => Ok(Self::SHA2_256(decode_derivative(&str[1..])?)),
-            "J" => Ok(Self::RandomSeed256ECDSAsecp256k1(decode_derivative(
-                &str[1..],
-            )?)),
-            "K" => Ok(Self::RandomSeed448(decode_derivative(&str[1..])?)),
-            "L" => Ok(Self::PubKeyX448(PublicKey(decode_derivative(&str[1..])?))),
-            // length 2 derivation codes
-            // TODO account for attached sig derivation codes
-            "0" => match &str[1..2] {
-                "A" => Ok(Self::RandomSeed128(decode_derivative(&str[1..])?)),
-                "B" => Ok(Self::SigEd25519Sha512(decode_derivative(&str[2..])?)),
-                "C" => Ok(Self::SigECDSAsecp256k1Sha256(decode_derivative(&str[2..])?)),
-                "D" => Ok(Self::Blake3_512(decode_derivative(&str[2..])?)),
-                "E" => Ok(Self::SHA3_512(decode_derivative(&str[2..])?)),
-                "F" => Ok(Self::Blake2B512(decode_derivative(&str[2..])?)),
-                "G" => Ok(Self::SHA2_512(decode_derivative(&str[2..])?)),
-                _ => Err(Error::DeserializationError(core::fmt::Error)),
-            },
-            // no derivation codes longer than 2 chars yet
-            _ => Err(Error::DeserializationError(core::fmt::Error)),
-        }
-    }
-}
-
-fn decode_derivative(str: &str) -> Result<Vec<u8>, Error> {
-    decode_config(str, base64::URL_SAFE).map_err(|_| Error::DeserializationError(core::fmt::Error))
-}
-
-/// Serde compatible Serialize
-impl Serialize for Prefix {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&self.to_str())
-    }
-}
-
-/// Serde compatible Deserialize
-impl<'de> Deserialize<'de> for Prefix {
-    fn deserialize<D>(deserializer: D) -> Result<Prefix, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        // TODO change from .unwrap()
-        let prefix = Prefix::from_str(&s).unwrap();
-        Ok(prefix)
-    }
-}
-
-impl Default for Prefix {
-    fn default() -> Self {
-        Self::SHA3_512(vec![])
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -228,9 +130,9 @@ mod tests {
 
     #[test]
     fn simple_deserialize() -> Result<(), Error> {
-        let pref: Prefix = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".parse()?;
+        let pref: IdentifierPrefix = "BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".parse()?;
 
-        assert_eq!(pref.derivation_code(), "A");
+        assert_eq!(pref.derivation_code(), "B");
 
         assert_eq!(pref.derivative().len(), 32);
 
@@ -241,7 +143,7 @@ mod tests {
 
     #[test]
     fn simple_serialize() -> Result<(), Error> {
-        let pref = Prefix::PubKeyEd25519NT(keys::PublicKey(vec![0; 32]));
+        let pref = BasicPrefix::Ed25519NT(keys::PublicKey(vec![0; 32]));
 
         assert_eq!(
             pref.to_str(),
@@ -261,13 +163,13 @@ mod tests {
             .keypair(Some(keys::KeyGenOption::UseSeed(vec![0u8; 32])))
             .map_err(|e| Error::CryptoError(e))?;
 
-        let key_prefix = Prefix::PubKeyEd25519NT(pub_key);
+        let key_prefix = BasicPrefix::Ed25519NT(pub_key);
 
         let sig = ed
             .sign(&data_string.as_bytes(), &priv_key)
             .map_err(|e| Error::CryptoError(e))?;
 
-        let sig_prefix = Prefix::SigEd25519Sha512(sig);
+        let sig_prefix = SelfSigningPrefix::Ed25519Sha512(sig);
 
         assert!(
             true,

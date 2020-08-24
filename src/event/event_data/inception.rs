@@ -1,20 +1,23 @@
 use super::super::sections::{InceptionWitnessConfig, KeyConfig};
-use crate::state::EventSemantics;
 use crate::error::Error;
 use crate::state::signatory::Signatory;
+use crate::state::EventSemantics;
 use crate::state::IdentifierState;
 use serde::{Deserialize, Serialize};
 
 /// Inception Event
 ///
 /// Describes the inception (icp) event data,
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct InceptionEvent {
     #[serde(flatten)]
     pub key_config: KeyConfig,
 
     #[serde(flatten)]
     pub witness_config: InceptionWitnessConfig,
+
+    #[serde(rename = "cnfg")]
+    pub inception_configuration: Vec<String>,
 }
 
 impl EventSemantics for InceptionEvent {
