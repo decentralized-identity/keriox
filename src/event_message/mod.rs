@@ -124,7 +124,7 @@ mod tests {
     use super::super::util::dfs_serializer;
     use super::*;
     use crate::{
-        derivation::sha3_512_digest,
+        derivation::{blake2b_256_digest, sha3_512_digest},
         event::{
             event_data::{inception::InceptionEvent, EventData},
             sections::InceptionWitnessConfig,
@@ -136,10 +136,13 @@ mod tests {
         },
     };
     use serde_json;
-    use ursa::signatures::{ed25519, SignatureScheme};
+    use ursa::{
+        kex::{x25519, KeyExchangeScheme},
+        signatures::{ed25519, SignatureScheme},
+    };
 
     #[test]
-    fn create() -> Result<(), Error> {
+    fn basic_create() -> Result<(), Error> {
         // hi Ed!
         let ed = ed25519::Ed25519Sha512::new();
 
@@ -172,12 +175,8 @@ mod tests {
             }),
         };
 
-        let icp_message = icp.sign(vec![])?;
-
         // serialised extracted dataset
-        let sed = dfs_serializer::to_string(&icp_message)?;
-
-        let str_event = serde_json::to_string(&icp_message)?;
+        let sed = icp.extract_serialized_data_set()?;
 
         // sign
         let sig = ed
@@ -203,6 +202,98 @@ mod tests {
         assert_eq!(s0.current.signers[0], pref0);
         assert_eq!(s0.current.threshold, 1);
         assert_eq!(s0.next, pref1);
+        assert_eq!(s0.witnesses, vec![]);
+        assert_eq!(s0.tally, 0);
+        assert_eq!(s0.delegated_keys, vec![]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn self_addressing_create() -> Result<(), Error> {
+        // hi Ed!
+        let ed = ed25519::Ed25519Sha512::new();
+
+        let (sig_key_0, sig_priv_0) = ed
+            .keypair(Option::None)
+            .map_err(|e| Error::CryptoError(e))?;
+        let (sig_key_1, sig_priv_1) = ed
+            .keypair(Option::None)
+            .map_err(|e| Error::CryptoError(e))?;
+
+        // hi X!
+        let x = x25519::X25519Sha256::new();
+
+        // get two X25519 keypairs
+        let (enc_key_0, enc_priv_0) = x.keypair(Option::None).map_err(|e| Error::CryptoError(e))?;
+        let (enc_key_1, enc_priv_1) = x.keypair(Option::None).map_err(|e| Error::CryptoError(e))?;
+
+        // initial key set
+        let sig_pref_0 = BasicPrefix::Ed25519(sig_key_0);
+        let enc_pref_0 = BasicPrefix::X25519(enc_key_0);
+
+        // next key set
+        let sig_pref_1 = BasicPrefix::Ed25519(sig_key_1);
+        let enc_pref_1 = BasicPrefix::X25519(enc_key_1);
+
+        // next key set pre-commitment
+        let nexter_pref = SelfAddressingPrefix::Blake2B256(blake2b_256_digest(
+            [sig_pref_1.to_str(), enc_pref_1.to_str()]
+                .join("")
+                .as_bytes(),
+        ));
+
+        let icp_data = Event {
+            prefix: IdentifierPrefix::default(),
+            sn: 0,
+            event_data: EventData::Icp(InceptionEvent {
+                key_config: KeyConfig {
+                    threshold: 1,
+                    public_keys: vec![sig_pref_0.clone(), enc_pref_0.clone()],
+                    threshold_key_digest: nexter_pref.clone(),
+                },
+                witness_config: InceptionWitnessConfig::default(),
+                inception_configuration: vec![],
+            }),
+        };
+
+        let pref = IdentifierPrefix::SelfAddressing(SelfAddressingPrefix::Blake2B256(
+            blake2b_256_digest(icp_data.extract_serialized_data_set()?.as_bytes()),
+        ));
+
+        let icp_event = Event {
+            prefix: pref.clone(),
+            ..icp_data
+        };
+
+        // serialised extracted dataset
+        let sed = icp_event.extract_serialized_data_set()?;
+
+        // sign
+        let sig = ed
+            .sign(sed.as_bytes(), &sig_priv_0)
+            .map_err(|e| Error::CryptoError(e))?;
+        let attached_sig = AttachedSignaturePrefix {
+            index: 0,
+            sig: SelfSigningPrefix::Ed25519Sha512(sig),
+        };
+
+        assert!(sig_pref_0.verify(sed.as_bytes(), &attached_sig.sig)?);
+
+        let signed_event = icp_event.sign(vec![attached_sig])?;
+
+        let s_ = IdentifierState::default();
+
+        let s0 = s_.verify_and_apply(&signed_event)?;
+
+        assert_eq!(s0.prefix, pref);
+        assert_eq!(s0.sn, 0);
+        assert_eq!(s0.last, SelfAddressingPrefix::default());
+        assert_eq!(s0.current.signers.len(), 2);
+        assert_eq!(s0.current.signers[0], sig_pref_0);
+        assert_eq!(s0.current.signers[1], enc_pref_0);
+        assert_eq!(s0.current.threshold, 1);
+        assert_eq!(s0.next, nexter_pref);
         assert_eq!(s0.witnesses, vec![]);
         assert_eq!(s0.tally, 0);
         assert_eq!(s0.delegated_keys, vec![]);

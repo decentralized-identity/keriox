@@ -150,20 +150,24 @@ mod tests {
     fn serialize() -> Result<(), Error> {
         let pref_ed_2 = AttachedSignaturePrefix {
             index: 2,
-            sig: SelfSigningPrefix::Ed25519Sha512(vec![]),
+            sig: SelfSigningPrefix::Ed25519Sha512(vec![0u8; 64]),
         };
         let pref_secp_6 = AttachedSignaturePrefix {
             index: 6,
-            sig: SelfSigningPrefix::ECDSAsecp256k1Sha256(vec![]),
+            sig: SelfSigningPrefix::ECDSAsecp256k1Sha256(vec![0u8; 64]),
         };
         let pref_448_4 = AttachedSignaturePrefix {
             index: 4,
-            sig: SelfSigningPrefix::Ed448(vec![]),
+            sig: SelfSigningPrefix::Ed448(vec![0u8; 114]),
         };
 
-        assert_eq!("AC", pref_ed_2.to_str());
-        assert_eq!("BG", pref_secp_6.to_str());
-        assert_eq!("0AAE", pref_448_4.to_str());
+        assert_eq!(88, pref_ed_2.to_str().len());
+        assert_eq!(88, pref_secp_6.to_str().len());
+        assert_eq!(156, pref_448_4.to_str().len());
+
+        assert_eq!("ACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", pref_ed_2.to_str());
+        assert_eq!("BGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", pref_secp_6.to_str());
+        assert_eq!("0AAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", pref_448_4.to_str());
         Ok(())
     }
 }
