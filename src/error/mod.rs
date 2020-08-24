@@ -1,5 +1,4 @@
 use base64::DecodeError;
-use serde::de;
 use serde_json;
 use thiserror::Error;
 use ursa::CryptoError;

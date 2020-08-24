@@ -3,7 +3,7 @@ use crate::{
     event::Event,
     prefix::{attached_signature::get_sig_count, AttachedSignaturePrefix, BasicPrefix, Prefix},
     state::{EventSemantics, IdentifierState, Verifiable},
-    util::dfs_serializer::to_string,
+    util::dfs_serializer,
 };
 use core::str::FromStr;
 use serde::{Deserialize, Serialize};
@@ -46,6 +46,13 @@ impl EventMessage {
         .map_err(|_| Error::DeserializationError)?
         .len())
     }
+
+    /// Extract Serialized Data Set
+    ///
+    /// returns the serialized extracted data set (for signing/verification) for this event message
+    pub fn extract_serialized_data_set(&self) -> Result<String, Error> {
+        dfs_serializer::to_string(self)
+    }
 }
 
 impl EventSemantics for EventMessage {
@@ -56,7 +63,7 @@ impl EventSemantics for EventMessage {
 
 impl Verifiable for EventMessage {
     fn verify_against(&self, state: &IdentifierState) -> Result<bool, Error> {
-        let serialized_data_extract = to_string(self)?;
+        let serialized_data_extract = self.extract_serialized_data_set()?;
 
         Ok(self.signatures.len() >= state.current.threshold
             && self
@@ -79,16 +86,16 @@ impl Verifiable for EventMessage {
 const JSON_SIG_DELIMITER: &str = "\n";
 
 pub fn parse_signed_message_json(message: &str) -> Result<EventMessage, Error> {
-    let parts: Vec<&str> = message.split("\r\n\r\n").collect();
+    let parts: Vec<&str> = message.split(JSON_SIG_DELIMITER).collect();
 
-    let sigs: Vec<AttachedSignaturePrefix> = parts[1]
-        .split(JSON_SIG_DELIMITER)
+    let sigs: Vec<AttachedSignaturePrefix> = parts[1..]
+        .iter()
         .map(|sig| AttachedSignaturePrefix::from_str(sig))
         .collect::<Result<Vec<AttachedSignaturePrefix>, Error>>()?;
 
     Ok(EventMessage {
         signatures: sigs,
-        ..serde_json::from_str(parts[0]).map_err(|_| Error::DeserializationError)?
+        ..serde_json::from_str(parts[0])?
     })
 }
 
@@ -160,10 +167,8 @@ mod tests {
                     public_keys: vec![pref0.clone()],
                     threshold_key_digest: pref1.clone(),
                 },
-                witness_config: InceptionWitnessConfig {
-                    tally: 0,
-                    initial_witnesses: vec![],
-                },
+                witness_config: InceptionWitnessConfig::default(),
+                inception_configuration: vec![],
             }),
         };
 

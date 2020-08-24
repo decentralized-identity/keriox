@@ -29,6 +29,14 @@ impl Event {
     pub fn get_serialized_size(&self) -> Result<usize, Error> {
         EventMessage::get_size(self)
     }
+
+    /// Extract Serialized Data Set
+    ///
+    /// returns the serialized extracted data set (for signing/verification) for this event
+    /// NOTE: this automatically calculates the "vs" data
+    pub fn extract_serialized_data_set(&self) -> Result<String, Error> {
+        EventMessage::new(self, vec![])?.extract_serialized_data_set()
+    }
 }
 
 impl EventSemantics for Event {
@@ -66,7 +74,7 @@ mod tests {
     #[test]
     fn ser_der() -> Result<(), serde_json::Error> {
         let event_str = "{
-  \"id\": \"DXq5YqaL6L48pf0fu7IUhL0JRaU2_RxFP0AL43wYn148\",
+  \"pre\": \"DXq5YqaL6L48pf0fu7IUhL0JRaU2_RxFP0AL43wYn148\",
   \"sn\": 0,
   \"ilk\": \"icp\",
   \"sith\": 2,
@@ -76,14 +84,15 @@ mod tests {
     \"B8tr54sHON1vWVrTkep6H-4HAl6FEQt27fThWoNZsa88\",
     \"BVrTkep6HHA8tr54sHON1Qt27fThWoNZsa88-4vWl6FE\"
   ],
-  \"next\": \"FWoNZsa88VrTkep6HQt27fTh-4HA8tr54sHON1vWl6FE\",
+  \"nxt\": \"FWoNZsa88VrTkep6HQt27fTh-4HA8tr54sHON1vWl6FE\",
   \"toad\": 2,
   \"wits\":
   [
     \"DVrTkep6H-Qt27fThWoNZsa884HA8tr54sHON1vWl6FE\",
     \"DHON1vWl6FEQt27fThWoNZsa88VrTkep6H-4HA8tr54s\",
     \"DThWoNZsa88VrTkeQt27fp6H-4HA8tr54sHON1vWl6FE\"
-  ]
+  ],
+  \"cnfg\": []
 }";
 
         let event: Event = serde_json::from_str(event_str)?;

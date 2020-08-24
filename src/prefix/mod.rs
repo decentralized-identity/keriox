@@ -20,11 +20,15 @@ pub trait Prefix: FromStr<Err = Error> {
     fn derivative(&self) -> &[u8];
     fn derivation_code(&self) -> String;
     fn to_str(&self) -> String {
-        [
-            self.derivation_code(),
-            encode_config(self.derivative(), base64::URL_SAFE_NO_PAD),
-        ]
-        .join("")
+        // empty data cannot be prefixed!
+        match self.derivative().len() {
+            0 => "".to_string(),
+            _ => [
+                self.derivation_code(),
+                encode_config(self.derivative(), base64::URL_SAFE_NO_PAD),
+            ]
+            .join(""),
+        }
     }
 }
 

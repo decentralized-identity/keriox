@@ -13,7 +13,7 @@ pub struct KeyConfig {
     pub threshold_key_digest: SelfAddressingPrefix,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct WitnessConfig {
     #[serde(rename = "toad")]
     pub tally: usize,
@@ -25,7 +25,7 @@ pub struct WitnessConfig {
     pub prune: Vec<IdentifierPrefix>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct InceptionWitnessConfig {
     #[serde(rename = "toad")]
     pub tally: usize,
