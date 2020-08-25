@@ -1,10 +1,11 @@
 use crate::prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix};
 use serde::{Deserialize, Serialize};
+use serde_hex::{Compact, SerHex};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct KeyConfig {
-    #[serde(rename = "sith")]
-    pub threshold: usize,
+    #[serde(rename = "sith", with = "SerHex::<Compact>")]
+    pub threshold: u64,
 
     #[serde(rename = "keys")]
     pub public_keys: Vec<BasicPrefix>,
@@ -15,8 +16,8 @@ pub struct KeyConfig {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct WitnessConfig {
-    #[serde(rename = "toad")]
-    pub tally: usize,
+    #[serde(rename = "toad", with = "SerHex::<Compact>")]
+    pub tally: u64,
 
     #[serde(rename = "adds")]
     pub graft: Vec<IdentifierPrefix>,
@@ -27,8 +28,8 @@ pub struct WitnessConfig {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct InceptionWitnessConfig {
-    #[serde(rename = "toad")]
-    pub tally: usize,
+    #[serde(rename = "toad", with = "SerHex::<Compact>")]
+    pub tally: u64,
 
     #[serde(rename = "wits")]
     pub initial_witnesses: Vec<IdentifierPrefix>,
@@ -39,7 +40,8 @@ pub struct DelegatedEventSeal {
     #[serde(rename = "id")]
     pub prefix: IdentifierPrefix,
 
-    pub sn: u32,
+    #[serde(with = "SerHex::<Compact>")]
+    pub sn: u64,
 
     #[serde(rename = "dig")]
     pub event_digest: SelfAddressingPrefix,
@@ -50,7 +52,8 @@ pub struct DelegatingLocationSeal {
     #[serde(rename = "id")]
     pub prefix: IdentifierPrefix,
 
-    pub sn: u32,
+    #[serde(with = "SerHex::<Compact>")]
+    pub sn: u64,
 
     pub ilk: String,
 

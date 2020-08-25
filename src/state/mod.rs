@@ -17,7 +17,7 @@ pub struct IdentifierState {
     pub current: Signatory,
     pub next: SelfAddressingPrefix,
     pub delegated_keys: Vec<DelegatedIdentifierState>,
-    pub tally: usize,
+    pub tally: u64,
     pub witnesses: Vec<IdentifierPrefix>,
 }
 

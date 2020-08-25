@@ -65,7 +65,7 @@ impl Verifiable for EventMessage {
     fn verify_against(&self, state: &IdentifierState) -> Result<bool, Error> {
         let serialized_data_extract = self.extract_serialized_data_set()?;
 
-        Ok(self.signatures.len() >= state.current.threshold
+        Ok(self.signatures.len() as u64 >= state.current.threshold
             && self
                 .signatures
                 .iter()

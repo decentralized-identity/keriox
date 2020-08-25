@@ -7,14 +7,14 @@ pub mod sections;
 use self::event_data::EventData;
 use crate::error::Error;
 use crate::state::EventSemantics;
+use serde_hex::{Compact, SerHex};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Event {
     #[serde(rename = "pre")]
     pub prefix: IdentifierPrefix,
 
-    // TODO a backhash/digest of previous message?
-    // TODO write as hex string
+    #[serde(with = "SerHex::<Compact>")]
     pub sn: u64,
 
     #[serde(flatten)]
@@ -75,7 +75,7 @@ mod tests {
     fn ser_der() -> Result<(), serde_json::Error> {
         let event_str = "{
   \"pre\": \"DXq5YqaL6L48pf0fu7IUhL0JRaU2_RxFP0AL43wYn148\",
-  \"sn\": 0,
+  \"sn\": \"0\",
   \"ilk\": \"icp\",
   \"sith\": 2,
   \"keys\":

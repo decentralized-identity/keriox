@@ -2,6 +2,6 @@ use crate::prefix::BasicPrefix;
 
 #[derive(Default, PartialEq, Debug)]
 pub struct Signatory {
-    pub threshold: usize,
+    pub threshold: u64,
     pub signers: Vec<BasicPrefix>,
 }
