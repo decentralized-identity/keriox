@@ -1,8 +1,10 @@
 [package]
-name = "keriox"
+name = "keri"
 version = "0.1.0"
 authors = ["Decentralized Identity Foundation"]
 edition = "2018"
+description = "Core library for the Key Event Receipt Infrastructure "
+license = "Apache-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
