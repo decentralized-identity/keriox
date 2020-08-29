@@ -5,8 +5,10 @@ use crate::{
     state::{EventSemantics, IdentifierState, Verifiable},
     util::dfs_serializer,
 };
+pub mod serialization_info;
 use core::str::FromStr;
 use serde::{Deserialize, Serialize};
+use serialization_info::*;
 use std::convert::TryInto;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -15,36 +17,49 @@ pub struct EventMessage {
     ///
     /// TODO should be broken up into better types
     #[serde(rename = "vs")]
-    version: String,
+    serialization_info: SerializationInfo,
 
     #[serde(flatten)]
     pub event: Event,
-
-    /// Appended Signatures
-    #[serde(skip)]
-    pub signatures: Vec<AttachedSignaturePrefix>,
     // Additional Data for forwards compat
     // #[serde(flatten)]
     // pub extra: HashMap<String, Value>,
 }
 
+pub struct SignedEventMessage {
+    pub event_message: EventMessage,
+    pub signatures: Vec<AttachedSignaturePrefix>,
+}
+
 impl EventMessage {
-    pub fn new(event: &Event, sigs: Vec<AttachedSignaturePrefix>) -> Result<Self, Error> {
+    pub fn new(event: &Event, format: &SerializationFormats) -> Result<Self, Error> {
         Ok(Self {
-            version: format!("KERI10JSON{:06x}_", event.get_serialized_size()?),
+            serialization_info: SerializationInfo {
+                major_version: 1,
+                minor_version: 0,
+                size: Self::get_size(event, format)? as u16,
+                kind: *format,
+            },
             event: event.clone(),
-            signatures: sigs,
         })
     }
 
-    pub fn get_size(event: &Event) -> Result<usize, Error> {
-        Ok(serde_json::to_string(&Self {
-            version: "KERI10JSON000000_".to_string(),
+    fn get_size(event: &Event, format: &SerializationFormats) -> Result<usize, Error> {
+        Ok(Self {
+            serialization_info: SerializationInfo::new(format, 0),
             event: event.clone(),
-            signatures: vec![],
-        })
+        }
+        .serialize()
         .map_err(|_| Error::DeserializationError)?
         .len())
+    }
+
+    pub fn serialization(&self) -> SerializationFormats {
+        self.serialization_info.kind
+    }
+
+    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
+        self.serialization().encode(self)
     }
 
     /// Extract Serialized Data Set
@@ -52,6 +67,19 @@ impl EventMessage {
     /// returns the serialized extracted data set (for signing/verification) for this event message
     pub fn extract_serialized_data_set(&self) -> Result<String, Error> {
         dfs_serializer::to_string(self)
+    }
+
+    pub fn sign(&self, sigs: Vec<AttachedSignaturePrefix>) -> SignedEventMessage {
+        SignedEventMessage::new(self, sigs)
+    }
+}
+
+impl SignedEventMessage {
+    pub fn new(message: &EventMessage, sigs: Vec<AttachedSignaturePrefix>) -> Self {
+        Self {
+            event_message: message.clone(),
+            signatures: sigs,
+        }
     }
 }
 
@@ -61,9 +89,15 @@ impl EventSemantics for EventMessage {
     }
 }
 
-impl Verifiable for EventMessage {
+impl EventSemantics for SignedEventMessage {
+    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
+        self.event_message.apply_to(state)
+    }
+}
+
+impl Verifiable for SignedEventMessage {
     fn verify_against(&self, state: &IdentifierState) -> Result<bool, Error> {
-        let serialized_data_extract = self.extract_serialized_data_set()?;
+        let serialized_data_extract = self.event_message.extract_serialized_data_set()?;
 
         Ok(self.signatures.len() as u64 >= state.current.threshold
             && self
@@ -94,14 +128,13 @@ pub fn parse_signed_message_json(message: &str) -> Result<EventMessage, Error> {
         .collect::<Result<Vec<AttachedSignaturePrefix>, Error>>()?;
 
     Ok(EventMessage {
-        signatures: sigs,
         ..serde_json::from_str(parts[0])?
     })
 }
 
-pub fn serialize_signed_message_json(message: &EventMessage) -> Result<String, Error> {
+pub fn serialize_signed_message_json(message: &SignedEventMessage) -> Result<String, Error> {
     Ok([
-        serde_json::to_string(message)?,
+        serde_json::to_string(&message.event_message)?,
         get_sig_count(message.signatures.len().try_into().unwrap()),
         message
             .signatures
@@ -113,7 +146,7 @@ pub fn serialize_signed_message_json(message: &EventMessage) -> Result<String, E
     .join(JSON_SIG_DELIMITER))
 }
 
-pub fn validate_events(kel: &[EventMessage]) -> Result<IdentifierState, Error> {
+pub fn validate_events(kel: &[SignedEventMessage]) -> Result<IdentifierState, Error> {
     kel.iter().fold(Ok(IdentifierState::default()), |s, e| {
         s?.verify_and_apply(e)
     })
@@ -175,8 +208,10 @@ mod tests {
             }),
         };
 
+        let icp_m = icp.to_message(&SerializationFormats::JSON)?;
+
         // serialised extracted dataset
-        let sed = icp.extract_serialized_data_set()?;
+        let sed = icp_m.extract_serialized_data_set()?;
 
         // sign
         let sig = ed
@@ -189,7 +224,7 @@ mod tests {
 
         assert!(pref0.verify(sed.as_bytes(), &attached_sig.sig)?);
 
-        let signed_event = icp.sign(vec![attached_sig])?;
+        let signed_event = icp_m.sign(vec![attached_sig]);
 
         let s_ = IdentifierState::default();
 
@@ -257,17 +292,20 @@ mod tests {
             }),
         };
 
+        let icp_data_message = icp_data.to_message(&SerializationFormats::JSON)?;
+
         let pref = IdentifierPrefix::SelfAddressing(SelfAddressingPrefix::Blake2B256(
-            blake2b_256_digest(icp_data.extract_serialized_data_set()?.as_bytes()),
+            blake2b_256_digest(icp_data_message.extract_serialized_data_set()?.as_bytes()),
         ));
 
-        let icp_event = Event {
+        let icp_m = Event {
             prefix: pref.clone(),
             ..icp_data
-        };
+        }
+        .to_message(&SerializationFormats::JSON)?;
 
         // serialised extracted dataset
-        let sed = icp_event.extract_serialized_data_set()?;
+        let sed = icp_m.extract_serialized_data_set()?;
 
         // sign
         let sig = ed
@@ -280,7 +318,7 @@ mod tests {
 
         assert!(sig_pref_0.verify(sed.as_bytes(), &attached_sig.sig)?);
 
-        let signed_event = icp_event.sign(vec![attached_sig])?;
+        let signed_event = icp_m.sign(vec![attached_sig]);
 
         let s_ = IdentifierState::default();
 

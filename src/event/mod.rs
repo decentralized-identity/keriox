@@ -1,5 +1,5 @@
-use crate::event_message::EventMessage;
-use crate::prefix::{AttachedSignaturePrefix, IdentifierPrefix};
+pub use crate::event_message::{serialization_info::SerializationFormats, EventMessage};
+use crate::prefix::IdentifierPrefix;
 use crate::state::IdentifierState;
 use serde::{Deserialize, Serialize};
 pub mod event_data;
@@ -22,20 +22,8 @@ pub struct Event {
 }
 
 impl Event {
-    pub fn sign(&self, sigs: Vec<AttachedSignaturePrefix>) -> Result<EventMessage, Error> {
-        EventMessage::new(self, sigs)
-    }
-
-    pub fn get_serialized_size(&self) -> Result<usize, Error> {
-        EventMessage::get_size(self)
-    }
-
-    /// Extract Serialized Data Set
-    ///
-    /// returns the serialized extracted data set (for signing/verification) for this event
-    /// NOTE: this automatically calculates the "vs" data
-    pub fn extract_serialized_data_set(&self) -> Result<String, Error> {
-        EventMessage::new(self, vec![])?.extract_serialized_data_set()
+    pub fn to_message(&self, format: &SerializationFormats) -> Result<EventMessage, Error> {
+        EventMessage::new(self, format)
     }
 }
 
@@ -77,7 +65,7 @@ mod tests {
   \"pre\": \"DXq5YqaL6L48pf0fu7IUhL0JRaU2_RxFP0AL43wYn148\",
   \"sn\": \"0\",
   \"ilk\": \"icp\",
-  \"sith\": 2,
+  \"sith\": \"2\",
   \"keys\":
   [
     \"BWoNZsa88VrTkep6HQt27fTh-4HA8tr54sHON1vWl6FE\",
@@ -85,7 +73,7 @@ mod tests {
     \"BVrTkep6HHA8tr54sHON1Qt27fThWoNZsa88-4vWl6FE\"
   ],
   \"nxt\": \"FWoNZsa88VrTkep6HQt27fTh-4HA8tr54sHON1vWl6FE\",
-  \"toad\": 2,
+  \"toad\": \"2\",
   \"wits\":
   [
     \"DVrTkep6H-Qt27fThWoNZsa884HA8tr54sHON1vWl6FE\",

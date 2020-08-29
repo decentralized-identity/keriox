@@ -1,4 +1,6 @@
 use base64::DecodeError;
+use core::num::ParseIntError;
+use serde_cbor;
 use serde_json;
 use thiserror::Error;
 use ursa::CryptoError;
@@ -12,6 +14,18 @@ pub enum Error {
     JSONSerializationError {
         #[from]
         source: serde_json::Error,
+    },
+
+    #[error("CBOR Serialization error")]
+    CBORSerializationError {
+        #[from]
+        source: serde_cbor::Error,
+    },
+
+    #[error("Error parsing numerical value: {source}")]
+    IntegerParseValue {
+        #[from]
+        source: ParseIntError,
     },
 
     #[error("Error while applying event: {0}")]
