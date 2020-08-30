@@ -10,6 +10,85 @@ pub struct AttachedSignaturePrefix {
     pub sig: SelfSigningPrefix,
 }
 
+impl AttachedSignaturePrefix {
+    pub fn new(index: u16, sig: SelfSigningPrefix) -> Self {
+        Self { index, sig }
+    }
+}
+
+pub mod parse_attached_signature {
+    use super::*;
+    use nom::{branch::*, combinator::*, error::ErrorKind, multi::*, sequence::*};
+
+    pub fn signature(s: &str) -> nom::IResult<&str, AttachedSignaturePrefix> {
+        let (more, type_c) = nom::bytes::complete::take(1u8)(s)?;
+
+        // TODO this could be a lot nicer
+        match type_c {
+            "A" => {
+                let (maybe_sig, index_c) = nom::bytes::complete::take(1u8)(more)?;
+
+                let index = b64_to_num(index_c)
+                    .map_err(|_| nom::Err::Failure((index_c, ErrorKind::IsNot)))?;
+
+                let (rest, sig_s) = nom::bytes::complete::take(86u8)(maybe_sig)?;
+
+                let sig = SelfSigningPrefix::Ed25519Sha512(
+                    base64::decode_config(sig_s, base64::URL_SAFE)
+                        .map_err(|_| nom::Err::Failure((index_c, ErrorKind::IsNot)))?,
+                );
+
+                Ok((rest, AttachedSignaturePrefix::new(index, sig)))
+            }
+            "B" => {
+                let (maybe_sig, index_c) = nom::bytes::complete::take(1u8)(more)?;
+
+                let index = b64_to_num(index_c)
+                    .map_err(|_| nom::Err::Failure((index_c, ErrorKind::IsNot)))?;
+
+                let (rest, sig_s) = nom::bytes::complete::take(86u8)(maybe_sig)?;
+
+                let sig = SelfSigningPrefix::ECDSAsecp256k1Sha256(
+                    base64::decode_config(sig_s, base64::URL_SAFE)
+                        .map_err(|_| nom::Err::Failure((index_c, ErrorKind::IsNot)))?,
+                );
+
+                Ok((rest, AttachedSignaturePrefix::new(index, sig)))
+            }
+            "0" => {
+                let (maybe_count, type_c_2) = nom::bytes::complete::take(1u8)(more)?;
+                match type_c_2 {
+                    "A" => {
+                        let (maybe_sig, index_c) = nom::bytes::complete::take(2u8)(maybe_count)?;
+
+                        let index = b64_to_num(index_c)
+                            .map_err(|_| nom::Err::Failure((index_c, ErrorKind::IsNot)))?;
+
+                        let (rest, sig_s) = nom::bytes::complete::take(152u8)(maybe_sig)?;
+
+                        let sig = SelfSigningPrefix::Ed448(
+                            base64::decode_config(sig_s, base64::URL_SAFE)
+                                .map_err(|_| nom::Err::Failure((index_c, ErrorKind::IsNot)))?,
+                        );
+
+                        Ok((rest, AttachedSignaturePrefix::new(index, sig)))
+                    }
+                    _ => Err(nom::Err::Failure((type_c_2, ErrorKind::IsNot))),
+                }
+            }
+            _ => Err(nom::Err::Failure((type_c, ErrorKind::IsNot))),
+        }
+    }
+
+    #[test]
+    fn test() {
+        assert_eq!(
+            signature("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+            Ok(("", AttachedSignaturePrefix::new(0, SelfSigningPrefix::Ed25519Sha512([0u8; 64].to_vec()))))
+        )
+    }
+}
+
 impl FromStr for AttachedSignaturePrefix {
     type Err = Error;
 
@@ -62,7 +141,7 @@ pub fn get_sig_count(num: u16) -> String {
 
 // returns the u16 from the lowest 2 bytes of the b64 string
 // currently only works for strings 4 chars or less
-fn b64_to_num(b64: &str) -> Result<u16, Error> {
+pub fn b64_to_num(b64: &str) -> Result<u16, Error> {
     let slice = decode_config(
         match b64.len() {
             1 => ["AAA", b64].join(""),
