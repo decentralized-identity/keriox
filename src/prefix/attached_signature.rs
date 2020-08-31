@@ -73,10 +73,10 @@ pub mod parse_attached_signature {
 
                         Ok((rest, AttachedSignaturePrefix::new(index, sig)))
                     }
-                    _ => Err(nom::Err::Failure((type_c_2, ErrorKind::IsNot))),
+                    _ => Err(nom::Err::Error((type_c_2, ErrorKind::IsNot))),
                 }
             }
-            _ => Err(nom::Err::Failure((type_c, ErrorKind::IsNot))),
+            _ => Err(nom::Err::Error((type_c, ErrorKind::IsNot))),
         }
     }
 
@@ -85,7 +85,12 @@ pub mod parse_attached_signature {
         assert_eq!(
             signature("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
             Ok(("", AttachedSignaturePrefix::new(0, SelfSigningPrefix::Ed25519Sha512([0u8; 64].to_vec()))))
-        )
+        );
+
+        assert_eq!(
+            signature("BCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+            Ok(("AA", AttachedSignaturePrefix::new(2, SelfSigningPrefix::ECDSAsecp256k1Sha256([0u8; 64].to_vec()))))
+        );
     }
 }
 
