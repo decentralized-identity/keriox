@@ -16,84 +16,6 @@ impl AttachedSignaturePrefix {
     }
 }
 
-pub mod parse_attached_signature {
-    use super::*;
-    use nom::{branch::*, combinator::*, error::ErrorKind, multi::*, sequence::*};
-
-    pub fn signature(s: &str) -> nom::IResult<&str, AttachedSignaturePrefix> {
-        let (more, type_c) = nom::bytes::complete::take(1u8)(s)?;
-
-        // TODO this could be a lot nicer
-        match type_c {
-            "A" => {
-                let (maybe_sig, index_c) = nom::bytes::complete::take(1u8)(more)?;
-
-                let index = b64_to_num(index_c)
-                    .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?;
-
-                let (rest, sig_s) = nom::bytes::complete::take(86u8)(maybe_sig)?;
-
-                let sig = SelfSigningPrefix::Ed25519Sha512(
-                    base64::decode_config(sig_s, base64::URL_SAFE)
-                        .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?,
-                );
-
-                Ok((rest, AttachedSignaturePrefix::new(index, sig)))
-            }
-            "B" => {
-                let (maybe_sig, index_c) = nom::bytes::complete::take(1u8)(more)?;
-
-                let index = b64_to_num(index_c)
-                    .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?;
-
-                let (rest, sig_s) = nom::bytes::complete::take(86u8)(maybe_sig)?;
-
-                let sig = SelfSigningPrefix::ECDSAsecp256k1Sha256(
-                    base64::decode_config(sig_s, base64::URL_SAFE)
-                        .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?,
-                );
-
-                Ok((rest, AttachedSignaturePrefix::new(index, sig)))
-            }
-            "0" => {
-                let (maybe_count, type_c_2) = nom::bytes::complete::take(1u8)(more)?;
-                match type_c_2 {
-                    "A" => {
-                        let (maybe_sig, index_c) = nom::bytes::complete::take(2u8)(maybe_count)?;
-
-                        let index = b64_to_num(index_c)
-                            .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?;
-
-                        let (rest, sig_s) = nom::bytes::complete::take(152u8)(maybe_sig)?;
-
-                        let sig = SelfSigningPrefix::Ed448(
-                            base64::decode_config(sig_s, base64::URL_SAFE)
-                                .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?,
-                        );
-
-                        Ok((rest, AttachedSignaturePrefix::new(index, sig)))
-                    }
-                    _ => Err(nom::Err::Error((type_c_2, ErrorKind::IsNot))),
-                }
-            }
-            _ => Err(nom::Err::Error((type_c, ErrorKind::IsNot))),
-        }
-    }
-
-    #[test]
-    fn test() {
-        assert_eq!(
-            signature("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
-            Ok(("", AttachedSignaturePrefix::new(0, SelfSigningPrefix::Ed25519Sha512([0u8; 64].to_vec()))))
-        );
-
-        assert_eq!(
-            signature("BCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
-            Ok(("AA", AttachedSignaturePrefix::new(2, SelfSigningPrefix::ECDSAsecp256k1Sha256([0u8; 64].to_vec()))))
-        );
-    }
-}
-
 impl FromStr for AttachedSignaturePrefix {
     type Err = Error;
 
@@ -165,7 +87,7 @@ pub fn b64_to_num(b64: &str) -> Result<u16, Error> {
     }))
 }
 
-fn num_to_b64(num: u16) -> String {
+pub fn num_to_b64(num: u16) -> String {
     match num {
         n if n < 63 => {
             encode_config(&[num.to_be_bytes()[1] << 2], base64::URL_SAFE)[..1].to_string()

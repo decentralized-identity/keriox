@@ -6,6 +6,7 @@ use ursa::signatures::prelude::*;
 
 pub mod attached_signature;
 pub mod basic;
+pub mod parse;
 pub mod seed;
 pub mod self_addressing;
 pub mod self_signing;

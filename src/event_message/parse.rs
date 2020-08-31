@@ -1,5 +1,5 @@
 use super::{AttachedSignaturePrefix, EventMessage, SignedEventMessage};
-use crate::prefix::attached_signature::{b64_to_num, parse_attached_signature::signature};
+use crate::prefix::{attached_signature::b64_to_num, parse::signature};
 use nom::{branch::*, combinator::*, error::ErrorKind, multi::*, sequence::*};
 
 fn json_message(s: &str) -> nom::IResult<&str, EventMessage> {
