@@ -63,6 +63,7 @@ pub fn signed_event_stream(s: &str) -> nom::IResult<&str, Vec<SignedEventMessage
 fn test_sigs() {
     use crate::prefix::SelfSigningPrefix;
     assert_eq!(sig_count("-AAA"), Ok(("", 0u16)));
+    assert_eq!(sig_count("-ABA"), Ok(("", 64u16)));
     assert_eq!(
         sig_count("-AABextra data and stuff"),
         Ok(("extra data and stuff", 1u16))
@@ -102,7 +103,6 @@ fn test_sigs() {
 #[test]
 fn test_event() {
     let stream = r#"{"vs":"KERI10JSON000159_","pre":"ECui-E44CqN2U7uffCikRCp_YKLkPrA4jsTZ_A0XRLzc","sn":"0","ilk":"icp","sith":"2","keys":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"nxt":"Evhf3437ZRRnVhT0zOxo_rBX_GxpGoAnLuzrVlDK8ZdM","toad":"0","wits":[],"cnfg":[]}extra data"#;
-    print!("{:?}", message(stream));
 }
 
 #[test]
