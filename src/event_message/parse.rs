@@ -6,7 +6,7 @@ fn json_message(s: &str) -> nom::IResult<&str, EventMessage> {
     let mut stream = serde_json::Deserializer::from_slice(s.as_bytes()).into_iter::<EventMessage>();
     match stream.next() {
         Some(Ok(event)) => Ok((&s[stream.byte_offset()..], event)),
-        _ => Err(nom::Err::Failure((s, ErrorKind::IsNot))),
+        _ => Err(nom::Err::Error((s, ErrorKind::IsNot))),
     }
 }
 
@@ -14,7 +14,7 @@ fn cbor_message(s: &str) -> nom::IResult<&str, EventMessage> {
     let mut stream = serde_cbor::Deserializer::from_slice(s.as_bytes()).into_iter::<EventMessage>();
     match stream.next() {
         Some(Ok(event)) => Ok((&s[stream.byte_offset()..], event)),
-        _ => Err(nom::Err::Failure((s, ErrorKind::IsNot))),
+        _ => Err(nom::Err::Error((s, ErrorKind::IsNot))),
     }
 }
 
@@ -60,7 +60,7 @@ pub fn signed_event_stream(s: &str) -> nom::IResult<&str, Vec<SignedEventMessage
 }
 
 #[test]
-fn test() {
+fn test_sigs() {
     use crate::prefix::SelfSigningPrefix;
     assert_eq!(sig_count("-AAA"), Ok(("", 0u16)));
     assert_eq!(
@@ -97,4 +97,19 @@ fn test() {
                 sig: SelfSigningPrefix::Ed448([0u8; 114].to_vec())
             }]))
         )
+}
+
+#[test]
+fn test_event() {
+    let stream = r#"{"vs":"KERI10JSON000159_","pre":"ECui-E44CqN2U7uffCikRCp_YKLkPrA4jsTZ_A0XRLzc","sn":"0","ilk":"icp","sith":"2","keys":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"nxt":"Evhf3437ZRRnVhT0zOxo_rBX_GxpGoAnLuzrVlDK8ZdM","toad":"0","wits":[],"cnfg":[]}extra data"#;
+    print!("{:?}", message(stream));
+}
+
+#[test]
+fn test_stream() {
+    // taken from KERIPY: tests/core/test_eventing.py#903
+    let stream = r#"{"vs":"KERI10JSON000159_","pre":"ECui-E44CqN2U7uffCikRCp_YKLkPrA4jsTZ_A0XRLzc","sn":"0","ilk":"icp","sith":"2","keys":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"nxt":"Evhf3437ZRRnVhT0zOxo_rBX_GxpGoAnLuzrVlDK8ZdM","toad":"0","wits":[],"cnfg":[]}-AADAAJ66nrRaNjltE31FZ4mELVGUMc_XOqOAOXZQjZCEAvbeJQ8r3AnccIe1aepMwgoQUeFdIIQLeEDcH8veLdud_DQABTQYtYWKh3ScYij7MOZz3oA6ZXdIDLRrv0ObeSb4oc6LYrR1LfkICfXiYDnp90tAdvaJX5siCLjSD3vfEM9ADDAACQTgUl4zF6U8hfDy8wwUva-HCAiS8LQuP7elKAHqgS8qtqv5hEj3aTjwE91UtgAX2oCgaw98BCYSeT5AuY1SpDA"#;
+    print!("{:?}", signed_event_stream(stream));
+
+    assert_eq!(true, false)
 }

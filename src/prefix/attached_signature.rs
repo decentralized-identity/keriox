@@ -29,13 +29,13 @@ pub mod parse_attached_signature {
                 let (maybe_sig, index_c) = nom::bytes::complete::take(1u8)(more)?;
 
                 let index = b64_to_num(index_c)
-                    .map_err(|_| nom::Err::Failure((index_c, ErrorKind::IsNot)))?;
+                    .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?;
 
                 let (rest, sig_s) = nom::bytes::complete::take(86u8)(maybe_sig)?;
 
                 let sig = SelfSigningPrefix::Ed25519Sha512(
                     base64::decode_config(sig_s, base64::URL_SAFE)
-                        .map_err(|_| nom::Err::Failure((index_c, ErrorKind::IsNot)))?,
+                        .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?,
                 );
 
                 Ok((rest, AttachedSignaturePrefix::new(index, sig)))
@@ -44,13 +44,13 @@ pub mod parse_attached_signature {
                 let (maybe_sig, index_c) = nom::bytes::complete::take(1u8)(more)?;
 
                 let index = b64_to_num(index_c)
-                    .map_err(|_| nom::Err::Failure((index_c, ErrorKind::IsNot)))?;
+                    .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?;
 
                 let (rest, sig_s) = nom::bytes::complete::take(86u8)(maybe_sig)?;
 
                 let sig = SelfSigningPrefix::ECDSAsecp256k1Sha256(
                     base64::decode_config(sig_s, base64::URL_SAFE)
-                        .map_err(|_| nom::Err::Failure((index_c, ErrorKind::IsNot)))?,
+                        .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?,
                 );
 
                 Ok((rest, AttachedSignaturePrefix::new(index, sig)))
@@ -62,13 +62,13 @@ pub mod parse_attached_signature {
                         let (maybe_sig, index_c) = nom::bytes::complete::take(2u8)(maybe_count)?;
 
                         let index = b64_to_num(index_c)
-                            .map_err(|_| nom::Err::Failure((index_c, ErrorKind::IsNot)))?;
+                            .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?;
 
                         let (rest, sig_s) = nom::bytes::complete::take(152u8)(maybe_sig)?;
 
                         let sig = SelfSigningPrefix::Ed448(
                             base64::decode_config(sig_s, base64::URL_SAFE)
-                                .map_err(|_| nom::Err::Failure((index_c, ErrorKind::IsNot)))?,
+                                .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?,
                         );
 
                         Ok((rest, AttachedSignaturePrefix::new(index, sig)))

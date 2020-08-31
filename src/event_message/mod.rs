@@ -6,10 +6,9 @@ use crate::{
     util::dfs_serializer,
 };
 pub mod serialization_info;
-use core::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serialization_info::*;
-use std::convert::TryInto;
+pub mod parse;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EventMessage {
@@ -26,6 +25,7 @@ pub struct EventMessage {
     // pub extra: HashMap<String, Value>,
 }
 
+#[derive(Debug, Clone)]
 pub struct SignedEventMessage {
     pub event_message: EventMessage,
     pub signatures: Vec<AttachedSignaturePrefix>,
@@ -115,38 +115,6 @@ impl Verifiable for SignedEventMessage {
                             })?)
                 })?)
     }
-}
-
-const JSON_SIG_DELIMITER: &str = "\n";
-
-pub mod parse;
-
-pub fn parse_signed_message_json(message: &str) -> Result<SignedEventMessage, Error> {
-    let parts: Vec<&str> = message.split(JSON_SIG_DELIMITER).collect();
-
-    let sigs: Vec<AttachedSignaturePrefix> = parts[2..]
-        .iter()
-        .map(|sig| AttachedSignaturePrefix::from_str(sig))
-        .collect::<Result<Vec<AttachedSignaturePrefix>, Error>>()?;
-
-    Ok(SignedEventMessage {
-        event_message: serde_json::from_str(parts[0])?,
-        signatures: sigs,
-    })
-}
-
-pub fn serialize_signed_message_json(message: &SignedEventMessage) -> Result<String, Error> {
-    Ok([
-        serde_json::to_string(&message.event_message)?,
-        get_sig_count(message.signatures.len().try_into().unwrap()),
-        message
-            .signatures
-            .iter()
-            .map(|sig| sig.to_str())
-            .collect::<Vec<String>>()
-            .join(JSON_SIG_DELIMITER),
-    ]
-    .join(JSON_SIG_DELIMITER))
 }
 
 pub fn validate_events(kel: &[SignedEventMessage]) -> Result<IdentifierState, Error> {
