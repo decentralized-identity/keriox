@@ -1,6 +1,6 @@
 [package]
 name = "keri"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Decentralized Identity Foundation"]
 edition = "2018"
 description = "Core library for the Key Event Receipt Infrastructure "
