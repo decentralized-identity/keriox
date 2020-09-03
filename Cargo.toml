@@ -1,6 +1,6 @@
 [package]
 name = "keri"
-version = "0.1.0"
+version = "0.1.2"
 authors = ["Decentralized Identity Foundation"]
 edition = "2018"
 description = "Core library for the Key Event Receipt Infrastructure "
@@ -23,3 +23,6 @@ serde_cbor = "0.10"
 thiserror = "1.0"
 serde-hex = "0.1"
 nom = "5"
+itoa = "0.4"
+ryu = "1.0"
+serde-transcode = "1.1"

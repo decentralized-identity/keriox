@@ -1,3 +1,4 @@
+use crate::util::dfs_serializer;
 use base64::DecodeError;
 use core::num::ParseIntError;
 use serde_cbor;
@@ -20,6 +21,12 @@ pub enum Error {
     CBORSerializationError {
         #[from]
         source: serde_cbor::Error,
+    },
+
+    #[error("DFS Serialization error")]
+    DFSSerializationError {
+        #[from]
+        source: dfs_serializer::Error,
     },
 
     #[error("Error parsing numerical value: {source}")]

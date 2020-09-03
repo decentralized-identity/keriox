@@ -1,36 +1,84 @@
-use crate::error::Error;
 use serde::{ser, Serialize};
-use std::fmt;
+use std::{fmt, io};
+use thiserror::Error;
 
-pub struct Serializer {
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("Error during Serialization: {source}")]
+    SerializationError {
+        #[from]
+        source: io::Error,
+    },
+
+    #[error("Error Converting to String: {source}")]
+    StringRepresentationError {
+        #[from]
+        source: std::string::FromUtf8Error,
+    },
+
+    #[error("Unexpected Error: {0}")]
+    Custom(String),
+}
+
+fn io2ce(io: io::Error) -> Error {
+    io.into()
+}
+
+pub struct Serializer<W> {
     // This string starts empty and data is appended as values are serialized.
-    output: String,
+    writer: W,
+}
+
+impl<W> Serializer<W>
+where
+    W: io::Write,
+{
+    pub fn new(writer: W) -> Self {
+        Self { writer }
+    }
 }
 
 impl ser::Error for Error {
     fn custom<T: fmt::Display>(msg: T) -> Self {
-        Error::SerializationError(msg.to_string())
+        Error::Custom(msg.to_string())
     }
 }
 
 // By convention, the public API of a Serde serializer is one or more `to_abc`
 // functions such as `to_string`, `to_bytes`, or `to_writer` depending on what
 // Rust types the serializer is able to produce as output.
-//
-// This basic serializer supports only `to_string`.
 pub fn to_string<T>(value: &T) -> Result<String, Error>
 where
     T: Serialize,
 {
-    let mut serializer = Serializer {
-        output: String::new(),
-    };
-
-    value.serialize(&mut serializer)?;
-    Ok(serializer.output)
+    let vec = to_vec(value)?;
+    let string = String::from_utf8(vec)?;
+    Ok(string)
 }
 
-impl<'a> ser::Serializer for &'a mut Serializer {
+pub fn to_writer<W, T>(writer: W, value: &T) -> Result<(), Error>
+where
+    W: io::Write,
+    T: ?Sized + Serialize,
+{
+    let mut ser = Serializer::new(writer);
+    value.serialize(&mut ser)?;
+    Ok(())
+}
+
+pub fn to_vec<T>(value: &T) -> Result<Vec<u8>, Error>
+where
+    T: ?Sized + Serialize,
+{
+    let mut writer = Vec::with_capacity(128);
+    to_writer(&mut writer, value)?;
+    Ok(writer)
+}
+
+impl<'a, W> ser::Serializer for &'a mut Serializer<W>
+where
+    W: io::Write,
+{
     // The output type produced by this `DepthFirstSerializer` during successful serialization.
     type Ok = ();
 
@@ -51,67 +99,85 @@ impl<'a> ser::Serializer for &'a mut Serializer {
 
     // TODO booleans do not appear in the KERI event data model, how should they be represented?
     fn serialize_bool(self, v: bool) -> Result<(), Self::Error> {
-        self.output += if v { "true" } else { "false" };
-        Ok(())
+        self.writer
+            .write_all(if v { b"true" } else { b"false" })
+            .map_err(io2ce)
     }
 
     // TODO encode all integers as 64 bit?
     fn serialize_i8(self, v: i8) -> Result<(), Self::Error> {
-        self.serialize_i64(i64::from(v))
+        let mut buffer = itoa::Buffer::new();
+        let s = buffer.format(v);
+        self.writer.write_all(s.as_bytes()).map_err(io2ce)
     }
 
     fn serialize_i16(self, v: i16) -> Result<(), Self::Error> {
-        self.serialize_i64(i64::from(v))
+        let mut buffer = itoa::Buffer::new();
+        let s = buffer.format(v);
+        self.writer.write_all(s.as_bytes()).map_err(io2ce)
     }
 
     fn serialize_i32(self, v: i32) -> Result<(), Self::Error> {
-        self.serialize_i64(i64::from(v))
+        let mut buffer = itoa::Buffer::new();
+        let s = buffer.format(v);
+        self.writer.write_all(s.as_bytes()).map_err(io2ce)
     }
 
     fn serialize_i64(self, v: i64) -> Result<(), Self::Error> {
-        self.output += &v.to_string();
-        Ok(())
+        let mut buffer = itoa::Buffer::new();
+        let s = buffer.format(v);
+        self.writer.write_all(s.as_bytes()).map_err(io2ce)
     }
 
     fn serialize_u8(self, v: u8) -> Result<(), Self::Error> {
-        self.serialize_u64(u64::from(v))
+        let mut buffer = itoa::Buffer::new();
+        let s = buffer.format(v);
+        self.writer.write_all(s.as_bytes()).map_err(io2ce)
     }
 
     fn serialize_u16(self, v: u16) -> Result<(), Self::Error> {
-        self.serialize_u64(u64::from(v))
+        let mut buffer = itoa::Buffer::new();
+        let s = buffer.format(v);
+        self.writer.write_all(s.as_bytes()).map_err(io2ce)
     }
 
     fn serialize_u32(self, v: u32) -> Result<(), Self::Error> {
-        self.serialize_u64(u64::from(v))
+        let mut buffer = itoa::Buffer::new();
+        let s = buffer.format(v);
+        self.writer.write_all(s.as_bytes()).map_err(io2ce)
     }
 
     fn serialize_u64(self, v: u64) -> Result<(), Self::Error> {
-        self.output += &v.to_string();
-        Ok(())
+        let mut buffer = itoa::Buffer::new();
+        let s = buffer.format(v);
+        self.writer.write_all(s.as_bytes()).map_err(io2ce)
     }
 
     fn serialize_f32(self, v: f32) -> Result<(), Self::Error> {
-        self.serialize_f64(f64::from(v))
+        let mut buffer = ryu::Buffer::new();
+        let s = buffer.format_finite(v);
+        self.writer.write_all(s.as_bytes()).map_err(io2ce)
     }
 
     fn serialize_f64(self, v: f64) -> Result<(), Self::Error> {
-        self.output += &v.to_string();
-        Ok(())
+        let mut buffer = ryu::Buffer::new();
+        let s = buffer.format_finite(v);
+        self.writer.write_all(s.as_bytes()).map_err(io2ce)
     }
 
     fn serialize_char(self, v: char) -> Result<(), Self::Error> {
-        self.serialize_str(&v.to_string())
+        self.writer
+            .write_all(&v.to_string().as_bytes())
+            .map_err(io2ce)
     }
 
     fn serialize_str(self, v: &str) -> Result<(), Self::Error> {
-        self.output += v;
-        Ok(())
+        self.writer.write_all(&v.as_bytes()).map_err(io2ce)
     }
 
     // Serialize a byte array as an array of bytes. Could also use a base64
     // string here. Binary formats will typically represent byte arrays more
     // compactly.
-    // TODO should use base64? all prefixes are base64 strings already anyway
     fn serialize_bytes(self, v: &[u8]) -> Result<(), Self::Error> {
         use serde::ser::SerializeSeq;
         let mut seq = self.serialize_seq(Some(v.len()))?;
@@ -258,7 +324,10 @@ impl<'a> ser::Serializer for &'a mut Serializer {
 //
 // This impl is SerializeSeq so these methods are called after `serialize_seq`
 // is called on the DepthFirstSerializer.
-impl<'a> ser::SerializeSeq for &'a mut Serializer {
+impl<'a, W> ser::SerializeSeq for &'a mut Serializer<W>
+where
+    W: io::Write,
+{
     // Must match the `Ok` type of the serializer.
     type Ok = ();
     // Must match the `Error` type of the serializer.
@@ -279,7 +348,10 @@ impl<'a> ser::SerializeSeq for &'a mut Serializer {
 }
 
 // Same thing but for tuples.
-impl<'a> ser::SerializeTuple for &'a mut Serializer {
+impl<'a, W> ser::SerializeTuple for &'a mut Serializer<W>
+where
+    W: io::Write,
+{
     type Ok = ();
     type Error = Error;
 
@@ -296,7 +368,10 @@ impl<'a> ser::SerializeTuple for &'a mut Serializer {
 }
 
 // Same thing but for tuple structs.
-impl<'a> ser::SerializeTupleStruct for &'a mut Serializer {
+impl<'a, W> ser::SerializeTupleStruct for &'a mut Serializer<W>
+where
+    W: io::Write,
+{
     type Ok = ();
     type Error = Error;
 
@@ -313,7 +388,10 @@ impl<'a> ser::SerializeTupleStruct for &'a mut Serializer {
 }
 
 // Tuple variants
-impl<'a> ser::SerializeTupleVariant for &'a mut Serializer {
+impl<'a, W> ser::SerializeTupleVariant for &'a mut Serializer<W>
+where
+    W: io::Write,
+{
     type Ok = ();
     type Error = Error;
 
@@ -336,7 +414,10 @@ impl<'a> ser::SerializeTupleVariant for &'a mut Serializer {
 // There is a third optional method on the `SerializeMap` trait. The
 // `serialize_entry` method allows serializers to optimize for the case where
 // key and value are both available simultaneously.
-impl<'a> ser::SerializeMap for &'a mut Serializer {
+impl<'a, W> ser::SerializeMap for &'a mut Serializer<W>
+where
+    W: io::Write,
+{
     type Ok = ();
     type Error = Error;
 
@@ -363,7 +444,10 @@ impl<'a> ser::SerializeMap for &'a mut Serializer {
 
 // Structs are like maps in which the keys are constrained to be compile-time
 // constant strings.
-impl<'a> ser::SerializeStruct for &'a mut Serializer {
+impl<'a, W> ser::SerializeStruct for &'a mut Serializer<W>
+where
+    W: io::Write,
+{
     type Ok = ();
     type Error = Error;
 
@@ -380,7 +464,10 @@ impl<'a> ser::SerializeStruct for &'a mut Serializer {
 }
 
 // Similar to `SerializeTupleVariant`
-impl<'a> ser::SerializeStructVariant for &'a mut Serializer {
+impl<'a, W> ser::SerializeStructVariant for &'a mut Serializer<W>
+where
+    W: io::Write,
+{
     type Ok = ();
     type Error = Error;
 
@@ -396,45 +483,120 @@ impl<'a> ser::SerializeStructVariant for &'a mut Serializer {
     }
 }
 
-#[test]
-fn test_struct() {
+#[cfg(test)]
+mod tests {
+    use super::to_string;
+    use serde::Serialize;
+
     #[derive(Serialize)]
-    struct Test {
+    struct Simple {
+        str: String,
+        tuple: (u32, u32, String),
+    }
+    #[derive(Serialize)]
+    struct Nested {
         int: u32,
         seq: Vec<&'static str>,
+        nested: Simple,
     }
 
-    let test = Test {
-        int: 1,
-        seq: vec!["a", "b"],
-    };
-    let expected = r#"1ab"#;
-    assert_eq!(to_string(&test).unwrap(), expected);
-}
-
-#[test]
-fn test_enum() {
     #[derive(Serialize)]
     enum E {
         Unit,
         Newtype(u32),
         Tuple(u32, u32),
-        Struct { a: u32 },
+        Struct { a: u32, b: String },
     }
 
-    let u = E::Unit;
-    let expected = r#"Unit"#;
-    assert_eq!(to_string(&u).unwrap(), expected);
+    #[derive(Serialize)]
+    struct NewType(E);
 
-    let n = E::Newtype(1);
-    let expected = r#"1"#;
-    assert_eq!(to_string(&n).unwrap(), expected);
+    #[derive(Serialize)]
+    struct Complex {
+        tuple: (E, String, Vec<Simple>),
+        en: E,
+        list: Vec<Nested>,
+        nt: NewType,
+    }
 
-    let t = E::Tuple(1, 2);
-    let expected = r#"12"#;
-    assert_eq!(to_string(&t).unwrap(), expected);
+    #[test]
+    fn test_struct0() {
+        let test = Nested {
+            int: 1,
+            seq: vec!["a", "b"],
+            nested: Simple {
+                str: "Hello".to_string(),
+                tuple: (1, 5, "goodbye".to_string()),
+            },
+        };
+        let expected = r#"1abHello15goodbye"#;
+        assert_eq!(to_string(&test).unwrap(), expected);
+    }
 
-    let s = E::Struct { a: 1 };
-    let expected = r#"1"#;
-    assert_eq!(to_string(&s).unwrap(), expected);
+    #[test]
+    fn test_struct1() {
+        let test = Complex {
+            tuple: (
+                E::Unit,
+                "a String".to_string(),
+                vec![
+                    Simple {
+                        str: "another String".to_string(),
+                        tuple: (0, 2, "lol".to_string()),
+                    },
+                    Simple {
+                        str: "getting tiresome".to_string(),
+                        tuple: (4, 4389749, "___@-".to_string()),
+                    },
+                ],
+            ),
+            en: E::Struct {
+                a: 500,
+                b: "b,".to_string(),
+            },
+            list: vec![
+                Nested {
+                    int: 1,
+                    seq: vec!["a", "b", "c", "e"],
+                    nested: Simple {
+                        str: "Hello".to_string(),
+                        tuple: (1, 5, "goodbye".to_string()),
+                    },
+                },
+                Nested {
+                    int: 100,
+                    seq: vec!["a2", "b3"],
+                    nested: Simple {
+                        str: "He".to_string(),
+                        tuple: (345, 531213, "foo".to_string()),
+                    },
+                },
+            ],
+            nt: NewType(E::Tuple(200, 300)),
+        };
+        let expected = r#"Unita Stringanother String02lolgetting tiresome44389749___@-500b,1abceHello15goodbye100a2b3He345531213foo200300"#;
+        assert_eq!(to_string(&test).unwrap(), expected);
+    }
+
+    #[test]
+    fn test_enum() {
+        let u = E::Unit;
+        let expected = r#"Unit"#;
+        assert_eq!(to_string(&u).unwrap(), expected);
+
+        let n = E::Newtype(1);
+        let expected = r#"1"#;
+        assert_eq!(to_string(&n).unwrap(), expected);
+
+        let t = E::Tuple(1, 2);
+        let expected = r#"12"#;
+        assert_eq!(to_string(&t).unwrap(), expected);
+
+        let s = E::Struct {
+            a: 1,
+            b: "thing".to_string(),
+        };
+        let expected = r#"1thing"#;
+        assert_eq!(to_string(&s).unwrap(), expected);
+    }
 }
