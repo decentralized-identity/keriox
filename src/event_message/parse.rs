@@ -42,7 +42,7 @@ fn sig_count(s: &str) -> nom::IResult<&str, u16> {
 
 /// called on an attached signature stream starting with a sig count
 fn signatures(s: &str) -> nom::IResult<&str, Vec<AttachedSignaturePrefix>> {
-    let (rest, (count, signatures)) = tuple((sig_count, many0(signature)))(s)?;
+    let (rest, (count, signatures)) = tuple((sig_count, many0(attached_signature)))(s)?;
     if count as usize != signatures.len() {
         Err(nom::Err::Error((s, ErrorKind::Count)))
     } else {
@@ -103,6 +103,7 @@ fn test_sigs() {
 #[test]
 fn test_event() {
     let stream = r#"{"vs":"KERI10JSON000159_","pre":"ECui-E44CqN2U7uffCikRCp_YKLkPrA4jsTZ_A0XRLzc","sn":"0","ilk":"icp","sith":"2","keys":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"nxt":"Evhf3437ZRRnVhT0zOxo_rBX_GxpGoAnLuzrVlDK8ZdM","toad":"0","wits":[],"cnfg":[]}extra data"#;
+    assert!(message(stream).is_ok())
 }
 
 #[test]
