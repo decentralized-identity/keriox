@@ -66,7 +66,7 @@ impl EventMessage {
     ///
     /// returns the serialized extracted data set (for signing/verification) for this event message
     pub fn extract_serialized_data_set(&self) -> Result<String, Error> {
-        dfs_serializer::to_string(self)
+        dfs_serializer::to_string(self).map_err(|e| e.into())
     }
 
     pub fn sign(&self, sigs: Vec<AttachedSignaturePrefix>) -> SignedEventMessage {
