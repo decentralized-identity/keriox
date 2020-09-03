@@ -1,6 +1,12 @@
 use super::{AttachedSignaturePrefix, EventMessage, SignedEventMessage};
-use crate::prefix::{attached_signature::b64_to_num, parse::signature};
+use crate::{
+    error::Error,
+    prefix::{attached_signature::b64_to_num, parse::attached_signature},
+    state::IdentifierState,
+    util::dfs_serializer,
+};
 use nom::{branch::*, combinator::*, error::ErrorKind, multi::*, sequence::*};
+use serde::{Deserialize, Deserializer, Serialize};
 
 fn json_message(s: &str) -> nom::IResult<&str, EventMessage> {
     let mut stream = serde_json::Deserializer::from_slice(s.as_bytes()).into_iter::<EventMessage>();
@@ -20,6 +26,49 @@ fn cbor_message(s: &str) -> nom::IResult<&str, EventMessage> {
 
 fn message(s: &str) -> nom::IResult<&str, EventMessage> {
     alt((json_message, cbor_message))(s)
+}
+
+fn json_sed_block(s: &str) -> Result<String, Error> {
+    let mut des = serde_json::Deserializer::from_slice(s.as_bytes());
+    dfs_serializer::to_string(&serde_transcode::Transcoder::new(&mut des)).map_err(|e| e.into())
+}
+
+fn cbor_sed_block(s: &[u8]) -> Result<String, Error> {
+    let mut des = serde_cbor::Deserializer::from_slice(s);
+    dfs_serializer::to_string(&serde_transcode::Transcoder::new(&mut des)).map_err(|e| e.into())
+}
+
+fn json_cbor_block(s: &str) -> Result<Vec<u8>, Error> {
+    let mut des = serde_json::Deserializer::from_slice(s.as_bytes());
+    serde_cbor::to_vec(&serde_transcode::Transcoder::new(&mut des)).map_err(|e| e.into())
+}
+
+fn json_sed(s: &str) -> nom::IResult<&str, String> {
+    let mut stream = serde_json::Deserializer::from_slice(s.as_bytes()).into_iter::<EventMessage>();
+    match stream.next() {
+        Some(Ok(_)) => Ok((
+            &s[stream.byte_offset()..],
+            json_sed_block(&s[..stream.byte_offset()])
+                .map_err(|_| nom::Err::Error((&s[..stream.byte_offset()], ErrorKind::IsNot)))?,
+        )),
+        _ => Err(nom::Err::Error((s, ErrorKind::IsNot))),
+    }
+}
+
+fn cbor_sed(s: &str) -> nom::IResult<&str, String> {
+    let mut stream = serde_cbor::Deserializer::from_slice(s.as_bytes()).into_iter::<EventMessage>();
+    match stream.next() {
+        Some(Ok(_)) => Ok((
+            &s[stream.byte_offset()..],
+            cbor_sed_block(&s[..stream.byte_offset()].as_bytes())
+                .map_err(|_| nom::Err::Error((s, ErrorKind::IsNot)))?,
+        )),
+        _ => Err(nom::Err::Error((s, ErrorKind::IsNot))),
+    }
+}
+
+pub fn sed(s: &str) -> nom::IResult<&str, String> {
+    alt((json_sed, cbor_sed))(s)
 }
 
 /// extracts the count from the sig count code
@@ -110,7 +159,14 @@ fn test_event() {
 fn test_stream() {
     // taken from KERIPY: tests/core/test_eventing.py#903
     let stream = r#"{"vs":"KERI10JSON000159_","pre":"ECui-E44CqN2U7uffCikRCp_YKLkPrA4jsTZ_A0XRLzc","sn":"0","ilk":"icp","sith":"2","keys":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"nxt":"Evhf3437ZRRnVhT0zOxo_rBX_GxpGoAnLuzrVlDK8ZdM","toad":"0","wits":[],"cnfg":[]}-AADAAJ66nrRaNjltE31FZ4mELVGUMc_XOqOAOXZQjZCEAvbeJQ8r3AnccIe1aepMwgoQUeFdIIQLeEDcH8veLdud_DQABTQYtYWKh3ScYij7MOZz3oA6ZXdIDLRrv0ObeSb4oc6LYrR1LfkICfXiYDnp90tAdvaJX5siCLjSD3vfEM9ADDAACQTgUl4zF6U8hfDy8wwUva-HCAiS8LQuP7elKAHqgS8qtqv5hEj3aTjwE91UtgAX2oCgaw98BCYSeT5AuY1SpDA"#;
-    print!("{:?}", signed_event_stream(stream));
 
-    assert_eq!(true, false)
+    assert!(signed_message(stream).is_ok());
+    assert!(signed_event_stream(stream).is_ok());
+}
+
+#[test]
+fn test_sed_extraction() {
+    let stream = r#"{"vs":"KERI10JSON000159_","pre":"ECui-E44CqN2U7uffCikRCp_YKLkPrA4jsTZ_A0XRLzc","sn":"0","ilk":"icp","sith":"2","keys":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"nxt":"Evhf3437ZRRnVhT0zOxo_rBX_GxpGoAnLuzrVlDK8ZdM","toad":"0","wits":[],"cnfg":[]}"#;
+
+    assert!(sed(stream).is_ok())
 }
