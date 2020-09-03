@@ -108,6 +108,20 @@ pub fn signed_event_stream(s: &str) -> nom::IResult<&str, Vec<SignedEventMessage
     many0(signed_message)(s)
 }
 
+pub fn signed_event_stream_validate(s: &str) -> nom::IResult<&str, IdentifierState> {
+    let (rest, id) = fold_many1(
+        signed_message,
+        Ok(IdentifierState::default()),
+        |acc, next| {
+            Ok(acc?
+                .verify_and_apply(&next)
+                .map_err(|_| nom::Err::Error((s, ErrorKind::Verify)))?)
+        },
+    )(s)?;
+
+    Ok((rest, id?))
+}
+
 #[test]
 fn test_sigs() {
     use crate::prefix::SelfSigningPrefix;
@@ -162,6 +176,7 @@ fn test_stream() {
 
     assert!(signed_message(stream).is_ok());
     assert!(signed_event_stream(stream).is_ok());
+    assert!(signed_event_stream_validate(stream).is_ok())
 }
 
 #[test]
