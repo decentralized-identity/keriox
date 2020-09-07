@@ -7,6 +7,7 @@ use crate::{
 };
 use nom::{branch::*, combinator::*, error::ErrorKind, multi::*, sequence::*};
 use serde::{Deserialize, Deserializer, Serialize};
+use serde_transcode::transcode;
 
 fn json_message(s: &str) -> nom::IResult<&str, EventMessage> {
     let mut stream = serde_json::Deserializer::from_slice(s.as_bytes()).into_iter::<EventMessage>();
@@ -28,23 +29,45 @@ fn message(s: &str) -> nom::IResult<&str, EventMessage> {
     alt((json_message, cbor_message))(s)
 }
 
-fn json_sed_block(s: &str) -> Result<String, Error> {
-    let mut des = serde_json::Deserializer::from_slice(s.as_bytes());
-    dfs_serializer::to_string(&serde_transcode::Transcoder::new(&mut des)).map_err(|e| e.into())
+fn json_sed_block(s: &[u8]) -> Result<Vec<u8>, Error> {
+    let mut res = Vec::with_capacity(128);
+    transcode(
+        &mut serde_json::Deserializer::from_slice(s),
+        &mut dfs_serializer::Serializer::new(&mut res),
+    )?;
+    Ok(res)
 }
 
-fn cbor_sed_block(s: &[u8]) -> Result<String, Error> {
-    let mut des = serde_cbor::Deserializer::from_slice(s);
-    dfs_serializer::to_string(&serde_transcode::Transcoder::new(&mut des)).map_err(|e| e.into())
+fn cbor_sed_block(s: &[u8]) -> Result<Vec<u8>, Error> {
+    let mut res = Vec::with_capacity(128);
+    transcode(
+        &mut serde_json::Deserializer::from_slice(s),
+        &mut dfs_serializer::Serializer::new(&mut res),
+    )?;
+    Ok(res)
+}
+
+fn cbor_json_block(s: &[u8]) -> Result<String, Error> {
+    let mut res = Vec::with_capacity(128);
+    transcode(
+        &mut serde_cbor::Deserializer::from_slice(s),
+        &mut serde_json::Serializer::new(&mut res),
+    )?;
+    // serde-json guarentees correct utf-8 output
+    Ok(String::from_utf8(res).unwrap())
 }
 
 fn json_cbor_block(s: &str) -> Result<Vec<u8>, Error> {
-    let mut des = serde_json::Deserializer::from_slice(s.as_bytes());
-    serde_cbor::to_vec(&serde_transcode::Transcoder::new(&mut des)).map_err(|e| e.into())
+    let mut res = Vec::with_capacity(128);
+    transcode(
+        &mut serde_json::Deserializer::from_str(s),
+        &mut serde_cbor::Serializer::new(&mut res),
+    )?;
+    Ok(res)
 }
 
-fn json_sed(s: &str) -> nom::IResult<&str, String> {
-    let mut stream = serde_json::Deserializer::from_slice(s.as_bytes()).into_iter::<EventMessage>();
+fn json_sed(s: &[u8]) -> nom::IResult<&[u8], Vec<u8>> {
+    let mut stream = serde_json::Deserializer::from_slice(s).into_iter::<EventMessage>();
     match stream.next() {
         Some(Ok(_)) => Ok((
             &s[stream.byte_offset()..],
@@ -55,19 +78,19 @@ fn json_sed(s: &str) -> nom::IResult<&str, String> {
     }
 }
 
-fn cbor_sed(s: &str) -> nom::IResult<&str, String> {
-    let mut stream = serde_cbor::Deserializer::from_slice(s.as_bytes()).into_iter::<EventMessage>();
+fn cbor_sed(s: &[u8]) -> nom::IResult<&[u8], Vec<u8>> {
+    let mut stream = serde_cbor::Deserializer::from_slice(s).into_iter::<EventMessage>();
     match stream.next() {
         Some(Ok(_)) => Ok((
             &s[stream.byte_offset()..],
-            cbor_sed_block(&s[..stream.byte_offset()].as_bytes())
+            cbor_sed_block(&s[..stream.byte_offset()])
                 .map_err(|_| nom::Err::Error((s, ErrorKind::IsNot)))?,
         )),
         _ => Err(nom::Err::Error((s, ErrorKind::IsNot))),
     }
 }
 
-pub fn sed(s: &str) -> nom::IResult<&str, String> {
+pub fn sed(s: &[u8]) -> nom::IResult<&[u8], Vec<u8>> {
     alt((json_sed, cbor_sed))(s)
 }
 
@@ -183,5 +206,5 @@ fn test_stream() {
 fn test_sed_extraction() {
     let stream = r#"{"vs":"KERI10JSON000159_","pre":"ECui-E44CqN2U7uffCikRCp_YKLkPrA4jsTZ_A0XRLzc","sn":"0","ilk":"icp","sith":"2","keys":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"nxt":"Evhf3437ZRRnVhT0zOxo_rBX_GxpGoAnLuzrVlDK8ZdM","toad":"0","wits":[],"cnfg":[]}"#;
 
-    assert!(sed(stream).is_ok())
+    assert!(sed(stream.as_bytes()).is_ok())
 }
