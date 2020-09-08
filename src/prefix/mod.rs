@@ -6,6 +6,7 @@ use ursa::signatures::prelude::*;
 
 pub mod attached_signature;
 pub mod basic;
+pub mod parse;
 pub mod seed;
 pub mod self_addressing;
 pub mod self_signing;
@@ -97,6 +98,10 @@ impl Default for IdentifierPrefix {
     }
 }
 
+/// Verify
+///
+/// Uses a public key to verify a signature against some data, with
+/// the key and signature represented by Basic and Self-Signing Prefixes
 pub fn verify(
     data: &[u8],
     key: &BasicPrefix,
@@ -120,6 +125,24 @@ pub fn verify(
             _ => Err(Error::SemanticError("wrong sig type".to_string())),
         },
         _ => Err(Error::SemanticError("inelligable key type".to_string())),
+    }
+}
+
+/// Derive
+///
+/// Derives the Basic Prefix corrosponding to the given Seed Prefix
+pub fn derive(seed: &SeedPrefix, transferable: bool) -> Result<BasicPrefix, Error> {
+    let (pk, _) = seed.derive_key_pair()?;
+    match seed {
+        SeedPrefix::RandomSeed256Ed25519(_) => match transferable {
+            true => Ok(BasicPrefix::Ed25519(pk)),
+            false => Ok(BasicPrefix::Ed25519NT(pk)),
+        },
+        SeedPrefix::RandomSeed256ECDSAsecp256k1(_) => match transferable {
+            true => Ok(BasicPrefix::ECDSAsecp256k1(pk)),
+            false => Ok(BasicPrefix::ECDSAsecp256k1NT(pk)),
+        },
+        _ => Err(Error::ImproperPrefixType),
     }
 }
 

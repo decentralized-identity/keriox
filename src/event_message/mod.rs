@@ -6,10 +6,9 @@ use crate::{
     util::dfs_serializer,
 };
 pub mod serialization_info;
-use core::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serialization_info::*;
-use std::convert::TryInto;
+pub mod parse;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EventMessage {
@@ -26,6 +25,7 @@ pub struct EventMessage {
     // pub extra: HashMap<String, Value>,
 }
 
+#[derive(Debug, Clone)]
 pub struct SignedEventMessage {
     pub event_message: EventMessage,
     pub signatures: Vec<AttachedSignaturePrefix>,
@@ -65,6 +65,7 @@ impl EventMessage {
     /// Extract Serialized Data Set
     ///
     /// returns the serialized extracted data set (for signing/verification) for this event message
+    /// NOTE: this method, for deserialized events, will be UNABLE to preserve ordering
     pub fn extract_serialized_data_set(&self) -> Result<String, Error> {
         dfs_serializer::to_string(self).map_err(|e| e.into())
     }
@@ -80,6 +81,20 @@ impl SignedEventMessage {
             event_message: message.clone(),
             signatures: sigs,
         }
+    }
+
+    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
+        Ok([
+            self.event_message.serialize()?,
+            get_sig_count(self.signatures.len() as u16)
+                .as_bytes()
+                .to_vec(),
+            self.signatures
+                .iter()
+                .map(|sig| sig.to_str().as_bytes().to_vec())
+                .fold(vec![], |acc, next| [acc, next].concat()),
+        ]
+        .concat())
     }
 }
 
@@ -115,36 +130,6 @@ impl Verifiable for SignedEventMessage {
                             })?)
                 })?)
     }
-}
-
-const JSON_SIG_DELIMITER: &str = "\n";
-
-pub fn parse_signed_message_json(message: &str) -> Result<SignedEventMessage, Error> {
-    let parts: Vec<&str> = message.split(JSON_SIG_DELIMITER).collect();
-
-    let sigs: Vec<AttachedSignaturePrefix> = parts[2..]
-        .iter()
-        .map(|sig| AttachedSignaturePrefix::from_str(sig))
-        .collect::<Result<Vec<AttachedSignaturePrefix>, Error>>()?;
-
-    Ok(SignedEventMessage {
-        event_message: serde_json::from_str(parts[0])?,
-        signatures: sigs,
-    })
-}
-
-pub fn serialize_signed_message_json(message: &SignedEventMessage) -> Result<String, Error> {
-    Ok([
-        serde_json::to_string(&message.event_message)?,
-        get_sig_count(message.signatures.len().try_into().unwrap()),
-        message
-            .signatures
-            .iter()
-            .map(|sig| sig.to_str())
-            .collect::<Vec<String>>()
-            .join(JSON_SIG_DELIMITER),
-    ]
-    .join(JSON_SIG_DELIMITER))
 }
 
 pub fn validate_events(kel: &[SignedEventMessage]) -> Result<IdentifierState, Error> {

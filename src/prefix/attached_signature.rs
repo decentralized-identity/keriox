@@ -10,6 +10,12 @@ pub struct AttachedSignaturePrefix {
     pub sig: SelfSigningPrefix,
 }
 
+impl AttachedSignaturePrefix {
+    pub fn new(index: u16, sig: SelfSigningPrefix) -> Self {
+        Self { index, sig }
+    }
+}
+
 impl FromStr for AttachedSignaturePrefix {
     type Err = Error;
 
@@ -62,7 +68,7 @@ pub fn get_sig_count(num: u16) -> String {
 
 // returns the u16 from the lowest 2 bytes of the b64 string
 // currently only works for strings 4 chars or less
-fn b64_to_num(b64: &str) -> Result<u16, Error> {
+pub fn b64_to_num(b64: &str) -> Result<u16, Error> {
     let slice = decode_config(
         match b64.len() {
             1 => ["AAA", b64].join(""),
@@ -81,7 +87,7 @@ fn b64_to_num(b64: &str) -> Result<u16, Error> {
     }))
 }
 
-fn num_to_b64(num: u16) -> String {
+pub fn num_to_b64(num: u16) -> String {
     match num {
         n if n < 63 => {
             encode_config(&[num.to_be_bytes()[1] << 2], base64::URL_SAFE)[..1].to_string()

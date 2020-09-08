@@ -2,6 +2,7 @@ use super::Prefix;
 use crate::error::Error;
 use base64::decode_config;
 use core::str::FromStr;
+use ursa::{keys::*, signatures::prelude::*};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum SeedPrefix {
@@ -9,6 +10,20 @@ pub enum SeedPrefix {
     RandomSeed256Ed25519(Vec<u8>),
     RandomSeed256ECDSAsecp256k1(Vec<u8>),
     RandomSeed448(Vec<u8>),
+}
+
+impl SeedPrefix {
+    pub fn derive_key_pair(&self) -> Result<(PublicKey, PrivateKey), Error> {
+        match self {
+            Self::RandomSeed256Ed25519(seed) => Ed25519Sha512::new()
+                .keypair(Some(KeyGenOption::UseSeed(seed.clone())))
+                .map_err(|e| Error::CryptoError(e)),
+            Self::RandomSeed256ECDSAsecp256k1(seed) => EcdsaSecp256k1Sha256::new()
+                .keypair(Some(KeyGenOption::UseSeed(seed.clone())))
+                .map_err(|e| Error::CryptoError(e)),
+            _ => Err(Error::ImproperPrefixType),
+        }
+    }
 }
 
 impl FromStr for SeedPrefix {
