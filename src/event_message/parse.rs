@@ -13,7 +13,10 @@ use crate::{
     util::dfs_serializer,
 };
 use nom::{branch::*, combinator::*, error::ErrorKind, multi::*, sequence::*};
+use rmp_serde as serde_mgpk;
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_transcode::transcode;
+use std::io::Cursor;
 
 #[derive(Clone, Debug)]
 pub struct DeserializedEvent<'a> {
@@ -71,8 +74,22 @@ fn cbor_message(s: &[u8]) -> nom::IResult<&[u8], DeserializedEvent> {
     }
 }
 
+fn mgpk_message(s: &[u8]) -> nom::IResult<&[u8], DeserializedEvent> {
+    let mut deser = serde_mgpk::Deserializer::new(Cursor::new(s));
+    match Deserialize::deserialize(&mut deser) {
+        Ok(event) => Ok((
+            &s[deser.get_ref().position() as usize..],
+            DeserializedEvent {
+                event: event,
+                raw: &s[..deser.get_ref().position() as usize],
+            },
+        )),
+        _ => Err(nom::Err::Error((s, ErrorKind::IsNot))),
+    }
+}
+
 pub fn message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], DeserializedEvent> {
-    alt((json_message, cbor_message))(s).map(|d| (d.0, d.1))
+    alt((json_message, cbor_message, mgpk_message))(s).map(|d| (d.0, d.1))
 }
 
 fn json_sed_block(s: &[u8]) -> Result<Vec<u8>, Error> {
