@@ -1,6 +1,7 @@
 use crate::util::dfs_serializer;
 use base64::DecodeError;
 use core::num::ParseIntError;
+use rmp_serde as serde_mgpk;
 use serde_cbor;
 use serde_json;
 use thiserror::Error;
@@ -21,6 +22,12 @@ pub enum Error {
     CBORSerializationError {
         #[from]
         source: serde_cbor::Error,
+    },
+
+    #[error("MessagePack Serialization error")]
+    MsgPackSerializationError {
+        #[from]
+        source: serde_mgpk::encode::Error,
     },
 
     #[error("DFS Serialization error")]
