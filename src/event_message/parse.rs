@@ -110,6 +110,15 @@ fn cbor_sed_block(s: &[u8]) -> Result<Vec<u8>, Error> {
     Ok(res)
 }
 
+fn mgpk_sed_block(s: &[u8]) -> Result<Vec<u8>, Error> {
+    let mut res = Vec::with_capacity(128);
+    transcode(
+        &mut serde_mgpk::Deserializer::from_read_ref(s),
+        &mut dfs_serializer::Serializer::new(&mut res),
+    )?;
+    Ok(res)
+}
+
 fn json_sed(s: &[u8]) -> nom::IResult<&[u8], Vec<u8>> {
     let mut stream = serde_json::Deserializer::from_slice(s).into_iter::<EventMessage>();
     match stream.next() {
@@ -134,8 +143,20 @@ fn cbor_sed(s: &[u8]) -> nom::IResult<&[u8], Vec<u8>> {
     }
 }
 
+fn mgpk_sed(s: &[u8]) -> nom::IResult<&[u8], Vec<u8>> {
+    let mut deser = serde_mgpk::Deserializer::new(Cursor::new(s));
+    match EventMessage::deserialize(&mut deser) {
+        Ok(_) => Ok((
+            &s[deser.get_ref().position() as usize..],
+            mgpk_sed_block(&s[deser.get_ref().position() as usize..])
+                .map_err(|_| nom::Err::Error((s, ErrorKind::IsNot)))?,
+        )),
+        _ => Err(nom::Err::Error((s, ErrorKind::IsNot))),
+    }
+}
+
 pub fn sed(s: &[u8]) -> nom::IResult<&[u8], Vec<u8>> {
-    alt((json_sed, cbor_sed))(s)
+    alt((json_sed, cbor_sed, mgpk_sed))(s)
 }
 
 /// extracts the count from the sig count code
