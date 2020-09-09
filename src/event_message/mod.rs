@@ -143,7 +143,7 @@ mod tests {
     use super::super::util::dfs_serializer;
     use super::*;
     use crate::{
-        derivation::{blake2b_256_digest, sha3_512_digest},
+        derivation::{blake3_256_digest, sha3_512_digest},
         event::{
             event_data::{inception::InceptionEvent, EventData},
             sections::InceptionWitnessConfig,
@@ -258,7 +258,7 @@ mod tests {
         let enc_pref_1 = BasicPrefix::X25519(enc_key_1);
 
         // next key set pre-commitment
-        let nexter_pref = SelfAddressingPrefix::Blake2B256(blake2b_256_digest(
+        let nexter_pref = SelfAddressingPrefix::Blake3_256(blake3_256_digest(
             [sig_pref_1.to_str(), enc_pref_1.to_str()]
                 .join("")
                 .as_bytes(),
@@ -280,8 +280,8 @@ mod tests {
 
         let icp_data_message = icp_data.to_message(&SerializationFormats::JSON)?;
 
-        let pref = IdentifierPrefix::SelfAddressing(SelfAddressingPrefix::Blake2B256(
-            blake2b_256_digest(icp_data_message.extract_serialized_data_set()?.as_bytes()),
+        let pref = IdentifierPrefix::SelfAddressing(SelfAddressingPrefix::Blake3_256(
+            blake3_256_digest(icp_data_message.extract_serialized_data_set()?.as_bytes()),
         ));
 
         let icp_m = Event {

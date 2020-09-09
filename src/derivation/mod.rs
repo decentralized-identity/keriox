@@ -1,3 +1,4 @@
+use blake3;
 use ursa::hash::{
     blake2::Blake2,
     sha2::{Sha256, Sha512},
@@ -27,24 +28,29 @@ pub fn self_signing_derivation(sig: &[u8]) -> Vec<u8> {
 ///   Multi-sig Self-addressing is a self-addressing where the inception data is the public key info of the multisig set (2.3.3)
 ///   Delegated Self-addressing uses the Dip event data for the inception data (2.3.4)
 ///
-pub fn blake3_256_digest(_input: &[u8]) -> Vec<u8> {
-    todo!()
+pub fn blake3_256_digest(input: &[u8]) -> Vec<u8> {
+    blake3::hash(input).as_bytes().to_owned().to_vec()
 }
 
 pub fn blake2s_256_digest(_input: &[u8]) -> Vec<u8> {
     todo!()
 }
 
-pub fn blake2b_256_digest(input: &[u8]) -> Vec<u8> {
+// TODO it seems that blake2b is always defined as outputting 512 bits?
+pub fn blake2b_256_digest(_input: &[u8]) -> Vec<u8> {
+    todo!()
+}
+
+pub fn blake3_512_digest(input: &[u8]) -> Vec<u8> {
+    let mut out = [0u8; 64];
+    let mut h = blake3::Hasher::new();
+    h.update(input);
+    h.finalize_xof().fill(&mut out);
+    out.to_vec()
+}
+
+pub fn blake2b_512_digest(input: &[u8]) -> Vec<u8> {
     Blake2::digest(input).to_vec()
-}
-
-pub fn blake3_512_digest(_input: &[u8]) -> Vec<u8> {
-    todo!()
-}
-
-pub fn blake2b_512_digest(_input: &[u8]) -> Vec<u8> {
-    todo!()
 }
 
 pub fn sha3_256_digest(input: &[u8]) -> Vec<u8> {

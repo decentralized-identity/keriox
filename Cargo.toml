@@ -26,3 +26,4 @@ nom = "5"
 itoa = "0.4"
 ryu = "1.0"
 serde-transcode = "1.1"
+blake3 = { version = "0.3", default-features = false }
