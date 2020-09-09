@@ -193,9 +193,20 @@ fn test_event() {
 }
 
 #[test]
-fn test_stream() {
+fn test_stream1() {
+    // NOTE: this stream fails to validate as blake3 is not yet implemented in this library
     // taken from KERIPY: tests/core/test_eventing.py#903
     let stream = r#"{"vs":"KERI10JSON000159_","pre":"ECui-E44CqN2U7uffCikRCp_YKLkPrA4jsTZ_A0XRLzc","sn":"0","ilk":"icp","sith":"2","keys":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"nxt":"Evhf3437ZRRnVhT0zOxo_rBX_GxpGoAnLuzrVlDK8ZdM","toad":"0","wits":[],"cnfg":[]}-AADAAJ66nrRaNjltE31FZ4mELVGUMc_XOqOAOXZQjZCEAvbeJQ8r3AnccIe1aepMwgoQUeFdIIQLeEDcH8veLdud_DQABTQYtYWKh3ScYij7MOZz3oA6ZXdIDLRrv0ObeSb4oc6LYrR1LfkICfXiYDnp90tAdvaJX5siCLjSD3vfEM9ADDAACQTgUl4zF6U8hfDy8wwUva-HCAiS8LQuP7elKAHqgS8qtqv5hEj3aTjwE91UtgAX2oCgaw98BCYSeT5AuY1SpDA"#;
+
+    assert!(signed_message(stream).is_ok());
+    assert!(signed_event_stream(stream).is_ok());
+    assert!(signed_event_stream_validate(stream).is_ok())
+}
+
+#[test]
+fn test_stream2() {
+    // generated with KERIOX
+    let stream = r#"{"vs":"KERI10JSON000180_","pre":"Foht9zzlHvbOiE10EnstEJHLsKQl6imWtWeYIDNS5eNYNOajsfNaDyActFF-8JUC1_ILxvcY3hDo29i8cRKoNzw","sn":"0","ilk":"icp","sith":"1","keys":["DxUJnfhEDURkQbJm3aWGyKR-QZYyJkwUhKe9kfG4mIoE","CzXsZBUUP2N55Y6LmoIps__Y62r-93ETwefvyUq3epj4"],"nxt":"FzBkf6F9o6Fjb_2hIdjfKauETOgvTcBjjJFjV1rteNQGEuWbPyX-kQkMzVqt7I62CM2fMw7aGvq08qAFZDZydNQ","toad":"0","wits":[],"cnfg":[]}-AABAALo_U5X2C-o1-YussrM2b4ECMGQkBWa2nnK45stmfgU1taaX7zRh4RTWQYHELThkOMdZSEG3dyWln-y3fpszwDA"#;
 
     assert!(signed_message(stream).is_ok());
     assert!(signed_event_stream(stream).is_ok());
