@@ -12,15 +12,17 @@ pub mod parse;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EventMessage {
-    /// Version and Size string
+    /// Serialization Information
     ///
-    /// TODO should be broken up into better types
+    /// Encodes the version, size and serialization format of the event
     #[serde(rename = "vs")]
     serialization_info: SerializationInfo,
 
     #[serde(flatten)]
     pub event: Event,
     // Additional Data for forwards compat
+    //
+    // TODO: Currently seems to be bugged, it captures and duplicates every element in the event
     // #[serde(flatten)]
     // pub extra: HashMap<String, Value>,
 }
