@@ -205,12 +205,12 @@ fn test_stream1() {
 
 #[test]
 fn test_stream2() {
-    // generated with KERIOX
+    // generated with old KERIOX, should fail to verify with incorrect signature
     let stream = r#"{"vs":"KERI10JSON000180_","pre":"Foht9zzlHvbOiE10EnstEJHLsKQl6imWtWeYIDNS5eNYNOajsfNaDyActFF-8JUC1_ILxvcY3hDo29i8cRKoNzw","sn":"0","ilk":"icp","sith":"1","keys":["DxUJnfhEDURkQbJm3aWGyKR-QZYyJkwUhKe9kfG4mIoE","CzXsZBUUP2N55Y6LmoIps__Y62r-93ETwefvyUq3epj4"],"nxt":"FzBkf6F9o6Fjb_2hIdjfKauETOgvTcBjjJFjV1rteNQGEuWbPyX-kQkMzVqt7I62CM2fMw7aGvq08qAFZDZydNQ","toad":"0","wits":[],"cnfg":[]}-AABAALo_U5X2C-o1-YussrM2b4ECMGQkBWa2nnK45stmfgU1taaX7zRh4RTWQYHELThkOMdZSEG3dyWln-y3fpszwDA"#;
 
     assert!(signed_message(stream).is_ok());
     assert!(signed_event_stream(stream).is_ok());
-    assert!(signed_event_stream_validate(stream).is_ok())
+    assert!(!signed_event_stream_validate(stream).is_ok())
 }
 
 #[test]
