@@ -1,4 +1,5 @@
 use super::Prefix;
+use crate::derivation::*;
 use crate::error::Error;
 use base64::decode_config;
 use core::str::FromStr;
@@ -15,6 +16,22 @@ pub enum SelfAddressingPrefix {
     SHA3_512(Vec<u8>),
     Blake2B512(Vec<u8>),
     SHA2_512(Vec<u8>),
+}
+
+impl SelfAddressingPrefix {
+    pub fn verify_binding(&self, sed: &[u8]) -> bool {
+        match self {
+            Self::Blake3_256(d) => &blake3_256_digest(sed) == d,
+            Self::Blake2B256(d) => &blake2b_256_digest(sed) == d,
+            Self::Blake2S256(d) => &blake2s_256_digest(sed) == d,
+            Self::SHA3_256(d) => &sha3_256_digest(sed) == d,
+            Self::SHA2_256(d) => &sha2_256_digest(sed) == d,
+            Self::Blake3_512(d) => &blake3_512_digest(sed) == d,
+            Self::SHA3_512(d) => &sha3_512_digest(sed) == d,
+            Self::Blake2B512(d) => &blake2b_512_digest(sed) == d,
+            Self::SHA2_512(d) => &sha2_512_digest(sed) == d,
+        }
+    }
 }
 
 impl FromStr for SelfAddressingPrefix {
