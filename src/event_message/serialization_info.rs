@@ -46,12 +46,12 @@ impl FromStr for SerializationFormats {
 pub struct SerializationInfo {
     pub major_version: u8,
     pub minor_version: u8,
-    pub size: u16,
+    pub size: usize,
     pub kind: SerializationFormats,
 }
 
 impl SerializationInfo {
-    pub fn new(kind: &SerializationFormats, size: u16) -> Self {
+    pub fn new(kind: &SerializationFormats, size: usize) -> Self {
         Self {
             major_version: 1,
             minor_version: 0,
@@ -78,7 +78,7 @@ impl FromStr for SerializationInfo {
                 major_version: u8::from_str_radix(&s[4..5], 16)?,
                 minor_version: u8::from_str_radix(&s[5..6], 16)?,
                 kind: SerializationFormats::from_str(&s[6..10])?,
-                size: u16::from_str_radix(&s[10..16], 16)?,
+                size: u16::from_str_radix(&s[10..16], 16)? as usize,
             }),
             _ => Err(Error::DeserializationError),
         }

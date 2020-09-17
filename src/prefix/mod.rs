@@ -167,6 +167,33 @@ mod tests {
     }
 
     #[test]
+    fn length() -> Result<(), Error> {
+        // correct
+        assert!(IdentifierPrefix::from_str("BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA").is_ok());
+        assert!(IdentifierPrefix::from_str("CBBBBBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA").is_ok());
+
+        // too short
+        assert!(!IdentifierPrefix::from_str("BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA").is_ok());
+
+        // too long
+        assert!(
+            !IdentifierPrefix::from_str("BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA").is_ok()
+        );
+
+        // not a real prefix
+        assert!(
+            !IdentifierPrefix::from_str("ZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA").is_ok()
+        );
+
+        // not base 64 URL
+        assert!(
+            !IdentifierPrefix::from_str("BAAAAAAAAAAAAAAAAAAA/AAAAAAAAAAAAAAAAAAAAAAAA").is_ok()
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn simple_serialize() -> Result<(), Error> {
         let pref = Basic::Ed25519NT.derive(keys::PublicKey(vec![0; 32]));
 

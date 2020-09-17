@@ -40,10 +40,7 @@ pub struct SignedEventMessage {
 impl EventMessage {
     pub fn new(event: &Event, format: &SerializationFormats) -> Result<Self, Error> {
         Ok(Self {
-            serialization_info: SerializationInfo::new(
-                format,
-                Self::get_size(event, format)? as u16,
-            ),
+            serialization_info: SerializationInfo::new(format, Self::get_size(event, format)?),
             event: event.clone(),
         })
     }
