@@ -60,16 +60,12 @@ impl EventMessage {
         self.serialization_info.kind
     }
 
+    /// Serialize
+    ///
+    /// returns the serialized event message
+    /// NOTE: this method, for deserialized events, will be UNABLE to preserve ordering
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         self.serialization().encode(self)
-    }
-
-    /// Extract Serialized Data Set
-    ///
-    /// returns the serialized extracted data set (for signing/verification) for this event message
-    /// NOTE: this method, for deserialized events, will be UNABLE to preserve ordering
-    pub fn extract_serialized_data_set(&self) -> Result<String, Error> {
-        dfs_serializer::to_string(self).map_err(|e| e.into())
     }
 
     pub fn sign(&self, sigs: Vec<AttachedSignaturePrefix>) -> SignedEventMessage {
@@ -114,7 +110,7 @@ impl EventSemantics for SignedEventMessage {
 
 impl Verifiable for SignedEventMessage {
     fn verify_against(&self, state: &IdentifierState) -> Result<bool, Error> {
-        let serialized_data_extract = self.event_message.extract_serialized_data_set()?;
+        let serialized = self.event_message.serialize()?;
 
         Ok(self.signatures.len() as u64 >= state.current.threshold
             && self
@@ -127,9 +123,7 @@ impl Verifiable for SignedEventMessage {
                             .signers
                             .get(sig.index as usize)
                             .ok_or(Error::SemanticError("Key not present in state".to_string()))
-                            .and_then(|key: &BasicPrefix| {
-                                key.verify(serialized_data_extract.as_bytes(), &sig.sig)
-                            })?)
+                            .and_then(|key: &BasicPrefix| key.verify(&serialized, &sig.sig))?)
                 })?)
     }
 }
@@ -179,7 +173,8 @@ mod tests {
         let pref0 = BasicPrefix::Ed25519(pub_key0);
 
         // initial control key hash prefix
-        let pref1 = SelfAddressingPrefix::SHA3_512(sha3_512_digest(&pub_key1.0));
+        let pref1 = BasicPrefix::Ed25519(pub_key1);
+        let nxt = SelfAddressingPrefix::Blake3_256(blake3_256_digest(pref1.to_str().as_bytes()));
 
         // create a simple inception event
         let icp = Event {
@@ -189,7 +184,7 @@ mod tests {
                 key_config: KeyConfig {
                     threshold: 1,
                     public_keys: vec![pref0.clone()],
-                    threshold_key_digest: pref1.clone(),
+                    threshold_key_digest: nxt.clone(),
                 },
                 witness_config: InceptionWitnessConfig::default(),
                 inception_configuration: vec![],
@@ -199,18 +194,18 @@ mod tests {
         let icp_m = icp.to_message(&SerializationFormats::JSON)?;
 
         // serialised extracted dataset
-        let sed = icp_m.extract_serialized_data_set()?;
+        let sed = icp_m.serialize()?;
 
         // sign
         let sig = ed
-            .sign(sed.as_bytes(), &priv_key0)
+            .sign(&sed, &priv_key0)
             .map_err(|e| Error::CryptoError(e))?;
         let attached_sig = AttachedSignaturePrefix {
             index: 0,
             sig: SelfSigningPrefix::Ed25519Sha512(sig),
         };
 
-        assert!(pref0.verify(sed.as_bytes(), &attached_sig.sig)?);
+        assert!(pref0.verify(&sed, &attached_sig.sig)?);
 
         let signed_event = icp_m.sign(vec![attached_sig]);
 
@@ -224,7 +219,7 @@ mod tests {
         assert_eq!(s0.current.signers.len(), 1);
         assert_eq!(s0.current.signers[0], pref0);
         assert_eq!(s0.current.threshold, 1);
-        assert_eq!(s0.next, pref1);
+        assert_eq!(s0.next, nxt);
         assert_eq!(s0.witnesses, vec![]);
         assert_eq!(s0.tally, 0);
         assert_eq!(s0.delegated_keys, vec![]);
@@ -283,7 +278,7 @@ mod tests {
         let icp_data_message = icp_data.to_message(&SerializationFormats::JSON)?;
 
         let pref = IdentifierPrefix::SelfAddressing(SelfAddressingPrefix::Blake3_256(
-            blake3_256_digest(icp_data_message.extract_serialized_data_set()?.as_bytes()),
+            blake3_256_digest(&icp_data_message.serialize()?),
         ));
 
         let icp_m = Event {
@@ -293,18 +288,18 @@ mod tests {
         .to_message(&SerializationFormats::JSON)?;
 
         // serialised extracted dataset
-        let sed = icp_m.extract_serialized_data_set()?;
+        let sed = icp_m.serialize()?;
 
         // sign
         let sig = ed
-            .sign(sed.as_bytes(), &sig_priv_0)
+            .sign(&sed, &sig_priv_0)
             .map_err(|e| Error::CryptoError(e))?;
         let attached_sig = AttachedSignaturePrefix {
             index: 0,
             sig: SelfSigningPrefix::Ed25519Sha512(sig),
         };
 
-        assert!(sig_pref_0.verify(sed.as_bytes(), &attached_sig.sig)?);
+        assert!(sig_pref_0.verify(&sed, &attached_sig.sig)?);
 
         let signed_event = icp_m.sign(vec![attached_sig]);
 
