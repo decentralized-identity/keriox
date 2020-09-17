@@ -1,4 +1,7 @@
-use crate::error::Error;
+use crate::{
+    derivation::{basic::Basic, self_signing::SelfSigning},
+    error::Error,
+};
 use base64::encode_config;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -107,19 +110,19 @@ pub fn verify(
     key: &BasicPrefix,
     signature: &SelfSigningPrefix,
 ) -> Result<bool, Error> {
-    match key {
-        BasicPrefix::Ed25519(pk) | BasicPrefix::Ed25519NT(pk) => match signature {
-            SelfSigningPrefix::Ed25519Sha512(sig) => {
+    match key.derivation {
+        Basic::Ed25519 | Basic::Ed25519NT => match signature.derivation {
+            SelfSigning::Ed25519Sha512 => {
                 let ed = Ed25519Sha512::new();
-                ed.verify(data.as_ref(), sig, &pk)
+                ed.verify(data.as_ref(), &signature.signature, &key.public_key)
                     .map_err(|e| Error::CryptoError(e))
             }
             _ => Err(Error::SemanticError("wrong sig type".to_string())),
         },
-        BasicPrefix::ECDSAsecp256k1(pk) | BasicPrefix::ECDSAsecp256k1NT(pk) => match signature {
-            SelfSigningPrefix::ECDSAsecp256k1Sha256(sig) => {
+        Basic::ECDSAsecp256k1 | Basic::ECDSAsecp256k1NT => match signature.derivation {
+            SelfSigning::ECDSAsecp256k1Sha256 => {
                 let secp = EcdsaSecp256k1Sha256::new();
-                secp.verify(data.as_ref(), sig, &pk)
+                secp.verify(data.as_ref(), &signature.signature, &key.public_key)
                     .map_err(|e| Error::CryptoError(e))
             }
             _ => Err(Error::SemanticError("wrong sig type".to_string())),
@@ -133,17 +136,16 @@ pub fn verify(
 /// Derives the Basic Prefix corrosponding to the given Seed Prefix
 pub fn derive(seed: &SeedPrefix, transferable: bool) -> Result<BasicPrefix, Error> {
     let (pk, _) = seed.derive_key_pair()?;
-    match seed {
-        SeedPrefix::RandomSeed256Ed25519(_) => match transferable {
-            true => Ok(BasicPrefix::Ed25519(pk)),
-            false => Ok(BasicPrefix::Ed25519NT(pk)),
+    Ok(BasicPrefix::new(
+        match seed {
+            SeedPrefix::RandomSeed256Ed25519(_) if transferable => Basic::Ed25519,
+            SeedPrefix::RandomSeed256Ed25519(_) if !transferable => Basic::Ed25519NT,
+            SeedPrefix::RandomSeed256ECDSAsecp256k1(_) if transferable => Basic::ECDSAsecp256k1,
+            SeedPrefix::RandomSeed256ECDSAsecp256k1(_) if !transferable => Basic::ECDSAsecp256k1NT,
+            _ => return Err(Error::ImproperPrefixType),
         },
-        SeedPrefix::RandomSeed256ECDSAsecp256k1(_) => match transferable {
-            true => Ok(BasicPrefix::ECDSAsecp256k1(pk)),
-            false => Ok(BasicPrefix::ECDSAsecp256k1NT(pk)),
-        },
-        _ => Err(Error::ImproperPrefixType),
-    }
+        pk,
+    ))
 }
 
 #[cfg(test)]
