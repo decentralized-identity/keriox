@@ -43,7 +43,7 @@ impl SelfAddressing {
 }
 
 impl DerivationCode for SelfAddressing {
-    fn to_str(&self) -> &'static str {
+    fn to_str(&self) -> String {
         match self {
             Self::Blake3_256 => "E",
             Self::Blake2B256 => "F",
@@ -55,6 +55,7 @@ impl DerivationCode for SelfAddressing {
             Self::Blake2B512 => "0F",
             Self::SHA2_512 => "0G",
         }
+        .into()
     }
 
     fn code_len(&self) -> usize {

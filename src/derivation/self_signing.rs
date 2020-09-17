@@ -13,12 +13,13 @@ pub enum SelfSigning {
 }
 
 impl DerivationCode for SelfSigning {
-    fn to_str(&self) -> &'static str {
+    fn to_str(&self) -> String {
         match self {
             Self::Ed25519Sha512 => "0B",
             Self::ECDSAsecp256k1Sha256 => "0C",
             Self::Ed448 => "1AAE",
         }
+        .into()
     }
 
     fn code_len(&self) -> usize {

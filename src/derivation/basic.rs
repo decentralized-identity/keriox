@@ -18,7 +18,7 @@ pub enum Basic {
 }
 
 impl DerivationCode for Basic {
-    fn to_str(&self) -> &'static str {
+    fn to_str(&self) -> String {
         match self {
             Self::Ed25519NT => "B",
             Self::X25519 => "C",
@@ -29,6 +29,7 @@ impl DerivationCode for Basic {
             Self::Ed448NT => "1AAC",
             Self::Ed448 => "1AAD",
         }
+        .into()
     }
 
     fn code_len(&self) -> usize {
