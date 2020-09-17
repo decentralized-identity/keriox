@@ -1,6 +1,6 @@
 [package]
 name = "keri"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Decentralized Identity Foundation", "Charles Cunningham <charles@jolocom.io>"]
 edition = "2018"
 description = "Core library for the Key Event Receipt Infrastructure "
