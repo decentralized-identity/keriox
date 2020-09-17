@@ -3,7 +3,7 @@ use crate::{
         attached_signature_code::{b64_to_num, AttachedSignatureCode},
         self_signing::SelfSigning,
     },
-    prefix::AttachedSignaturePrefix,
+    prefix::{AttachedSignaturePrefix, SelfSigningPrefix},
 };
 use nom::{
     branch::*, bytes::complete::take, combinator::*, error::ErrorKind, multi::*, sequence::*,
@@ -27,10 +27,7 @@ pub fn attached_signature(s: &str) -> nom::IResult<&str, AttachedSignaturePrefix
 
             Ok((
                 rest,
-                AttachedSignaturePrefix::new(
-                    AttachedSignatureCode::new(SelfSigning::Ed25519Sha512, index),
-                    sig,
-                ),
+                AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig, index),
             ))
         }
         "B" => {
@@ -46,10 +43,7 @@ pub fn attached_signature(s: &str) -> nom::IResult<&str, AttachedSignaturePrefix
 
             Ok((
                 rest,
-                AttachedSignaturePrefix::new(
-                    AttachedSignatureCode::new(SelfSigning::ECDSAsecp256k1Sha256, index),
-                    sig,
-                ),
+                AttachedSignaturePrefix::new(SelfSigning::ECDSAsecp256k1Sha256, sig, index),
             ))
         }
         "0" => {
@@ -68,10 +62,7 @@ pub fn attached_signature(s: &str) -> nom::IResult<&str, AttachedSignaturePrefix
 
                     Ok((
                         rest,
-                        AttachedSignaturePrefix::new(
-                            AttachedSignatureCode::new(SelfSigning::Ed448, index),
-                            sig,
-                        ),
+                        AttachedSignaturePrefix::new(SelfSigning::Ed448, sig, index),
                     ))
                 }
                 _ => Err(nom::Err::Error((type_c_2, ErrorKind::IsNot))),
@@ -84,12 +75,12 @@ pub fn attached_signature(s: &str) -> nom::IResult<&str, AttachedSignaturePrefix
 #[test]
 fn test() {
     assert_eq!(
-            attached_signature("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
-            Ok(("", AttachedSignaturePrefix::new(0, SelfSigningPrefix::Ed25519Sha512([0u8; 64].to_vec()))))
-        );
+        attached_signature("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+        Ok(("", AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, vec![0u8; 64], 0)))
+    );
 
     assert_eq!(
-            attached_signature("BCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
-            Ok(("AA", AttachedSignaturePrefix::new(2, SelfSigningPrefix::ECDSAsecp256k1Sha256([0u8; 64].to_vec()))))
-        );
+        attached_signature("BCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+        Ok(("AA", AttachedSignaturePrefix::new(SelfSigning::ECDSAsecp256k1Sha256, vec![0u8; 64], 2)))
+    );
 }

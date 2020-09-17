@@ -23,12 +23,6 @@ impl SelfSigningPrefix {
     }
 }
 
-impl From<&AttachedSignaturePrefix> for SelfSigningPrefix {
-    fn from(attached: &AttachedSignaturePrefix) -> Self {
-        Self::new(attached.code.code, attached.signature.clone())
-    }
-}
-
 impl FromStr for SelfSigningPrefix {
     type Err = Error;
 
@@ -41,7 +35,10 @@ impl FromStr for SelfSigningPrefix {
                 decode_config(&s[code.code_len()..code.prefix_b64_len()], base64::URL_SAFE)?,
             ))
         } else {
-            Err(Error::SemanticError("Incorrect Prefix Length".into()))
+            Err(Error::SemanticError(format!(
+                "Incorrect Prefix Length: {}",
+                s
+            )))
         }
     }
 }

@@ -1,6 +1,7 @@
 use super::DerivationCode;
-use crate::error::Error;
+use crate::{error::Error, prefix::BasicPrefix};
 use core::str::FromStr;
+use ursa::keys::PublicKey;
 
 /// Basic Derivations
 ///
@@ -15,6 +16,12 @@ pub enum Basic {
     Ed448,
     X25519,
     X448,
+}
+
+impl Basic {
+    pub fn derive(&self, public_key: PublicKey) -> BasicPrefix {
+        BasicPrefix::new(*self, public_key)
+    }
 }
 
 impl DerivationCode for Basic {

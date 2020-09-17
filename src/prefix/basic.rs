@@ -42,7 +42,10 @@ impl FromStr for BasicPrefix {
                 )?),
             ))
         } else {
-            Err(Error::SemanticError("Incorrect Prefix Length".into()))
+            Err(Error::SemanticError(format!(
+                "Incorrect Prefix Length: {}",
+                s
+            )))
         }
     }
 }

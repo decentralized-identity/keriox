@@ -168,7 +168,7 @@ mod tests {
 
     #[test]
     fn simple_serialize() -> Result<(), Error> {
-        let pref = BasicPrefix::Ed25519NT(keys::PublicKey(vec![0; 32]));
+        let pref = Basic::Ed25519NT.derive(keys::PublicKey(vec![0; 32]));
 
         assert_eq!(
             pref.to_str(),
@@ -188,13 +188,16 @@ mod tests {
             .keypair(Some(keys::KeyGenOption::UseSeed(vec![0u8; 32])))
             .map_err(|e| Error::CryptoError(e))?;
 
-        let key_prefix = BasicPrefix::Ed25519NT(pub_key);
+        let key_prefix = Basic::Ed25519NT.derive(pub_key);
 
         let sig = ed
             .sign(&data_string.as_bytes(), &priv_key)
             .map_err(|e| Error::CryptoError(e))?;
 
-        let sig_prefix = SelfSigningPrefix::Ed25519Sha512(sig);
+        let sig_prefix = SelfSigningPrefix {
+            derivation: SelfSigning::Ed25519Sha512,
+            signature: sig,
+        };
 
         assert!(
             true,

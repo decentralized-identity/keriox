@@ -1,5 +1,5 @@
 use super::DerivationCode;
-use crate::error::Error;
+use crate::{error::Error, prefix::SelfAddressingPrefix};
 use blake3;
 use core::str::FromStr;
 use ursa::hash::{
@@ -27,7 +27,7 @@ pub enum SelfAddressing {
 }
 
 impl SelfAddressing {
-    pub fn derive(&self, data: &[u8]) -> Vec<u8> {
+    pub fn digest(&self, data: &[u8]) -> Vec<u8> {
         match self {
             Self::Blake3_256 => blake3_256_digest(data),
             Self::Blake2B256 => blake2b_256_digest(data),
@@ -39,6 +39,10 @@ impl SelfAddressing {
             Self::Blake2B512 => blake2b_512_digest(data),
             Self::SHA2_512 => sha2_512_digest(data),
         }
+    }
+
+    pub fn derive(&self, data: &[u8]) -> SelfAddressingPrefix {
+        SelfAddressingPrefix::new(*self, self.digest(data))
     }
 }
 

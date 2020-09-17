@@ -1,6 +1,8 @@
-use super::Prefix;
+use super::{Prefix, SelfSigningPrefix};
 use crate::{
-    derivation::{attached_signature_code::AttachedSignatureCode, DerivationCode},
+    derivation::{
+        attached_signature_code::AttachedSignatureCode, self_signing::SelfSigning, DerivationCode,
+    },
     error::Error,
 };
 use base64::decode_config;
@@ -9,13 +11,16 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct AttachedSignaturePrefix {
-    pub code: AttachedSignatureCode,
-    pub signature: Vec<u8>,
+    pub index: u16,
+    pub signature: SelfSigningPrefix,
 }
 
 impl AttachedSignaturePrefix {
-    pub fn new(code: AttachedSignatureCode, signature: Vec<u8>) -> Self {
-        Self { code, signature }
+    pub fn new(code: SelfSigning, signature: Vec<u8>, index: u16) -> Self {
+        Self {
+            signature: SelfSigningPrefix::new(code, signature),
+            index,
+        }
     }
 }
 
@@ -27,21 +32,25 @@ impl FromStr for AttachedSignaturePrefix {
 
         if (s.len()) == code.prefix_b64_len() {
             Ok(Self::new(
-                code,
+                code.code,
                 decode_config(&s[code.code_len()..code.prefix_b64_len()], base64::URL_SAFE)?,
+                code.index,
             ))
         } else {
-            Err(Error::SemanticError("Incorrect Prefix Length".into()))
+            Err(Error::SemanticError(format!(
+                "Incorrect Prefix Length: {}",
+                s
+            )))
         }
     }
 }
 
 impl Prefix for AttachedSignaturePrefix {
     fn derivative(&self) -> &[u8] {
-        &self.signature
+        &self.signature.signature
     }
     fn derivation_code(&self) -> String {
-        self.code.to_str()
+        AttachedSignatureCode::new(self.signature.derivation, self.index).to_str()
     }
 }
 
@@ -76,38 +85,33 @@ mod tests {
 
     #[test]
     fn deserialize() -> Result<(), Error> {
-        let attached_ed_1 = "AB";
-        let attached_secp_2 = "BC";
-        let attached_448_3 = "0AAD";
+        let attached_ed_1 = "ABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        let attached_secp_2 = "BCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        let attached_448_3 = "0AADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
         let pref_ed_1 = AttachedSignaturePrefix::from_str(attached_ed_1)?;
         let pref_secp_2 = AttachedSignaturePrefix::from_str(attached_secp_2)?;
         let pref_448_3 = AttachedSignaturePrefix::from_str(attached_448_3)?;
 
-        assert_eq!(1, pref_ed_1.code.index);
-        assert_eq!(2, pref_secp_2.code.index);
-        assert_eq!(3, pref_448_3.code.index);
+        assert_eq!(1, pref_ed_1.index);
+        assert_eq!(2, pref_secp_2.index);
+        assert_eq!(3, pref_448_3.index);
 
-        assert_eq!(SelfSigning::Ed25519Sha512, pref_ed_1.code.code);
-        assert_eq!(SelfSigning::ECDSAsecp256k1Sha256, pref_secp_2.code.code);
-        assert_eq!(SelfSigning::Ed448, pref_448_3.code.code);
+        assert_eq!(SelfSigning::Ed25519Sha512, pref_ed_1.signature.derivation);
+        assert_eq!(
+            SelfSigning::ECDSAsecp256k1Sha256,
+            pref_secp_2.signature.derivation
+        );
+        assert_eq!(SelfSigning::Ed448, pref_448_3.signature.derivation);
         Ok(())
     }
 
     #[test]
     fn serialize() -> Result<(), Error> {
-        let pref_ed_2 = AttachedSignaturePrefix::new(
-            AttachedSignatureCode::new(SelfSigning::Ed25519Sha512, 2),
-            vec![0u8; 64],
-        );
-        let pref_secp_6 = AttachedSignaturePrefix::new(
-            AttachedSignatureCode::new(SelfSigning::ECDSAsecp256k1Sha256, 6),
-            vec![0u8; 64],
-        );
-        let pref_448_4 = AttachedSignaturePrefix::new(
-            AttachedSignatureCode::new(SelfSigning::Ed448, 4),
-            vec![0u8; 114],
-        );
+        let pref_ed_2 = AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, vec![0u8; 64], 2);
+        let pref_secp_6 =
+            AttachedSignaturePrefix::new(SelfSigning::ECDSAsecp256k1Sha256, vec![0u8; 64], 6);
+        let pref_448_4 = AttachedSignaturePrefix::new(SelfSigning::Ed448, vec![0u8; 114], 4);
 
         assert_eq!(88, pref_ed_2.to_str().len());
         assert_eq!(88, pref_secp_6.to_str().len());

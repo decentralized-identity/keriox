@@ -20,7 +20,7 @@ impl SelfAddressingPrefix {
     }
 
     pub fn verify_binding(&self, sed: &[u8]) -> bool {
-        self.derivation.derive(sed) == self.digest
+        self.derivation.digest(sed) == self.digest
     }
 }
 
@@ -36,7 +36,10 @@ impl FromStr for SelfAddressingPrefix {
                 decode_config(&s[code.code_len()..code.prefix_b64_len()], base64::URL_SAFE)?,
             ))
         } else {
-            Err(Error::SemanticError("Incorrect Prefix Length".into()))
+            Err(Error::SemanticError(format!(
+                "Incorrect Prefix Length: {}",
+                s
+            )))
         }
     }
 }
