@@ -354,8 +354,6 @@ mod tests {
         assert!(sig_pref_0.verify(&serialized, &attached_sig.signature)?);
 
         let signed_event = icp_m.sign(vec![attached_sig]);
-        // println!("{}", String::from_utf8(signed_event.serialize()?).unwrap());
-        // assert!(false);
 
         let s_ = IdentifierState::default();
 
