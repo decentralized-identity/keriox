@@ -1,4 +1,10 @@
-use crate::prefix::{attached_signature::b64_to_num, AttachedSignaturePrefix, SelfSigningPrefix};
+use crate::{
+    derivation::{
+        attached_signature_code::{b64_to_num, AttachedSignatureCode},
+        self_signing::SelfSigning,
+    },
+    prefix::{AttachedSignaturePrefix, SelfSigningPrefix},
+};
 use nom::{
     branch::*, bytes::complete::take, combinator::*, error::ErrorKind, multi::*, sequence::*,
 };
@@ -16,12 +22,13 @@ pub fn attached_signature(s: &str) -> nom::IResult<&str, AttachedSignaturePrefix
 
             let (rest, sig_s) = take(86u8)(maybe_sig)?;
 
-            let sig = SelfSigningPrefix::Ed25519Sha512(
-                base64::decode_config(sig_s, base64::URL_SAFE)
-                    .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?,
-            );
+            let sig = base64::decode_config(sig_s, base64::URL_SAFE)
+                .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?;
 
-            Ok((rest, AttachedSignaturePrefix::new(index, sig)))
+            Ok((
+                rest,
+                AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig, index),
+            ))
         }
         "B" => {
             let (maybe_sig, index_c) = take(1u8)(more)?;
@@ -31,12 +38,13 @@ pub fn attached_signature(s: &str) -> nom::IResult<&str, AttachedSignaturePrefix
 
             let (rest, sig_s) = take(86u8)(maybe_sig)?;
 
-            let sig = SelfSigningPrefix::ECDSAsecp256k1Sha256(
-                base64::decode_config(sig_s, base64::URL_SAFE)
-                    .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?,
-            );
+            let sig = base64::decode_config(sig_s, base64::URL_SAFE)
+                .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?;
 
-            Ok((rest, AttachedSignaturePrefix::new(index, sig)))
+            Ok((
+                rest,
+                AttachedSignaturePrefix::new(SelfSigning::ECDSAsecp256k1Sha256, sig, index),
+            ))
         }
         "0" => {
             let (maybe_count, type_c_2) = take(1u8)(more)?;
@@ -49,12 +57,13 @@ pub fn attached_signature(s: &str) -> nom::IResult<&str, AttachedSignaturePrefix
 
                     let (rest, sig_s) = take(152u8)(maybe_sig)?;
 
-                    let sig = SelfSigningPrefix::Ed448(
-                        base64::decode_config(sig_s, base64::URL_SAFE)
-                            .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?,
-                    );
+                    let sig = base64::decode_config(sig_s, base64::URL_SAFE)
+                        .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?;
 
-                    Ok((rest, AttachedSignaturePrefix::new(index, sig)))
+                    Ok((
+                        rest,
+                        AttachedSignaturePrefix::new(SelfSigning::Ed448, sig, index),
+                    ))
                 }
                 _ => Err(nom::Err::Error((type_c_2, ErrorKind::IsNot))),
             }
@@ -66,12 +75,12 @@ pub fn attached_signature(s: &str) -> nom::IResult<&str, AttachedSignaturePrefix
 #[test]
 fn test() {
     assert_eq!(
-            attached_signature("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
-            Ok(("", AttachedSignaturePrefix::new(0, SelfSigningPrefix::Ed25519Sha512([0u8; 64].to_vec()))))
-        );
+        attached_signature("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+        Ok(("", AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, vec![0u8; 64], 0)))
+    );
 
     assert_eq!(
-            attached_signature("BCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
-            Ok(("AA", AttachedSignaturePrefix::new(2, SelfSigningPrefix::ECDSAsecp256k1Sha256([0u8; 64].to_vec()))))
-        );
+        attached_signature("BCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+        Ok(("AA", AttachedSignaturePrefix::new(SelfSigning::ECDSAsecp256k1Sha256, vec![0u8; 64], 2)))
+    );
 }

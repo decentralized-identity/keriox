@@ -1,70 +1,55 @@
 use super::Prefix;
+use crate::derivation::{self_addressing::SelfAddressing, DerivationCode};
 use crate::error::Error;
 use base64::decode_config;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum SelfAddressingPrefix {
-    Blake3_256(Vec<u8>),
-    Blake2B256(Vec<u8>),
-    Blake2S256(Vec<u8>),
-    SHA3_256(Vec<u8>),
-    SHA2_256(Vec<u8>),
-    Blake3_512(Vec<u8>),
-    SHA3_512(Vec<u8>),
-    Blake2B512(Vec<u8>),
-    SHA2_512(Vec<u8>),
+pub struct SelfAddressingPrefix {
+    pub derivation: SelfAddressing,
+    pub digest: Vec<u8>,
+}
+
+impl SelfAddressingPrefix {
+    pub fn new(code: SelfAddressing, digest: Vec<u8>) -> Self {
+        Self {
+            derivation: code,
+            digest,
+        }
+    }
+
+    pub fn verify_binding(&self, sed: &[u8]) -> bool {
+        self.derivation.digest(sed) == self.digest
+    }
 }
 
 impl FromStr for SelfAddressingPrefix {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match &s[..1] {
-            "E" => Ok(Self::Blake3_256(decode_config(&s[1..], base64::URL_SAFE)?)),
-            "F" => Ok(Self::Blake2B256(decode_config(&s[1..], base64::URL_SAFE)?)),
-            "G" => Ok(Self::Blake2S256(decode_config(&s[1..], base64::URL_SAFE)?)),
-            "H" => Ok(Self::SHA3_256(decode_config(&s[1..], base64::URL_SAFE)?)),
-            "I" => Ok(Self::SHA3_256(decode_config(&s[1..], base64::URL_SAFE)?)),
-            "0" => match &s[1..2] {
-                "D" => Ok(Self::Blake3_512(decode_config(&s[2..], base64::URL_SAFE)?)),
-                "E" => Ok(Self::SHA3_512(decode_config(&s[2..], base64::URL_SAFE)?)),
-                "F" => Ok(Self::Blake2B512(decode_config(&s[2..], base64::URL_SAFE)?)),
-                "G" => Ok(Self::SHA2_512(decode_config(&s[2..], base64::URL_SAFE)?)),
-                _ => Err(Error::DeserializationError),
-            },
-            _ => Err(Error::DeserializationError),
+        let code = SelfAddressing::from_str(s)?;
+
+        if s.len() == code.prefix_b64_len() {
+            Ok(Self::new(
+                code,
+                decode_config(&s[code.code_len()..code.prefix_b64_len()], base64::URL_SAFE)?,
+            ))
+        } else {
+            Err(Error::SemanticError(format!(
+                "Incorrect Prefix Length: {}",
+                s
+            )))
         }
     }
 }
 
 impl Prefix for SelfAddressingPrefix {
     fn derivative(&self) -> &[u8] {
-        match self {
-            Self::Blake3_256(d) => &d,
-            Self::Blake2B256(d) => &d,
-            Self::Blake2S256(d) => &d,
-            Self::SHA3_256(d) => &d,
-            Self::SHA2_256(d) => &d,
-            Self::Blake3_512(d) => &d,
-            Self::SHA3_512(d) => &d,
-            Self::Blake2B512(d) => &d,
-            Self::SHA2_512(d) => &d,
-        }
+        &self.digest
     }
     fn derivation_code(&self) -> String {
-        match self {
-            Self::Blake3_256(_) => "E".to_string(),
-            Self::Blake2B256(_) => "F".to_string(),
-            Self::Blake2S256(_) => "G".to_string(),
-            Self::SHA3_256(_) => "H".to_string(),
-            Self::SHA2_256(_) => "I".to_string(),
-            Self::Blake3_512(_) => "0D".to_string(),
-            Self::SHA3_512(_) => "0E".to_string(),
-            Self::Blake2B512(_) => "0F".to_string(),
-            Self::SHA2_512(_) => "0G".to_string(),
-        }
+        self.derivation.to_str()
     }
 }
 
@@ -92,6 +77,9 @@ impl<'de> Deserialize<'de> for SelfAddressingPrefix {
 
 impl Default for SelfAddressingPrefix {
     fn default() -> Self {
-        SelfAddressingPrefix::Blake3_256(vec![])
+        Self {
+            derivation: SelfAddressing::Blake3_256,
+            digest: vec![],
+        }
     }
 }

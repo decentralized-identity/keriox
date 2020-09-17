@@ -1,12 +1,9 @@
 use super::{AttachedSignaturePrefix, EventMessage, SignedEventMessage};
 use crate::{
-    error::Error,
-    prefix::{attached_signature::b64_to_num, parse::attached_signature},
-    state::IdentifierState,
-    util::dfs_serializer,
+    derivation::attached_signature_code::b64_to_num, error::Error,
+    prefix::parse::attached_signature, state::IdentifierState, util::dfs_serializer,
 };
 use nom::{branch::*, combinator::*, error::ErrorKind, multi::*, sequence::*};
-use serde::{Deserialize, Deserializer, Serialize};
 use serde_transcode::transcode;
 
 fn json_message(s: &str) -> nom::IResult<&str, EventMessage> {
@@ -43,25 +40,6 @@ fn cbor_sed_block(s: &[u8]) -> Result<Vec<u8>, Error> {
     transcode(
         &mut serde_json::Deserializer::from_slice(s),
         &mut dfs_serializer::Serializer::new(&mut res),
-    )?;
-    Ok(res)
-}
-
-fn cbor_json_block(s: &[u8]) -> Result<String, Error> {
-    let mut res = Vec::with_capacity(128);
-    transcode(
-        &mut serde_cbor::Deserializer::from_slice(s),
-        &mut serde_json::Serializer::new(&mut res),
-    )?;
-    // serde-json guarentees correct utf-8 output
-    Ok(String::from_utf8(res).unwrap())
-}
-
-fn json_cbor_block(s: &str) -> Result<Vec<u8>, Error> {
-    let mut res = Vec::with_capacity(128);
-    transcode(
-        &mut serde_json::Deserializer::from_str(s),
-        &mut serde_cbor::Serializer::new(&mut res),
     )?;
     Ok(res)
 }
@@ -114,12 +92,8 @@ fn sig_count(s: &str) -> nom::IResult<&str, u16> {
 
 /// called on an attached signature stream starting with a sig count
 fn signatures(s: &str) -> nom::IResult<&str, Vec<AttachedSignaturePrefix>> {
-    let (rest, (count, signatures)) = tuple((sig_count, many0(attached_signature)))(s)?;
-    if count as usize != signatures.len() {
-        Err(nom::Err::Error((s, ErrorKind::Count)))
-    } else {
-        Ok((rest, signatures))
-    }
+    let (rest, sc) = sig_count(s)?;
+    count(attached_signature, sc as usize)(rest)
 }
 
 pub fn signed_message(s: &str) -> nom::IResult<&str, SignedEventMessage> {
@@ -147,7 +121,10 @@ pub fn signed_event_stream_validate(s: &str) -> nom::IResult<&str, IdentifierSta
 
 #[test]
 fn test_sigs() {
-    use crate::prefix::SelfSigningPrefix;
+    use crate::{
+        derivation::{attached_signature_code::AttachedSignatureCode, self_signing::SelfSigning},
+        prefix::AttachedSignaturePrefix,
+    };
     assert_eq!(sig_count("-AAA"), Ok(("", 0u16)));
     assert_eq!(sig_count("-ABA"), Ok(("", 64u16)));
     assert_eq!(
@@ -156,34 +133,25 @@ fn test_sigs() {
     );
 
     assert_eq!(
-            signatures("-AABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
-            Ok(("", vec![AttachedSignaturePrefix {
-                index: 0,
-                sig: SelfSigningPrefix::Ed25519Sha512([0u8; 64].to_vec())
-            }]))
-        );
+        signatures("-AABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+        Ok(("", vec![AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, vec![0u8; 64], 0)]))
+    );
 
     assert_eq!(
-            signatures("-AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAextra data"),
-            Ok(("extra data", vec![AttachedSignaturePrefix {
-                index: 0,
-                sig: SelfSigningPrefix::Ed25519Sha512([0u8; 64].to_vec())
-            }, AttachedSignaturePrefix {
-                index: 2,
-                sig: SelfSigningPrefix::Ed448([0u8; 114].to_vec())
-            }]))
-        );
+        signatures("-AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAextra data"),
+        Ok(("extra data", vec![
+            AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, vec![0u8; 64], 0),
+            AttachedSignaturePrefix::new(SelfSigning::Ed448, vec![0u8; 114], 2)
+        ]))
+    );
 
     assert_eq!(
-            signatures("-AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
-            Ok(("", vec![AttachedSignaturePrefix {
-                index: 0,
-                sig: SelfSigningPrefix::Ed25519Sha512([0u8; 64].to_vec())
-            }, AttachedSignaturePrefix {
-                index: 2,
-                sig: SelfSigningPrefix::Ed448([0u8; 114].to_vec())
-            }]))
-        )
+        signatures("-AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+        Ok(("", vec![
+            AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, vec![0u8; 64], 0),
+            AttachedSignaturePrefix::new(SelfSigning::Ed448, vec![0u8; 114], 2)
+        ]))
+    )
 }
 
 #[test]
@@ -194,7 +162,6 @@ fn test_event() {
 
 #[test]
 fn test_stream1() {
-    // NOTE: this stream fails to validate as blake3 is not yet implemented in this library
     // taken from KERIPY: tests/core/test_eventing.py#903
     let stream = r#"{"vs":"KERI10JSON000159_","pre":"ECui-E44CqN2U7uffCikRCp_YKLkPrA4jsTZ_A0XRLzc","sn":"0","ilk":"icp","sith":"2","keys":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"nxt":"Evhf3437ZRRnVhT0zOxo_rBX_GxpGoAnLuzrVlDK8ZdM","toad":"0","wits":[],"cnfg":[]}-AADAAJ66nrRaNjltE31FZ4mELVGUMc_XOqOAOXZQjZCEAvbeJQ8r3AnccIe1aepMwgoQUeFdIIQLeEDcH8veLdud_DQABTQYtYWKh3ScYij7MOZz3oA6ZXdIDLRrv0ObeSb4oc6LYrR1LfkICfXiYDnp90tAdvaJX5siCLjSD3vfEM9ADDAACQTgUl4zF6U8hfDy8wwUva-HCAiS8LQuP7elKAHqgS8qtqv5hEj3aTjwE91UtgAX2oCgaw98BCYSeT5AuY1SpDA"#;
 
@@ -205,8 +172,18 @@ fn test_stream1() {
 
 #[test]
 fn test_stream2() {
-    // generated with old KERIOX, should fail to verify with incorrect signature
-    let stream = r#"{"vs":"KERI10JSON000180_","pre":"Foht9zzlHvbOiE10EnstEJHLsKQl6imWtWeYIDNS5eNYNOajsfNaDyActFF-8JUC1_ILxvcY3hDo29i8cRKoNzw","sn":"0","ilk":"icp","sith":"1","keys":["DxUJnfhEDURkQbJm3aWGyKR-QZYyJkwUhKe9kfG4mIoE","CzXsZBUUP2N55Y6LmoIps__Y62r-93ETwefvyUq3epj4"],"nxt":"FzBkf6F9o6Fjb_2hIdjfKauETOgvTcBjjJFjV1rteNQGEuWbPyX-kQkMzVqt7I62CM2fMw7aGvq08qAFZDZydNQ","toad":"0","wits":[],"cnfg":[]}-AABAALo_U5X2C-o1-YussrM2b4ECMGQkBWa2nnK45stmfgU1taaX7zRh4RTWQYHELThkOMdZSEG3dyWln-y3fpszwDA"#;
+    // generated by KERIOX
+    let stream = r#"{"vs":"KERI10JSON00012a_","pre":"E4_CHZxqydVAvJEI7beqk3TZwUR92nQydi1nI8UqUTxk","sn":"0","ilk":"icp","sith":"1","keys":["DLfozZ0uGvLED22X3K8lX6ciwhl02jdjt1DQ_EHnJro0","C6KROFI5gWRXhAiIMiHLCDa-Oj09kmVMr2btCE96k_3g"],"nxt":"E99mhvP0pLkGtxymQkspRqcdoIFOqdigCf_F3rpg7rfk","toad":"0","wits":[],"cnfg":[]}-AABAAlxZyoxbADu-x9Ho6EC7valjC4bNn7muWvqC_u0EBd1P9xIeOSxmcYdhyvBg1-o-25ebv66Q3Td5bZ730wqLjBA"#;
+
+    assert!(signed_message(stream).is_ok());
+    assert!(signed_event_stream(stream).is_ok());
+    assert!(signed_event_stream_validate(stream).is_ok())
+}
+
+#[test]
+fn test_stream3() {
+    // should fail to verify with incorrect signature
+    let stream = r#"{"vs":"KERI10JSON00012a_","pre":"E4_CHZxqydVAvJEI7beqk3TZwUR92nQydi1nI8UqUTxk","sn":"0","ilk":"icp","sith":"1","keys":["DLfozZ0uGvLED22X3K8lX6ciwhl02jdjt1DQ_EHnJro0","C6KROFI5gWRXhAiIMiHLCDa-Oj09kmVMr2btCE96k_3g"],"nxt":"E99mhvP0pLkGtxymQkspRqcdoIFOqdigCf_F3rpg7rfk","toad":"0","wits":[],"cnfg":[]}-AABAAlxZyoxbADu-x9Ho6EC7valjC4bNn7muWvqC_uAEBd1P9xIeOSxmcYdhyvBg1-o-25ebv66Q3Td5bZ730wqLjBA"#;
 
     assert!(signed_message(stream).is_ok());
     assert!(signed_event_stream(stream).is_ok());
@@ -217,5 +194,6 @@ fn test_stream2() {
 fn test_sed_extraction() {
     let stream = r#"{"vs":"KERI10JSON000159_","pre":"ECui-E44CqN2U7uffCikRCp_YKLkPrA4jsTZ_A0XRLzc","sn":"0","ilk":"icp","sith":"2","keys":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"nxt":"Evhf3437ZRRnVhT0zOxo_rBX_GxpGoAnLuzrVlDK8ZdM","toad":"0","wits":[],"cnfg":[]}"#;
 
-    assert!(sed(stream.as_bytes()).is_ok())
+    // sed transcoding is not required until arbitrary content events are used
+    // assert!(sed(stream.as_bytes()).is_ok())
 }

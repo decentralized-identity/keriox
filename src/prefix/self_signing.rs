@@ -1,52 +1,54 @@
 use super::Prefix;
-use crate::error::Error;
+use crate::{
+    derivation::{self_signing::SelfSigning, DerivationCode},
+    error::Error,
+    prefix::AttachedSignaturePrefix,
+};
 use base64::decode_config;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum SelfSigningPrefix {
-    ECDSAsecp256k1Sha256(Vec<u8>),
-    Ed25519Sha512(Vec<u8>),
-    Ed448(Vec<u8>),
+pub struct SelfSigningPrefix {
+    pub derivation: SelfSigning,
+    pub signature: Vec<u8>,
+}
+
+impl SelfSigningPrefix {
+    pub fn new(code: SelfSigning, signature: Vec<u8>) -> Self {
+        Self {
+            derivation: code,
+            signature,
+        }
+    }
 }
 
 impl FromStr for SelfSigningPrefix {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match &s[..2] {
-            "0B" => Ok(Self::ECDSAsecp256k1Sha256(decode_config(
-                &s[2..],
-                base64::URL_SAFE,
-            )?)),
-            "0C" => Ok(Self::Ed25519Sha512(decode_config(
-                &s[2..],
-                base64::URL_SAFE,
-            )?)),
-            "1A" => match &s[2..4] {
-                "AE" => Ok(Self::Ed448(decode_config(&s[4..], base64::URL_SAFE)?)),
-                _ => Err(Error::DeserializationError),
-            },
-            _ => Err(Error::DeserializationError),
+        let code = SelfSigning::from_str(s)?;
+
+        if s.len() == code.prefix_b64_len() {
+            Ok(Self::new(
+                code,
+                decode_config(&s[code.code_len()..code.prefix_b64_len()], base64::URL_SAFE)?,
+            ))
+        } else {
+            Err(Error::SemanticError(format!(
+                "Incorrect Prefix Length: {}",
+                s
+            )))
         }
     }
 }
 
 impl Prefix for SelfSigningPrefix {
     fn derivative(&self) -> &[u8] {
-        match self {
-            Self::ECDSAsecp256k1Sha256(sig) => &sig,
-            Self::Ed25519Sha512(sig) => &sig,
-            Self::Ed448(sig) => &sig,
-        }
+        &self.signature
     }
     fn derivation_code(&self) -> String {
-        match self {
-            Self::ECDSAsecp256k1Sha256(_) => "0B".to_string(),
-            Self::Ed25519Sha512(_) => "0C".to_string(),
-            Self::Ed448(_) => "1AAE".to_string(),
-        }
+        self.derivation.to_str()
     }
 }
 
