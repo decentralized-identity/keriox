@@ -48,7 +48,7 @@ impl FromStr for SelfSigning {
                 _ => Err(Error::DeserializationError),
             },
             "1" => match &s[1..4] {
-                "AAD" => Ok(Self::Ed448),
+                "AAE" => Ok(Self::Ed448),
                 _ => Err(Error::DeserializationError),
             },
             _ => Err(Error::DeserializationError),

@@ -94,7 +94,7 @@ impl FromStr for SelfAddressing {
             "F" => Ok(Self::Blake2B256),
             "G" => Ok(Self::Blake2S256),
             "H" => Ok(Self::SHA3_256),
-            "I" => Ok(Self::SHA3_256),
+            "I" => Ok(Self::SHA2_256),
             "0" => match &s[1..2] {
                 "D" => Ok(Self::Blake3_512),
                 "E" => Ok(Self::SHA3_512),
