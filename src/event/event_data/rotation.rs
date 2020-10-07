@@ -1,5 +1,7 @@
 use super::super::sections::{KeyConfig, WitnessConfig};
-use crate::{prefix::SelfAddressingPrefix, state::EventSemantics};
+use crate::error::Error;
+use crate::state::IdentifierState;
+use crate::{prefix::SelfAddressingPrefix, state::signatory::Signatory, state::EventSemantics};
 use serde::{Deserialize, Serialize};
 
 /// Rotation Event
@@ -17,4 +19,17 @@ pub struct RotationEvent {
     pub witness_config: WitnessConfig,
 }
 
-impl EventSemantics for RotationEvent {}
+impl EventSemantics for RotationEvent {
+    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
+        Ok(IdentifierState {
+            last: self.previous_event_hash.clone(),
+            current: Signatory {
+                threshold: self.key_config.threshold,
+                signers: self.key_config.public_keys.clone(),
+            },
+            next: self.key_config.threshold_key_digest.clone(),
+            tally: self.witness_config.tally,
+            ..state
+        })
+    }
+}
