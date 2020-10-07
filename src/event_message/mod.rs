@@ -187,22 +187,18 @@ pub fn verify_identifier_binding(icp_event: &EventMessage) -> Result<bool, Error
 
 #[cfg(test)]
 mod tests {
+    mod test_utils;
+    use self::test_utils::{test_mock_event_sequence, EventType};
     use super::super::util::dfs_serializer;
     use super::*;
     use crate::{
-        derivation::{
-            attached_signature_code::AttachedSignatureCode, basic::Basic,
-            self_addressing::SelfAddressing, self_signing::SelfSigning,
-        },
+        derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
         event::{
             event_data::{inception::InceptionEvent, EventData},
             sections::InceptionWitnessConfig,
             sections::KeyConfig,
         },
-        prefix::{
-            AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
-            SelfSigningPrefix,
-        },
+        prefix::{AttachedSignaturePrefix, IdentifierPrefix, SelfAddressingPrefix},
     };
     use serde_json;
     use ursa::{
@@ -367,6 +363,35 @@ mod tests {
         assert_eq!(s0.witnesses, vec![]);
         assert_eq!(s0.tally, 0);
         assert_eq!(s0.delegated_keys, vec![]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_basic_establishment_sequence() -> Result<(), Error> {
+        // Sequence should contain Inception Event.
+        let no_inception_seq = vec![EventType::Rotation, EventType::Rotation];
+        assert!(test_mock_event_sequence(no_inception_seq).is_err());
+
+        // Sequence can't start with Rotation Event.
+        let rotation_first_seq = vec![EventType::Rotation, EventType::Inception];
+        assert!(test_mock_event_sequence(rotation_first_seq).is_err());
+
+        // Sequence should contain exacly one Inception Event.
+        let wrong_seq = vec![
+            EventType::Inception,
+            EventType::Rotation,
+            EventType::Rotation,
+            EventType::Inception,
+        ];
+        assert!(test_mock_event_sequence(wrong_seq).is_err());
+
+        let ok_seq = vec![
+            EventType::Inception,
+            EventType::Rotation,
+            EventType::Rotation,
+        ];
+        assert!(test_mock_event_sequence(ok_seq).is_ok());
 
         Ok(())
     }
