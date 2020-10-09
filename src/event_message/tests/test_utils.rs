@@ -142,7 +142,7 @@ fn test_update_identifier_state(
     // Attach sign to event message.
     let signed_event = event_msg.sign(vec![attached_sig.clone()]);
 
-    // Applay event to current IdentifierState.
+    // Apply event to current IdentifierState.
     let new_state = state_data.state.verify_and_apply(&signed_event)?;
 
     // Check if current prefix can verify message and signature.
@@ -155,7 +155,7 @@ fn test_update_identifier_state(
     // Check if state is updated correctly.
     assert_eq!(new_state.prefix, IdentifierPrefix::Basic(identifier));
     assert_eq!(new_state.sn, state_data.sn);
-    assert_eq!(new_state.last, state_data.prev_event_hash);
+    assert_eq!(new_state.last, signed_event.serialize()?);
     assert_eq!(new_state.current.signers.len(), 1);
     assert_eq!(new_state.current.signers[0], current_pref);
     assert_eq!(new_state.current.threshold, 1);
@@ -168,7 +168,7 @@ fn test_update_identifier_state(
     let mut new_history = state_data.history_prefs.clone();
     new_history.push(current_pref);
     // Current event will be previous event for the next one, so return its hash.
-    let prev_event_hash = SelfAddressing::Blake3_256.derive(&sed);
+    let prev_event_hash = SelfAddressing::Blake3_256.derive(&signed_event.serialize()?);
     // Compute sn for next event.
     let next_sn = state_data.sn + 1;
 
@@ -181,9 +181,9 @@ fn test_update_identifier_state(
     })
 }
 
-/// For given sequence of EventTypes check whether `IdentifierState` is updated correctly
+/// For given sequence of EventTypes check wheather `IdentifierState` is updated correctly
 /// by applying `test_update_identifier_state` sequentially.
-pub fn test_mock_event_sequence(sequence: Vec<EventType>) -> Result<(TestStateData), Error> {
+pub fn test_mock_event_sequence(sequence: Vec<EventType>) -> Result<TestStateData, Error> {
     let mut st = get_initial_test_data();
 
     let step = |event_type, state_data: Result<TestStateData, Error>| {
