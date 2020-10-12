@@ -124,37 +124,28 @@ impl SignedEventMessage {
 
 impl EventSemantics for EventMessage {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
+        // Update state.last with serialized current event message.
         match self.event.event_data {
             EventData::Icp(_) => {
                 if verify_identifier_binding(self)? {
-                    self.event.apply_to(state)
+                    self.event.apply_to(IdentifierState {
+                        last: self.serialize()?,
+                        ..state
+                    })
                 } else {
                     Err(Error::SemanticError(
                         "Invalid Identifier Prefix Binding".into(),
                     ))
                 }
             }
-            _ => self.event.apply_to(state),
-        }
-    }
-}
-
-impl EventSemantics for SignedEventMessage {
-    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
-        // Update state.last with serialized current event message.
-        let new_state = match &self.event_message.event.event_data {
-            EventData::Icp(_) => IdentifierState {
-                last: self.serialize()?,
-                ..state
-            },
-            EventData::Rot(rot) => {
+            EventData::Rot(ref rot) => {
                 // Check if hashes of state.last event and previous_event_hash matches.
                 if rot.previous_event_hash.derivation.derive(&state.last) == rot.previous_event_hash
                 {
-                    IdentifierState {
+                    self.event.apply_to(IdentifierState {
                         last: self.serialize()?,
                         ..state
-                    }
+                    })
                 } else {
                     return Err(Error::SemanticError(
                         "Last event does not match previous event".to_string(),
@@ -162,9 +153,13 @@ impl EventSemantics for SignedEventMessage {
                 }
             }
             _ => todo!(),
-        };
+        }
+    }
+}
 
-        self.event_message.apply_to(new_state)
+impl EventSemantics for SignedEventMessage {
+    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
+        self.event_message.apply_to(state)
     }
 }
 
@@ -285,7 +280,7 @@ mod tests {
 
         assert_eq!(s0.prefix, IdentifierPrefix::Basic(pref0.clone()));
         assert_eq!(s0.sn, 0);
-        assert_eq!(s0.last, signed_event.serialize()?);
+        assert_eq!(s0.last, sed);
         assert_eq!(s0.current.signers.len(), 1);
         assert_eq!(s0.current.signers[0], pref0);
         assert_eq!(s0.current.threshold, 1);
@@ -377,7 +372,7 @@ mod tests {
 
         assert_eq!(s0.prefix, pref);
         assert_eq!(s0.sn, 0);
-        assert_eq!(s0.last, signed_event.serialize()?);
+        assert_eq!(s0.last, serialized);
         assert_eq!(s0.current.signers.len(), 2);
         assert_eq!(s0.current.signers[0], sig_pref_0);
         assert_eq!(s0.current.signers[1], enc_pref_0);

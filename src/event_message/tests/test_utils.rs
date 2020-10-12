@@ -155,7 +155,7 @@ fn test_update_identifier_state(
     // Check if state is updated correctly.
     assert_eq!(new_state.prefix, IdentifierPrefix::Basic(identifier));
     assert_eq!(new_state.sn, state_data.sn);
-    assert_eq!(new_state.last, signed_event.serialize()?);
+    assert_eq!(new_state.last, sed);
     assert_eq!(new_state.current.signers.len(), 1);
     assert_eq!(new_state.current.signers[0], current_pref);
     assert_eq!(new_state.current.threshold, 1);
@@ -168,7 +168,7 @@ fn test_update_identifier_state(
     let mut new_history = state_data.history_prefs.clone();
     new_history.push(current_pref);
     // Current event will be previous event for the next one, so return its hash.
-    let prev_event_hash = SelfAddressing::Blake3_256.derive(&signed_event.serialize()?);
+    let prev_event_hash = SelfAddressing::Blake3_256.derive(&sed);
     // Compute sn for next event.
     let next_sn = state_data.sn + 1;
 
