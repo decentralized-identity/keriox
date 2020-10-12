@@ -2,63 +2,65 @@ use crate::prefix::{AttachedSignaturePrefix, IdentifierPrefix, SelfAddressingPre
 use chrono::prelude::*;
 
 pub trait MapTable<K, V> {
+    type Error;
+
     /// Put
     ///
     /// Adds the given value at the given key, IF there is no existing value for that key
     /// Returns true if insertion succeeds, false otherwise
-    fn put(&self, key: &K, value: V) -> bool;
+    fn put(&self, key: &K, value: V) -> Result<(), Self::Error>;
 
     /// Set
     ///
     /// Sets the given key to the given value, OVERWRITES the existing value if there is one
-    fn set(&self, key: &K, value: V) -> bool;
+    fn set(&self, key: &K, value: V) -> Result<(), Self::Error>;
 
     /// Get
     ///
     /// Returns the value associated with the given key
-    fn get(&self, key: &K) -> V;
+    fn get(&self, key: &K) -> Result<Option<V>, Self::Error>;
 
     /// Delete
     ///
     /// Removes all values for the given key
-    fn del(&self, key: &K) -> bool;
+    fn del(&self, key: &K) -> Result<(), Self::Error>;
 }
 
 pub trait MultiMapTable<K, V> {
+    type Error;
+
     /// Put
     ///
     /// Adds the given value at the given key, IF there is no existing value for that key
     /// Returns true if insertion succeeds, false otherwise
-    fn put(&self, key: &K, value: V) -> bool;
+    fn put(&self, key: &K, value: V) -> Result<(), Self::Error>;
 
     /// Set
     ///
     /// Sets the given key to the given value, OVERWRITES the existing value if there is one
-    fn set(&self, key: &K, value: V) -> bool;
+    fn set(&self, key: &K, value: V) -> Result<(), Self::Error>;
 
     /// Get
     ///
     /// Returns the value associated with the given key
-    fn get(&self, key: &K) -> Vec<V> {
-        self.itr(key).collect()
-    }
+    fn get(&self, key: &K) -> Result<Option<Vec<V>>, Self::Error>;
 
     /// Delete
     ///
     /// Removes all values for the given key
-    fn del(&self, key: &K) -> bool;
+    fn del(&self, key: &K) -> Result<(), Self::Error>;
 
     /// Count
     ///
     /// Returns the number of items for the given key
-    fn cnt(&self, key: &K) -> usize {
-        self.get(key).len()
+    fn cnt(&self, key: &K) -> Result<Option<usize>, Self::Error> {
+        Ok(self.get(key)?.map(|v| v.len()))
     }
 
     /// Iterate
     ///
     /// Returns an iterator over the items for the given key
-    fn itr(&self, key: &K) -> Box<dyn Iterator<Item = V>>;
+    fn itr(&self, key: &K) -> Result<Option<Box<dyn Iterator<Item = V>>>, Self::Error>;
 }
 
 pub trait EventDatabase<Evts, Dtss, Sigs, Rcts, Ures, Kels, Pses, Ooes, Dels, Ldes>
