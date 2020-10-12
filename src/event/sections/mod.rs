@@ -36,6 +36,15 @@ pub struct InceptionWitnessConfig {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct DelegatingEventSeal {
+    #[serde(rename = "pre")]
+    pub prefix: IdentifierPrefix,
+
+    #[serde(rename = "dig")]
+    pub commitment: SelfAddressingPrefix,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DelegatedEventSeal {
     #[serde(rename = "id")]
     pub prefix: IdentifierPrefix,
