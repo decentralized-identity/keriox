@@ -28,3 +28,4 @@ ryu = "1.0"
 serde-transcode = "1.1"
 blake3 = { version = "0.3", default-features = false }
 rkv = "0.15"
+chrono = "0.4"

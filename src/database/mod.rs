@@ -1,3 +1,6 @@
+use crate::prefix::{AttachedSignaturePrefix, IdentifierPrefix, SelfAddressingPrefix};
+use chrono::prelude::*;
+
 pub trait MapTable<K, V> {
     /// Put
     ///
@@ -36,7 +39,7 @@ pub trait MultiMapTable<K, V> {
     /// Get
     ///
     /// Returns the value associated with the given key
-    fn get(&self, key: &K) -> Box<dyn AsRef<&[V]>> {
+    fn get(&self, key: &K) -> Vec<V> {
         self.itr(key).collect()
     }
 
@@ -60,16 +63,16 @@ pub trait MultiMapTable<K, V> {
 
 pub trait EventDatabase<Evts, Dtss, Sigs, Rcts, Ures, Kels, Pses, Ooes, Dels, Ldes>
 where
-    Evts: MapTable<String, Vec<u8>>,
-    Dtss: MapTable<String, String>,
-    Sigs: MultiMapTable<String, String>,
-    Rcts: MultiMapTable<String, String>,
-    Ures: MapTable<String, String>,
-    Kels: MultiMapTable<String, String>,
-    Pses: MultiMapTable<String, String>,
-    Ooes: MultiMapTable<String, String>,
-    Dels: MultiMapTable<String, String>,
-    Ldes: MultiMapTable<String, String>,
+    Evts: MapTable<(IdentifierPrefix, SelfAddressingPrefix), Vec<u8>>,
+    Dtss: MapTable<(IdentifierPrefix, SelfAddressingPrefix), DateTime<Utc>>,
+    Sigs: MultiMapTable<(IdentifierPrefix, SelfAddressingPrefix), AttachedSignaturePrefix>,
+    Rcts: MultiMapTable<(IdentifierPrefix, SelfAddressingPrefix), String>,
+    Ures: MapTable<(IdentifierPrefix, SelfAddressingPrefix), String>,
+    Kels: MultiMapTable<(IdentifierPrefix, u32), SelfAddressingPrefix>,
+    Pses: MultiMapTable<(IdentifierPrefix, u32), SelfAddressingPrefix>,
+    Ooes: MultiMapTable<(IdentifierPrefix, u32), SelfAddressingPrefix>,
+    Dels: MultiMapTable<(IdentifierPrefix, u32), SelfAddressingPrefix>,
+    Ldes: MultiMapTable<(IdentifierPrefix, u32), SelfAddressingPrefix>,
 {
     /// Events, serialized
     ///
@@ -114,12 +117,21 @@ where
     fn pses(&self) -> &Pses;
 
     /// Out of Order Escrow Event digest
+    ///
+    /// Keys: ID Prefix + sn of key event
+    /// Values: digest of events, for lookup in evts, >1 per key is allowed
     fn ooes(&self) -> &Ooes;
 
     /// Duplicitous Event Entry Digest
+    ///
+    /// Keys: ID Prefix + sn of key event
+    /// Values: digest of events, for lookup in evts, >1 per key is allowed
     fn dels(&self) -> &Dels;
 
     /// Likely Duplicitous Escrow Events
+    ///
+    /// Keys: ID Prefix + sn of key event
+    /// Values: digest of events, for lookup in evts, >1 per key is allowed
     fn ldes(&self) -> &Ldes;
 }
 
