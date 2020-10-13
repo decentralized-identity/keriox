@@ -1,4 +1,6 @@
-use crate::prefix::{AttachedSignaturePrefix, IdentifierPrefix, SelfAddressingPrefix};
+use crate::prefix::{
+    AttachedSignaturePrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix, SelfSigningPrefix,
+};
 use chrono::prelude::*;
 
 pub trait MapTable<K, V> {
@@ -63,18 +65,35 @@ pub trait MultiMapTable<K, V> {
     fn itr(&self, key: &K) -> Result<Option<Box<dyn Iterator<Item = V>>>, Self::Error>;
 }
 
+pub struct ContentIndex(IdentifierPrefix, SelfAddressingPrefix);
+pub struct SequenceIndex(IdentifierPrefix, u32);
+
+// useful for using as an index type, but expensive
+// TODO: investigate using AsRef<[u8]>
+impl From<ContentIndex> for Vec<u8> {
+    fn from(ci: ContentIndex) -> Self {
+        [ci.0.to_str(), ci.1.to_str()].concat().into_bytes()
+    }
+}
+
+impl From<SequenceIndex> for Vec<u8> {
+    fn from(si: SequenceIndex) -> Self {
+        format!("{}.{:032}", si.0.to_str(), si.1).into_bytes()
+    }
+}
+
 pub trait EventDatabase<Evts, Dtss, Sigs, Rcts, Ures, Kels, Pses, Ooes, Dels, Ldes>
 where
-    Evts: MapTable<(IdentifierPrefix, SelfAddressingPrefix), Vec<u8>>,
-    Dtss: MapTable<(IdentifierPrefix, SelfAddressingPrefix), DateTime<Utc>>,
-    Sigs: MultiMapTable<(IdentifierPrefix, SelfAddressingPrefix), AttachedSignaturePrefix>,
-    Rcts: MultiMapTable<(IdentifierPrefix, SelfAddressingPrefix), String>,
-    Ures: MapTable<(IdentifierPrefix, SelfAddressingPrefix), String>,
-    Kels: MultiMapTable<(IdentifierPrefix, u32), SelfAddressingPrefix>,
-    Pses: MultiMapTable<(IdentifierPrefix, u32), SelfAddressingPrefix>,
-    Ooes: MultiMapTable<(IdentifierPrefix, u32), SelfAddressingPrefix>,
-    Dels: MultiMapTable<(IdentifierPrefix, u32), SelfAddressingPrefix>,
-    Ldes: MultiMapTable<(IdentifierPrefix, u32), SelfAddressingPrefix>,
+    Evts: MapTable<ContentIndex, Vec<u8>>,
+    Dtss: MapTable<ContentIndex, DateTime<Utc>>,
+    Sigs: MultiMapTable<ContentIndex, AttachedSignaturePrefix>,
+    Rcts: MultiMapTable<ContentIndex, (IdentifierPrefix, SelfSigningPrefix)>,
+    Ures: MapTable<ContentIndex, (IdentifierPrefix, SelfSigningPrefix)>,
+    Kels: MultiMapTable<SequenceIndex, SelfAddressingPrefix>,
+    Pses: MultiMapTable<SequenceIndex, SelfAddressingPrefix>,
+    Ooes: MultiMapTable<SequenceIndex, SelfAddressingPrefix>,
+    Dels: MultiMapTable<SequenceIndex, SelfAddressingPrefix>,
+    Ldes: MultiMapTable<SequenceIndex, SelfAddressingPrefix>,
 {
     /// Events, serialized
     ///
