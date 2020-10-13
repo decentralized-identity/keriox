@@ -78,17 +78,33 @@ impl From<ContentIndex> for Vec<u8> {
 
 impl From<SequenceIndex> for Vec<u8> {
     fn from(si: SequenceIndex) -> Self {
-        format!("{}.{:032}", si.0.to_str(), si.1).into_bytes()
+        format!("{}.{:032x}", si.0.to_str(), si.1).into_bytes()
     }
 }
 
-pub trait EventDatabase<Evts, Dtss, Sigs, Rcts, Ures, Kels, Pses, Ooes, Dels, Ldes>
+pub trait EventDatabase<Evts, Dtss, Sigs, Rcts, Ures, Vrcs, Vres, Kels, Pses, Ooes, Dels, Ldes>
 where
     Evts: MapTable<ContentIndex, Vec<u8>>,
     Dtss: MapTable<ContentIndex, DateTime<Utc>>,
     Sigs: MultiMapTable<ContentIndex, AttachedSignaturePrefix>,
     Rcts: MultiMapTable<ContentIndex, (IdentifierPrefix, SelfSigningPrefix)>,
     Ures: MapTable<ContentIndex, (IdentifierPrefix, SelfSigningPrefix)>,
+    Vrcs: MultiMapTable<
+        ContentIndex,
+        (
+            IdentifierPrefix,
+            SelfAddressingPrefix,
+            AttachedSignaturePrefix,
+        ),
+    >,
+    Vres: MultiMapTable<
+        ContentIndex,
+        (
+            IdentifierPrefix,
+            SelfAddressingPrefix,
+            AttachedSignaturePrefix,
+        ),
+    >,
     Kels: MultiMapTable<SequenceIndex, SelfAddressingPrefix>,
     Pses: MultiMapTable<SequenceIndex, SelfAddressingPrefix>,
     Ooes: MultiMapTable<SequenceIndex, SelfAddressingPrefix>,
@@ -113,17 +129,29 @@ where
     /// Values: event signatures, >1 per key is allowed
     fn sigs(&self) -> &Sigs;
 
-    /// Receipt Couplets
+    /// Receipt Couplets (non-transferable)
     ///
     /// Keys: ID prefix + digest of serialized event
     /// Values: Witness/Validator ID prefix + event signature, >1 per key is allowed
     fn rcts(&self) -> &Rcts;
 
-    /// Unverified Receipt Couplet
+    /// Unverified Receipt Couplet (non-transferable)
+    ///
+    /// Keys: ID prefix + digest of serialized event
+    /// Values: Witness/Validator ID prefix + event signature (?)
+    fn ures(&self) -> &Ures;
+
+    /// Receipt triplets (transferable)
+    ///
+    /// Keys: ID prefix + digest of serialized event
+    /// Values: Witness/Validator ID prefix + latest witness/validator establishment event digest + event signature
+    fn vrcs(&self) -> &Vrcs;
+
+    /// Unverified Receipt triplets (transferable)
     ///
     /// Keys: Witness/Validator ID prefix + digest of serialized event
-    /// Values: event ID prefix + event signature (?)
-    fn ures(&self) -> &Ures;
+    /// Values: Witness/Validator ID prefix + latest witness/validator establishment event digest + event signature
+    fn vres(&self) -> &Vres;
 
     /// Key Event Digest List
     ///
