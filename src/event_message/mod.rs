@@ -152,6 +152,21 @@ impl EventSemantics for EventMessage {
                     ));
                 }
             }
+            EventData::Ixn(ref inter) => {
+                // Check if hashes of state.last event and previous_event_hash matches.
+                if inter.previous_event_hash.derivation.derive(&state.last)
+                    == inter.previous_event_hash
+                {
+                    self.event.apply_to(IdentifierState {
+                        last: self.serialize()?,
+                        ..state
+                    })
+                } else {
+                    return Err(Error::SemanticError(
+                        "Last event does not match previous event".to_string(),
+                    ));
+                }
+            }
             _ => todo!(),
         }
     }
@@ -212,7 +227,7 @@ mod tests {
     use crate::{
         derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
         event::{
-            event_data::{inception::InceptionEvent, EventData},
+            event_data::{inception::InceptionEvent, interaction::InteractionEvent, EventData},
             sections::InceptionWitnessConfig,
             sections::KeyConfig,
         },
@@ -408,6 +423,21 @@ mod tests {
             EventType::Inception,
             EventType::Rotation,
             EventType::Rotation,
+        ];
+        assert!(test_mock_event_sequence(ok_seq).is_ok());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_basic_sequence() -> Result<(), Error> {
+        let ok_seq = vec![
+            EventType::Inception,
+            EventType::Interaction,
+            EventType::Interaction,
+            EventType::Interaction,
+            EventType::Rotation,
+            EventType::Interaction,
         ];
         assert!(test_mock_event_sequence(ok_seq).is_ok());
 
