@@ -231,7 +231,7 @@ mod tests {
                 inception::InceptionEvent, interaction::InteractionEvent,
                 receipt::ReceiptTransferable, rotation::RotationEvent, EventData,
             },
-            sections::{EventSeal, InceptionWitnessConfig, KeyConfig, WitnessConfig},
+            sections::{seal::EventSeal, InceptionWitnessConfig, KeyConfig, WitnessConfig},
         },
         prefix::{AttachedSignaturePrefix, IdentifierPrefix, SelfAddressingPrefix},
     };
@@ -632,10 +632,35 @@ mod tests {
         }
 
         // incept Alice and Bob
-        let mut alice = LogState::new();
-        let mut bob = LogState::new();
+        let mut alice = LogState::new()?;
+        let mut bob = LogState::new()?;
+
+        let alices_state_of_bob =
+            IdentifierState::default().verify_and_apply(bob.log.last().unwrap().clone());
+        let bobs_state_of_alice = IdentifierState::default();
 
         // receipting loop
+        for i in 1..10 {
+            // bob sees alices last event
+            let bobs_state_of_alice =
+                bobs_state_of_alice.verify_and_apply(alice.log.last().unwrap().clone())?;
+            // bob creates a receipt for the event
+            let bobs_rct_for_alice = bob.make_rct(alice.log.last().unwrap().clone())?;
+
+            // alice gets the receipt
+            alice.add_sig(alices_state_of_bob, bobs_rct_for_alice)?;
+
+            // bob rotates
+            bob.rotate()?;
+
+            // alice validates bob's event
+            let alices_state_of_bob =
+                alices_state_of_bob.verify_and_apply(bob.log.last().unwrap().clone())?;
+
+            // sends bob her event
+            let bobs_state_of_alice =
+                bobs_state_of_alice.verify_and_apply(alice.log.last().unwrap().clone())?;
+        }
 
         Ok(())
     }
