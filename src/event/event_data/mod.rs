@@ -12,7 +12,7 @@ use self::{
     delegated::{DelegatedInceptionEvent, DelegatedRotationEvent},
     inception::InceptionEvent,
     interaction::InteractionEvent,
-    receipt::EventReceipt,
+    receipt::{ReceiptNonTransferable, ReceiptTransferable},
     rotation::RotationEvent,
 };
 
@@ -27,7 +27,8 @@ pub enum EventData {
     Ixn(InteractionEvent),
     Dip(DelegatedInceptionEvent),
     Drt(DelegatedRotationEvent),
-    Rct(EventReceipt),
+    Rct(ReceiptNonTransferable),
+    Vrc(ReceiptTransferable),
 }
 
 impl EventSemantics for EventData {
@@ -39,6 +40,7 @@ impl EventSemantics for EventData {
             Self::Dip(e) => e.apply_to(state),
             Self::Drt(e) => e.apply_to(state),
             Self::Rct(e) => e.apply_to(state),
+            Self::Vrc(e) => e.apply_to(state),
         }
     }
 }
