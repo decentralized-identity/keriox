@@ -22,7 +22,6 @@ pub struct RotationEvent {
 impl EventSemantics for RotationEvent {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         Ok(IdentifierState {
-            last: self.previous_event_hash.clone(),
             current: Signatory {
                 threshold: self.key_config.threshold,
                 signers: self.key_config.public_keys.clone(),
