@@ -13,7 +13,7 @@ use signatory::Signatory;
 pub struct IdentifierState {
     pub prefix: IdentifierPrefix,
     pub sn: u64,
-    pub last: SelfAddressingPrefix,
+    pub last: Vec<u8>,
     pub current: Signatory,
     pub next: SelfAddressingPrefix,
     pub delegated_keys: Vec<DelegatedIdentifierState>,

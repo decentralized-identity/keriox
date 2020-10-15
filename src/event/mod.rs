@@ -32,7 +32,7 @@ impl EventSemantics for Event {
         match self.event_data {
             EventData::Icp(_) => {
                 // ICP events require the state to be uninitialized
-                if state != IdentifierState::default() || self.sn != 0 {
+                if state.prefix != IdentifierPrefix::default() || self.sn != 0 {
                     return Err(Error::SemanticError("SN is not correct".to_string()));
                 }
             }
@@ -45,7 +45,6 @@ impl EventSemantics for Event {
                 }
             }
         };
-
         Ok(IdentifierState {
             sn: self.sn,
             prefix: self.prefix.clone(),

@@ -124,17 +124,50 @@ impl SignedEventMessage {
 
 impl EventSemantics for EventMessage {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
+        // Update state.last with serialized current event message.
         match self.event.event_data {
             EventData::Icp(_) => {
                 if verify_identifier_binding(self)? {
-                    self.event.apply_to(state)
+                    self.event.apply_to(IdentifierState {
+                        last: self.serialize()?,
+                        ..state
+                    })
                 } else {
                     Err(Error::SemanticError(
                         "Invalid Identifier Prefix Binding".into(),
                     ))
                 }
             }
-            _ => self.event.apply_to(state),
+            EventData::Rot(ref rot) => {
+                // Check if hashes of state.last event and previous_event_hash matches.
+                if rot.previous_event_hash.derivation.derive(&state.last) == rot.previous_event_hash
+                {
+                    self.event.apply_to(IdentifierState {
+                        last: self.serialize()?,
+                        ..state
+                    })
+                } else {
+                    return Err(Error::SemanticError(
+                        "Last event does not match previous event".to_string(),
+                    ));
+                }
+            }
+            EventData::Ixn(ref inter) => {
+                // Check if hashes of state.last event and previous_event_hash matches.
+                if inter.previous_event_hash.derivation.derive(&state.last)
+                    == inter.previous_event_hash
+                {
+                    self.event.apply_to(IdentifierState {
+                        last: self.serialize()?,
+                        ..state
+                    })
+                } else {
+                    return Err(Error::SemanticError(
+                        "Last event does not match previous event".to_string(),
+                    ));
+                }
+            }
+            _ => todo!(),
         }
     }
 }
@@ -194,7 +227,7 @@ mod tests {
     use crate::{
         derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
         event::{
-            event_data::{inception::InceptionEvent, EventData},
+            event_data::{inception::InceptionEvent, interaction::InteractionEvent, EventData},
             sections::InceptionWitnessConfig,
             sections::KeyConfig,
         },
@@ -262,7 +295,7 @@ mod tests {
 
         assert_eq!(s0.prefix, IdentifierPrefix::Basic(pref0.clone()));
         assert_eq!(s0.sn, 0);
-        assert_eq!(s0.last, SelfAddressingPrefix::default());
+        assert_eq!(s0.last, sed);
         assert_eq!(s0.current.signers.len(), 1);
         assert_eq!(s0.current.signers[0], pref0);
         assert_eq!(s0.current.threshold, 1);
@@ -354,7 +387,7 @@ mod tests {
 
         assert_eq!(s0.prefix, pref);
         assert_eq!(s0.sn, 0);
-        assert_eq!(s0.last, SelfAddressingPrefix::default());
+        assert_eq!(s0.last, serialized);
         assert_eq!(s0.current.signers.len(), 2);
         assert_eq!(s0.current.signers[0], sig_pref_0);
         assert_eq!(s0.current.signers[1], enc_pref_0);
@@ -390,6 +423,21 @@ mod tests {
             EventType::Inception,
             EventType::Rotation,
             EventType::Rotation,
+        ];
+        assert!(test_mock_event_sequence(ok_seq).is_ok());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_basic_sequence() -> Result<(), Error> {
+        let ok_seq = vec![
+            EventType::Inception,
+            EventType::Interaction,
+            EventType::Interaction,
+            EventType::Interaction,
+            EventType::Rotation,
+            EventType::Interaction,
         ];
         assert!(test_mock_event_sequence(ok_seq).is_ok());
 
