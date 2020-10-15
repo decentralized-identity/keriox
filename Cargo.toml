@@ -13,6 +13,8 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 exp_ursa = []
+lmdb = ["rkv"]
+default = ["lmdb"]
 
 [dependencies]
 ursa = { version = "0.3", default-features = false, features = ["portable"]}
@@ -27,3 +29,6 @@ itoa = "0.4"
 ryu = "1.0"
 serde-transcode = "1.1"
 blake3 = { version = "0.3", default-features = false }
+chrono = "0.4"
+
+rkv = { version = "0.15", optional = true }

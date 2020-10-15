@@ -1,4 +1,5 @@
 use crate::prefix::{AttachedSignaturePrefix, IdentifierPrefix, SelfAddressingPrefix};
+pub mod lmdb;
 
 pub trait EventDatabase<'a> {
     type Error;
@@ -8,7 +9,12 @@ pub trait EventDatabase<'a> {
     /// for a given identifier at a given sequence number
     /// (rotation events can supercede interaction events
     /// with the same sn)
-    fn last_event_at_sn(&self, pref: &IdentifierPrefix, sn: u64) -> Option<&'a [u8]>;
+    /// TODO: see if it can return a Result<Option<&'a [u8]>_>
+    fn last_event_at_sn(
+        &self,
+        pref: &IdentifierPrefix,
+        sn: u64,
+    ) -> Result<Option<Vec<u8>>, Self::Error>;
 
     /// Log Event
     ///
@@ -16,16 +22,16 @@ pub trait EventDatabase<'a> {
     /// Should also log the time
     fn log_event(
         &self,
-        raw: &[u8],
         prefix: &IdentifierPrefix,
         dig: &SelfAddressingPrefix,
+        raw: &[u8],
         sigs: &[AttachedSignaturePrefix],
     ) -> Result<(), Self::Error>;
 
-    /// Commit Event
+    /// Finalise Event
     ///
     /// Update associated logs for fully verified event
-    fn commit_event(
+    fn finalise_event(
         &self,
         prefix: &IdentifierPrefix,
         sn: u64,
@@ -62,10 +68,20 @@ pub trait EventDatabase<'a> {
         dig: &SelfAddressingPrefix,
     ) -> Result<(), Self::Error>;
 
+    /// Duplicitous Event
+    ///
+    /// Marks an event as being known duplicitous
+    fn duplicitous_event(
+        &self,
+        pref: &IdentifierPrefix,
+        sn: u64,
+        dig: &SelfAddressingPrefix,
+    ) -> Result<(), Self::Error>;
+
     /// Add Receipt
     ///
     /// Associates a signature Sig made by Signer with the event referenced by Dig and Pref
-    fn add_receipt(
+    fn add_nt_receipt_for_event(
         &self,
         pref: &IdentifierPrefix,
         dig: &SelfAddressingPrefix,
