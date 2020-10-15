@@ -1,4 +1,4 @@
-use super::super::sections::seal::Seal;
+use super::super::sections::seal::EventSeal;
 use crate::prefix::SelfAddressingPrefix;
 use crate::state::EventSemantics;
 use serde::{Deserialize, Serialize};
@@ -33,7 +33,7 @@ pub struct ReceiptTransferable {
     /// An Event Seal which indicates the latest establishment event of
     /// the Validator when the Receipt was made
     #[serde(rename = "seal")]
-    pub validator_location_seal: Seal,
+    pub validator_location_seal: EventSeal,
 }
 
 impl EventSemantics for ReceiptTransferable {}
