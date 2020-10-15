@@ -69,6 +69,7 @@ fn create_mock_event(
                     threshold_key_digest: nxt,
                 },
                 witness_config: WitnessConfig::default(),
+                data: vec![],
             }),
         },
         EventType::Interaction => Event {
@@ -200,8 +201,8 @@ fn test_update_identifier_state(
     assert_eq!(new_state.tally, 0);
     assert_eq!(new_state.delegated_keys, vec![]);
 
-   let mut new_history = state_data.history_prefs.clone();
-     // If event_type is establishment event, append current prefix to prefixes
+    let mut new_history = state_data.history_prefs.clone();
+    // If event_type is establishment event, append current prefix to prefixes
     // history. It will be obsolete in the future establishement events.
     if event_type.is_establishment_event() {
         new_history.push(current_pref);

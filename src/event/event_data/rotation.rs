@@ -1,4 +1,4 @@
-use super::super::sections::{KeyConfig, WitnessConfig};
+use super::super::sections::{seal::*, KeyConfig, WitnessConfig};
 use crate::error::Error;
 use crate::state::IdentifierState;
 use crate::{prefix::SelfAddressingPrefix, state::signatory::Signatory, state::EventSemantics};
@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 /// Describtes the rotation (rot) event data
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RotationEvent {
-    #[serde(rename = "prev")]
+    #[serde(rename = "dig")]
     pub previous_event_hash: SelfAddressingPrefix,
 
     #[serde(flatten)]
@@ -17,6 +17,8 @@ pub struct RotationEvent {
 
     #[serde(flatten)]
     pub witness_config: WitnessConfig,
+
+    pub data: Vec<Seal>,
 }
 
 impl EventSemantics for RotationEvent {
