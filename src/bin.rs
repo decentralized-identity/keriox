@@ -18,7 +18,11 @@ use keri::{
     state::IdentifierState,
     util::dfs_serializer,
 };
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    net::{SocketAddr, TcpListener, TcpStream},
+    str::FromStr,
+};
 use ursa::{
     keys::{PrivateKey, PublicKey},
     signatures::{ed25519, SignatureScheme},
@@ -215,4 +219,41 @@ impl LogState {
     }
 }
 
-fn main() {}
+fn main() {
+    let matches = App::new("KERI Direct Mode TCP demo")
+        .version("0.1")
+        .author("Jolocom & Human Colossus Foundation")
+        .arg(
+            Arg::with_name("PORT")
+                .help("Which port to use, format <hostname>:<port>, e.g. 127.0.0.1:443 or localhost:123")
+                .required(true)
+                .index(1),
+        )
+        .arg(
+            Arg::with_name("connect")
+                .help("connects to given port instead of listening")
+                .short("c")
+                .long("connect")
+                .takes_value(false),
+        )
+        .get_matches();
+
+    // use string of format <hostname>:<port>
+    let port: SocketAddr = matches
+        .value_of("PORT")
+        .unwrap()
+        .parse()
+        .expect("not a parsable port value");
+
+    let i = LogState::new();
+    let they = IdentifierState::default();
+
+    let stream = if matches.is_present("connect") {
+        // connect to PORT
+        TcpStream::connect(port).unwrap()
+    } else {
+        // listen on PORT
+        let listener = TcpListener::bind(port).unwrap();
+        listener.accept().unwrap().0
+    };
+}
