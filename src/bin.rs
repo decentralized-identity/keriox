@@ -30,6 +30,7 @@ struct LogState {
     pub state: IdentifierState,
     pub keypair: (PublicKey, PrivateKey),
     pub next_keypair: (PublicKey, PrivateKey),
+    pub escrow_sigs: Vec<SignedEventMessage>,
 }
 impl LogState {
     // incept a state and keys
@@ -89,10 +90,11 @@ impl LogState {
             state: s0,
             keypair,
             next_keypair,
+            escrow_sigs: vec![],
         })
     }
 
-    // take a receipt made by validator, verify it and add to sigs_map
+    // take a receipt made by validator, verify it and add to sigs_map or escrow
     fn add_sig(
         &mut self,
         validator: IdentifierState,
@@ -116,19 +118,24 @@ impl LogState {
                                     .derive(&event.event_message.serialize()?)
                             // seal pref is the pref of the validator
                             && rct.validator_location_seal.prefix == validator.prefix
-                            // seal dig is the digest of the last establishment event for the validator
-                            && rct.validator_location_seal.event_digest
-                                == rct
-                                    .validator_location_seal
-                                    .event_digest
-                                    .derivation
-                                    .derive(&validator.last)
                 {
-                    validator.verify(&event.event_message.sign(sigs.signatures.clone()))?;
-                    self.sigs_map
-                        .entry(sigs.event_message.event.sn)
-                        .or_insert_with(|| vec![])
-                        .push(sigs);
+                    if rct.validator_location_seal.event_digest
+                        == rct
+                            .validator_location_seal
+                            .event_digest
+                            .derivation
+                            .derive(&validator.last)
+                    {
+                        // seal dig is the digest of the last establishment event for the validator, verify the rct
+                        validator.verify(&event.event_message.sign(sigs.signatures.clone()))?;
+                        self.sigs_map
+                            .entry(sigs.event_message.event.sn)
+                            .or_insert_with(|| vec![])
+                            .push(sigs);
+                    } else {
+                        // escrow the seal
+                        self.escrow_sigs.push(sigs)
+                    }
                     Ok(())
                 } else {
                     Err(Error::SemanticError("incorrect receipt binding".into()))
