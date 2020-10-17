@@ -20,8 +20,9 @@ use keri::{
 };
 use std::{
     collections::HashMap,
+    io::prelude::*,
     net::{SocketAddr, TcpListener, TcpStream},
-    str::FromStr,
+    str::from_utf8_unchecked,
 };
 use ursa::{
     keys::{PrivateKey, PublicKey},
@@ -101,7 +102,7 @@ impl LogState {
     // take a receipt made by validator, verify it and add to sigs_map or escrow
     fn add_sig(
         &mut self,
-        validator: IdentifierState,
+        validator: &IdentifierState,
         sigs: SignedEventMessage,
     ) -> Result<(), Error> {
         match sigs.event_message.event.event_data.clone() {
@@ -212,6 +213,8 @@ impl LogState {
 
         self.state = self.state.clone().verify_and_apply(&rot)?;
 
+        self.log.push(rot.clone());
+
         self.keypair = keypair;
         self.next_keypair = next_keypair;
 
@@ -219,7 +222,7 @@ impl LogState {
     }
 }
 
-fn main() {
+fn main() -> ! {
     let matches = App::new("KERI Direct Mode TCP demo")
         .version("0.1")
         .author("Jolocom & Human Colossus Foundation")
@@ -244,11 +247,13 @@ fn main() {
         .unwrap()
         .parse()
         .expect("not a parsable port value");
+    let connect = matches.is_present("connect");
 
-    let i = LogState::new();
-    let they = IdentifierState::default();
+    let mut i = LogState::new().unwrap();
+    let mut they = IdentifierState::default();
+    let mut buf = [0u8; 2048];
 
-    let stream = if matches.is_present("connect") {
+    let mut stream = if connect {
         // connect to PORT
         TcpStream::connect(port).unwrap()
     } else {
@@ -256,4 +261,33 @@ fn main() {
         let listener = TcpListener::bind(port).unwrap();
         listener.accept().unwrap().0
     };
+
+    stream
+        .write(&i.log.last().unwrap().serialize().unwrap())
+        .unwrap();
+    println!("------\ninitial local state: {:?}\n", i.state);
+    println!("sent:\n{}", unsafe { from_utf8_unchecked(&i.state.last) });
+
+    loop {
+        // read incoming
+        stream.read(&mut buf).unwrap();
+
+        // TODO HACK NOT GOOD but otherwise the parsing functions need to be refactored to take &[u8]
+        let ev = signed_message(unsafe { from_utf8_unchecked(&buf) })
+            .unwrap()
+            .1;
+
+        match ev.event_message.event.event_data {
+            EventData::Vrc(_) => {
+                i.add_sig(&they, ev).unwrap();
+                i.rotate().unwrap();
+                println!("------\nnew local state: {:?}\n", i.state);
+                stream.write(&i.state.last).unwrap();
+            }
+            _ => {
+                they = they.verify_and_apply(&ev).unwrap();
+                println!("------\nnew remote state: {:?}\n", they);
+            }
+        }
+    }
 }
