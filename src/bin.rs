@@ -175,9 +175,7 @@ impl LogState {
 
     fn rotate(&mut self) -> Result<SignedEventMessage, Error> {
         let ed = ed25519::Ed25519Sha512::new();
-        let keypair = ed
-            .keypair(Option::None)
-            .map_err(|e| Error::CryptoError(e))?;
+        let keypair = self.next_keypair.clone();
         let next_keypair = ed
             .keypair(Option::None)
             .map_err(|e| Error::CryptoError(e))?;
@@ -206,7 +204,7 @@ impl LogState {
         let rot = ev.sign(vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
             ed25519::Ed25519Sha512::new()
-                .sign(&ev.serialize()?, &self.keypair.1)
+                .sign(&ev.serialize()?, &keypair.1)
                 .map_err(|e| Error::CryptoError(e))?,
             0,
         )]);
