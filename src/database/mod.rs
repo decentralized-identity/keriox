@@ -1,7 +1,11 @@
-use crate::prefix::{AttachedSignaturePrefix, IdentifierPrefix, SelfAddressingPrefix};
+use crate::prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix};
 pub mod lmdb;
 
-pub trait EventDatabase<'a> {
+/// Event Database
+///
+/// An Abstract model of state for Key Events,
+/// Signatures and Receipts.
+pub trait EventDatabase {
     type Error;
     /// Last Event At SN
     ///
@@ -16,10 +20,36 @@ pub trait EventDatabase<'a> {
         sn: u64,
     ) -> Result<Option<Vec<u8>>, Self::Error>;
 
+    /// Get Keys for Prefix
+    ///
+    /// Returns the current signing keys associated with
+    /// the given Prefix
+    fn get_keys_for_prefix(
+        &self,
+        pref: &IdentifierPrefix,
+    ) -> Result<Option<Vec<BasicPrefix>>, Self::Error>;
+
+    /// Get Children of Prefix
+    ///
+    /// Returns the Identifiers delegated to by the
+    /// given Prefix
+    fn get_children_of_prefix(
+        &self,
+        pref: &IdentifierPrefix,
+    ) -> Result<Option<Vec<IdentifierPrefix>>, Self::Error>;
+
+    /// Get Parent of Prefix
+    ///
+    /// Returns the delegator for the given Prefix,
+    /// if there is one
+    fn get_parent_of_prefix(
+        &self,
+        pref: &IdentifierPrefix,
+    ) -> Result<Option<IdentifierPrefix>, Self::Error>;
+
     /// Log Event
     ///
-    /// Adds the raw event data to the database
-    /// Should also log the time
+    /// Adds the raw event data to the database and a timestamp
     fn log_event(
         &self,
         prefix: &IdentifierPrefix,
@@ -78,10 +108,21 @@ pub trait EventDatabase<'a> {
         dig: &SelfAddressingPrefix,
     ) -> Result<(), Self::Error>;
 
-    /// Add Receipt
+    /// Add Non-Transferrable Receipt
     ///
     /// Associates a signature Sig made by Signer with the event referenced by Dig and Pref
     fn add_nt_receipt_for_event(
+        &self,
+        pref: &IdentifierPrefix,
+        dig: &SelfAddressingPrefix,
+        signer: &IdentifierPrefix,
+        sig: &AttachedSignaturePrefix,
+    ) -> Result<(), Self::Error>;
+
+    /// Add Transferrable Receipt
+    ///
+    /// Associates a signature Sig made by Signer with the event referenced by Dig and Pref
+    fn add_t_receipt_for_event(
         &self,
         pref: &IdentifierPrefix,
         dig: &SelfAddressingPrefix,
