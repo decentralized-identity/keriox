@@ -20,11 +20,11 @@ pub struct WitnessConfig {
     #[serde(rename = "toad", with = "SerHex::<Compact>")]
     pub tally: u64,
 
-    #[serde(rename = "adds")]
-    pub graft: Vec<IdentifierPrefix>,
-
     #[serde(rename = "cuts")]
     pub prune: Vec<IdentifierPrefix>,
+
+    #[serde(rename = "adds")]
+    pub graft: Vec<IdentifierPrefix>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
