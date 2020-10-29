@@ -1,5 +1,5 @@
 use keri::{
-    derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
+    derivation::{basic::Basic, self_addressing::SelfAddressing},
     error::Error,
     event::{
         event_data::{
@@ -14,47 +14,33 @@ use keri::{
         parse::signed_event_stream, serialization_info::SerializationFormats, EventMessage,
         SignedEventMessage,
     },
-    prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix},
+    prefix::{IdentifierPrefix, Prefix},
+    signer::Signer,
     state::IdentifierState,
     util::dfs_serializer,
 };
 use serde_json::to_string_pretty;
 use std::{collections::HashMap, str::from_utf8};
-use ursa::{
-    keys::{PrivateKey, PublicKey},
-    signatures::{ed25519, SignatureScheme},
-};
 
 pub struct LogState {
     pub log: Vec<SignedEventMessage>,
     pub state: IdentifierState,
     pub receipts: HashMap<u64, Vec<SignedEventMessage>>,
     pub escrow_sigs: Vec<SignedEventMessage>,
-    pub keypair: (PublicKey, PrivateKey),
-    pub next_keypair: (PublicKey, PrivateKey),
+    signer: Signer,
     pub other_instances: HashMap<String, IdentifierState>,
 }
 impl LogState {
     // incept a state and keys
     pub fn new() -> Result<LogState, Error> {
-        let ed = ed25519::Ed25519Sha512::new();
-        let keypair = ed
-            .keypair(Option::None)
-            .map_err(|e| Error::CryptoError(e))?;
-        let next_keypair = ed
-            .keypair(Option::None)
-            .map_err(|e| Error::CryptoError(e))?;
+        let signer = Signer::new(Basic::Ed25519)?;
 
         let icp_data = InceptionEvent {
             key_config: KeyConfig {
                 threshold: 1,
-                public_keys: vec![Basic::Ed25519.derive(keypair.0.clone())],
-                threshold_key_digest: SelfAddressing::Blake3_256.derive(
-                    Basic::Ed25519
-                        .derive(next_keypair.0.clone())
-                        .to_str()
-                        .as_bytes(),
-                ),
+                public_keys: vec![signer.public_key()],
+                threshold_key_digest: SelfAddressing::Blake3_256
+                    .derive(signer.next_public_key().to_str().as_bytes()),
             },
             witness_config: InceptionWitnessConfig::default(),
             inception_configuration: vec![],
@@ -77,13 +63,7 @@ impl LogState {
         }
         .to_message(&SerializationFormats::JSON)?;
 
-        let ed = ed25519::Ed25519Sha512::new();
-        let sigged = icp_m.sign(vec![AttachedSignaturePrefix::new(
-            SelfSigning::Ed25519Sha512,
-            ed.sign(&icp_m.serialize()?, &keypair.1)
-                .map_err(|e| Error::CryptoError(e))?,
-            0,
-        )]);
+        let sigged = icp_m.sign(vec![signer.sign(icp_m.serialize()?)?]);
 
         let s0 = IdentifierState::default().verify_and_apply(&sigged)?;
 
@@ -91,8 +71,7 @@ impl LogState {
             log: vec![sigged],
             receipts: HashMap::new(),
             state: s0,
-            keypair,
-            next_keypair,
+            signer,
             escrow_sigs: vec![],
             other_instances: HashMap::new(),
         })
@@ -163,22 +142,11 @@ impl LogState {
             }),
         }
         .to_message(&SerializationFormats::JSON)?
-        .sign(vec![AttachedSignaturePrefix::new(
-            SelfSigning::Ed25519Sha512,
-            ed25519::Ed25519Sha512::new()
-                .sign(&ser, &self.keypair.1)
-                .map_err(|e| Error::CryptoError(e))?,
-            0,
-        )]))
+        .sign(vec![self.signer.sign(ser)?]))
     }
 
     pub fn rotate(&mut self) -> Result<SignedEventMessage, Error> {
-        let ed = ed25519::Ed25519Sha512::new();
-        let keypair = self.next_keypair.clone();
-        let next_keypair = ed
-            .keypair(Option::None)
-            .map_err(|e| Error::CryptoError(e))?;
-
+        self.signer = self.signer.rotate()?;
         let ev = Event {
             prefix: self.state.prefix.clone(),
             sn: self.state.sn + 1,
@@ -186,13 +154,9 @@ impl LogState {
                 previous_event_hash: SelfAddressing::Blake3_256.derive(&self.state.last),
                 key_config: KeyConfig {
                     threshold: 1,
-                    public_keys: vec![Basic::Ed25519.derive(keypair.0.clone())],
-                    threshold_key_digest: SelfAddressing::Blake3_256.derive(
-                        Basic::Ed25519
-                            .derive(next_keypair.0.clone())
-                            .to_str()
-                            .as_bytes(),
-                    ),
+                    public_keys: vec![self.signer.public_key()],
+                    threshold_key_digest: SelfAddressing::Blake3_256
+                        .derive(self.signer.next_public_key().to_str().as_bytes()),
                 },
                 witness_config: WitnessConfig::default(),
                 data: vec![],
@@ -200,20 +164,11 @@ impl LogState {
         }
         .to_message(&SerializationFormats::JSON)?;
 
-        let rot = ev.sign(vec![AttachedSignaturePrefix::new(
-            SelfSigning::Ed25519Sha512,
-            ed25519::Ed25519Sha512::new()
-                .sign(&ev.serialize()?, &keypair.1)
-                .map_err(|e| Error::CryptoError(e))?,
-            0,
-        )]);
+        let rot = ev.sign(vec![self.signer.sign(ev.serialize()?)?]);
 
         self.state = self.state.clone().verify_and_apply(&rot)?;
 
         self.log.push(rot.clone());
-
-        self.keypair = keypair;
-        self.next_keypair = next_keypair;
 
         Ok(rot)
     }
@@ -233,13 +188,7 @@ impl LogState {
         }
         .to_message(&SerializationFormats::JSON)?;
 
-        let ixn = ev.sign(vec![AttachedSignaturePrefix::new(
-            SelfSigning::Ed25519Sha512,
-            ed25519::Ed25519Sha512::new()
-                .sign(&ev.serialize().unwrap(), &self.keypair.1)
-                .map_err(|e| Error::CryptoError(e))?,
-            0,
-        )]);
+        let ixn = ev.sign(vec![self.signer.sign(ev.serialize()?)?]);
 
         self.state = self.state.clone().verify_and_apply(&ixn)?;
         self.log.push(ixn.clone());
