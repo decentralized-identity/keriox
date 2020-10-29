@@ -1,7 +1,4 @@
-use keri::{
-    derivation::{basic::Basic, self_addressing::SelfAddressing},
-    error::Error,
-    event::{
+use keri::{derivation::{basic::Basic, self_addressing::SelfAddressing}, error::Error, log::EventLog, event::{
         event_data::{
             inception::InceptionEvent, interaction::InteractionEvent, receipt::ReceiptTransferable,
             rotation::RotationEvent, EventData,
@@ -9,21 +6,15 @@ use keri::{
         sections::seal::DigestSeal,
         sections::{seal::EventSeal, seal::Seal, InceptionWitnessConfig, KeyConfig, WitnessConfig},
         Event,
-    },
-    event_message::{
+    }, event_message::{
         parse::signed_event_stream, serialization_info::SerializationFormats, EventMessage,
         SignedEventMessage,
-    },
-    prefix::{IdentifierPrefix, Prefix},
-    signer::Signer,
-    state::IdentifierState,
-    util::dfs_serializer,
-};
+    }, prefix::{IdentifierPrefix, Prefix}, signer::Signer, state::IdentifierState, util::dfs_serializer};
 use serde_json::to_string_pretty;
 use std::{collections::HashMap, str::from_utf8};
 
 pub struct LogState {
-    pub log: Vec<SignedEventMessage>,
+    log: EventLog,
     pub state: IdentifierState,
     pub receipts: HashMap<u64, Vec<SignedEventMessage>>,
     pub escrow_sigs: Vec<SignedEventMessage>,
@@ -64,11 +55,13 @@ impl LogState {
         .to_message(&SerializationFormats::JSON)?;
 
         let sigged = icp_m.sign(vec![signer.sign(icp_m.serialize()?)?]);
+        let mut log = EventLog::new();
 
         let s0 = IdentifierState::default().verify_and_apply(&sigged)?;
+        log.commit(sigged);
 
         Ok(LogState {
-            log: vec![sigged],
+            log: log,
             receipts: HashMap::new(),
             state: s0,
             signer,
@@ -87,8 +80,7 @@ impl LogState {
             EventData::Vrc(rct) => {
                 let event = self
                     .log
-                    .get(sigs.event_message.event.sn as usize)
-                    .ok_or(Error::SemanticError("incorrect receipt sn".into()))?;
+                    .get(sigs.event_message.event.sn)?;
 
                 // This logic can in future be moved to the correct place in the Kever equivalent here
                 // receipt pref is the ID who made the event being receipted
@@ -168,7 +160,7 @@ impl LogState {
 
         self.state = self.state.clone().verify_and_apply(&rot)?;
 
-        self.log.push(rot.clone());
+        self.log.commit(rot.clone());
 
         Ok(rot)
     }
@@ -191,7 +183,7 @@ impl LogState {
         let ixn = ev.sign(vec![self.signer.sign(ev.serialize()?)?]);
 
         self.state = self.state.clone().verify_and_apply(&ixn)?;
-        self.log.push(ixn.clone());
+        self.log.commit(ixn.clone());
         Ok(ixn)
     }
 
@@ -247,5 +239,13 @@ impl LogState {
             }
         }
         response
+    }
+
+    pub fn get_last_event(&self) -> Option<&SignedEventMessage>{
+        self.log.get_last()
+    }
+
+    pub fn get_log_len(&self) -> usize {
+        self.log.get_len()
     }
 }

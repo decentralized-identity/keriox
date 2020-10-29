@@ -27,6 +27,19 @@ impl EventLog {
         self.0.push(event);
         Ok(result)
     }
+
+    pub fn get(&self, sn: u64) -> Result<&SignedEventMessage, Error>{
+        self.0.get(sn as usize)
+                    .ok_or(Error::SemanticError("sn not found in log".into()))
+    }
+
+    pub fn get_last(&self) -> Option<&SignedEventMessage>{
+        self.0.last()
+    }
+
+    pub fn get_len(&self) -> usize {
+        self.0.len()
+    }
 }
 
 // apply every event in a KEL starting with inception

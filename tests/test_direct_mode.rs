@@ -7,9 +7,9 @@ fn test_direct_mode() -> Result<(), Error> {
     // Init alice.
     let mut alice = LogState::new()?;
     assert_eq!(alice.state.sn, 0);
-    assert_eq!(alice.log.len(), 1);
+    assert_eq!(alice.get_log_len(), 1);
     assert!(matches!(
-        alice.log.first().unwrap().event_message.event.event_data,
+        alice.get_last_event().unwrap().event_message.event.event_data,
         EventData::Icp(_)
     ));
     assert!(alice.other_instances.is_empty());
@@ -19,9 +19,9 @@ fn test_direct_mode() -> Result<(), Error> {
     // Init bob.
     let mut bob = LogState::new()?;
     assert_eq!(bob.state.sn, 0);
-    assert_eq!(bob.log.len(), 1);
+    assert_eq!(bob.get_log_len(), 1);
     assert!(matches!(
-        bob.log.first().unwrap().event_message.event.event_data,
+        bob.get_last_event().unwrap().event_message.event.event_data,
         EventData::Icp(_)
     ));
     assert!(bob.other_instances.is_empty());
@@ -29,7 +29,7 @@ fn test_direct_mode() -> Result<(), Error> {
     assert!(bob.escrow_sigs.is_empty());
 
     // Serialize alice inception event.
-    let mut msg_to_bob = alice.log.last().unwrap().serialize()?;
+    let mut msg_to_bob = alice.get_last_event().unwrap().serialize()?;
 
     // Simulate sending it to bob.
     let mut bob_receipts = bob.process_events(msg_to_bob);
@@ -50,7 +50,7 @@ fn test_direct_mode() -> Result<(), Error> {
         .filter_map(Result::ok)
         .collect::<Vec<_>>()
         .concat();
-    let mut msg_to_alice = bob.log.last().unwrap().serialize().unwrap();
+    let mut msg_to_alice = bob.get_last_event().unwrap().serialize().unwrap();
     msg_to_alice.append(&mut receipts);
 
     // Send message from bob to alice and get alice's receipts.
@@ -81,11 +81,11 @@ fn test_direct_mode() -> Result<(), Error> {
 
     // Rotation event.
     alice.rotate()?;
-    assert_eq!(alice.log.len(), 2);
+    assert_eq!(alice.get_log_len(), 2);
     assert_eq!(alice.state.sn, 1);
 
     // Send rotation event to bob.
-    msg_to_bob = alice.log.last().unwrap().serialize()?;
+    msg_to_bob = alice.get_last_event().unwrap().serialize()?;
     bob_receipts = bob.process_events(msg_to_bob);
     {
         // Check if bob's state of alice is the same as current alice state.
@@ -95,7 +95,7 @@ fn test_direct_mode() -> Result<(), Error> {
             .unwrap();
         assert_eq!(*alice_state_in_bob, alice.state);
         assert_eq!(alice.state.sn, 1);
-        assert_eq!(alice.log.len(), 2);
+        assert_eq!(alice.get_log_len(), 2);
     }
     msg_to_alice = bob_receipts
         .iter()
@@ -111,11 +111,11 @@ fn test_direct_mode() -> Result<(), Error> {
 
     // Interaction event.
     alice.make_ixn("")?;
-    assert_eq!(alice.log.len(), 3);
+    assert_eq!(alice.get_log_len(), 3);
     assert_eq!(alice.state.sn, 2);
 
     // Send interaction event to bob.
-    msg_to_bob = alice.log.last().unwrap().serialize()?;
+    msg_to_bob = alice.get_last_event().unwrap().serialize()?;
     bob_receipts = bob.process_events(msg_to_bob);
 
     {
