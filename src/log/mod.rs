@@ -28,12 +28,13 @@ impl EventLog {
         Ok(result)
     }
 
-    pub fn get(&self, sn: u64) -> Result<&SignedEventMessage, Error>{
-        self.0.get(sn as usize)
-                    .ok_or(Error::SemanticError("sn not found in log".into()))
+    pub fn get(&self, sn: u64) -> Result<&SignedEventMessage, Error> {
+        self.0
+            .get(sn as usize)
+            .ok_or(Error::SemanticError("sn not found in log".into()))
     }
 
-    pub fn get_last(&self) -> Option<&SignedEventMessage>{
+    pub fn get_last(&self) -> Option<&SignedEventMessage> {
         self.0.last()
     }
 

@@ -1,4 +1,7 @@
-use keri::{derivation::{basic::Basic, self_addressing::SelfAddressing}, error::Error, log::EventLog, event::{
+use keri::{
+    derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
+    error::Error,
+    event::{
         event_data::{
             inception::InceptionEvent, interaction::InteractionEvent, receipt::ReceiptTransferable,
             rotation::RotationEvent, EventData,
@@ -6,32 +9,43 @@ use keri::{derivation::{basic::Basic, self_addressing::SelfAddressing}, error::E
         sections::seal::DigestSeal,
         sections::{seal::EventSeal, seal::Seal, InceptionWitnessConfig, KeyConfig, WitnessConfig},
         Event,
-    }, event_message::{
+    },
+    event_message::{
         parse::signed_event_stream, serialization_info::SerializationFormats, EventMessage,
         SignedEventMessage,
-    }, prefix::{IdentifierPrefix, Prefix}, signer::Signer, state::IdentifierState, util::dfs_serializer};
+    },
+    log::EventLog,
+    prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix},
+    signer::CryptoBox,
+    state::IdentifierState,
+    util::dfs_serializer,
+};
 use serde_json::to_string_pretty;
 use std::{collections::HashMap, str::from_utf8};
 
 pub struct LogState {
+    key_manager: CryptoBox,
     log: EventLog,
     pub state: IdentifierState,
     pub receipts: HashMap<u64, Vec<SignedEventMessage>>,
     pub escrow_sigs: Vec<SignedEventMessage>,
-    signer: Signer,
     pub other_instances: HashMap<String, IdentifierState>,
 }
 impl LogState {
     // incept a state and keys
     pub fn new() -> Result<LogState, Error> {
-        let signer = Signer::new(Basic::Ed25519)?;
+        let key_manager = CryptoBox::new()?;
 
         let icp_data = InceptionEvent {
             key_config: KeyConfig {
                 threshold: 1,
-                public_keys: vec![signer.public_key()],
-                threshold_key_digest: SelfAddressing::Blake3_256
-                    .derive(signer.next_public_key().to_str().as_bytes()),
+                public_keys: vec![Basic::Ed25519.derive(key_manager.public_key())],
+                threshold_key_digest: SelfAddressing::Blake3_256.derive(
+                    Basic::Ed25519
+                        .derive(key_manager.next_pub_key.clone())
+                        .to_str()
+                        .as_bytes(),
+                ),
             },
             witness_config: InceptionWitnessConfig::default(),
             inception_configuration: vec![],
@@ -48,23 +62,27 @@ impl LogState {
         );
 
         let icp_m = Event {
-            prefix: pref.clone(),
+            prefix: pref,
             sn: 0,
             event_data: EventData::Icp(icp_data),
         }
         .to_message(&SerializationFormats::JSON)?;
 
-        let sigged = icp_m.sign(vec![signer.sign(icp_m.serialize()?)?]);
+        let sigged = icp_m.sign(vec![AttachedSignaturePrefix::new(
+            SelfSigning::Ed25519Sha512,
+            key_manager.sign(&icp_m.serialize()?)?,
+            0,
+        )]);
         let mut log = EventLog::new();
 
         let s0 = IdentifierState::default().verify_and_apply(&sigged)?;
-        log.commit(sigged);
+        log.commit(sigged)?;
 
         Ok(LogState {
             log: log,
             receipts: HashMap::new(),
             state: s0,
-            signer,
+            key_manager,
             escrow_sigs: vec![],
             other_instances: HashMap::new(),
         })
@@ -78,9 +96,7 @@ impl LogState {
     ) -> Result<(), Error> {
         match sigs.event_message.event.event_data.clone() {
             EventData::Vrc(rct) => {
-                let event = self
-                    .log
-                    .get(sigs.event_message.event.sn)?;
+                let event = self.log.get(sigs.event_message.event.sn)?;
 
                 // This logic can in future be moved to the correct place in the Kever equivalent here
                 // receipt pref is the ID who made the event being receipted
@@ -122,6 +138,7 @@ impl LogState {
 
     pub fn make_rct(&self, event: EventMessage) -> Result<SignedEventMessage, Error> {
         let ser = event.serialize()?;
+        let signature = self.key_manager.sign(&ser)?;
         Ok(Event {
             prefix: event.event.prefix,
             sn: event.event.sn,
@@ -134,33 +151,48 @@ impl LogState {
             }),
         }
         .to_message(&SerializationFormats::JSON)?
-        .sign(vec![self.signer.sign(ser)?]))
+        .sign(vec![AttachedSignaturePrefix::new(
+            SelfSigning::Ed25519Sha512,
+            signature,
+            0,
+        )]))
     }
 
     pub fn rotate(&mut self) -> Result<SignedEventMessage, Error> {
-        self.signer = self.signer.rotate()?;
-        let ev = Event {
-            prefix: self.state.prefix.clone(),
-            sn: self.state.sn + 1,
-            event_data: EventData::Rot(RotationEvent {
-                previous_event_hash: SelfAddressing::Blake3_256.derive(&self.state.last),
-                key_config: KeyConfig {
-                    threshold: 1,
-                    public_keys: vec![self.signer.public_key()],
-                    threshold_key_digest: SelfAddressing::Blake3_256
-                        .derive(self.signer.next_public_key().to_str().as_bytes()),
-                },
-                witness_config: WitnessConfig::default(),
-                data: vec![],
-            }),
-        }
-        .to_message(&SerializationFormats::JSON)?;
+        self.key_manager = self.key_manager.rotate()?;
+        let ev = {
+            Event {
+                prefix: self.state.prefix.clone(),
+                sn: self.state.sn + 1,
+                event_data: EventData::Rot(RotationEvent {
+                    previous_event_hash: SelfAddressing::Blake3_256.derive(&self.state.last),
+                    key_config: KeyConfig {
+                        threshold: 1,
+                        public_keys: vec![Basic::Ed25519.derive(self.key_manager.public_key())],
+                        threshold_key_digest: SelfAddressing::Blake3_256.derive(
+                            Basic::Ed25519
+                                .derive(self.key_manager.next_pub_key.clone())
+                                .to_str()
+                                .as_bytes(),
+                        ),
+                    },
+                    witness_config: WitnessConfig::default(),
+                    data: vec![],
+                }),
+            }
+            .to_message(&SerializationFormats::JSON)?
+        };
 
-        let rot = ev.sign(vec![self.signer.sign(ev.serialize()?)?]);
+        let signature = self.key_manager.sign(&ev.serialize()?)?;
+        let rot = ev.sign(vec![AttachedSignaturePrefix::new(
+            SelfSigning::Ed25519Sha512,
+            signature,
+            0,
+        )]);
 
         self.state = self.state.clone().verify_and_apply(&rot)?;
 
-        self.log.commit(rot.clone());
+        self.log.commit(rot.clone())?;
 
         Ok(rot)
     }
@@ -180,10 +212,15 @@ impl LogState {
         }
         .to_message(&SerializationFormats::JSON)?;
 
-        let ixn = ev.sign(vec![self.signer.sign(ev.serialize()?)?]);
+        let signature = self.key_manager.sign(&ev.serialize()?)?;
+        let ixn = ev.sign(vec![AttachedSignaturePrefix::new(
+            SelfSigning::Ed25519Sha512,
+            signature,
+            0,
+        )]);
 
         self.state = self.state.clone().verify_and_apply(&ixn)?;
-        self.log.commit(ixn.clone());
+        self.log.commit(ixn.clone())?;
         Ok(ixn)
     }
 
@@ -241,7 +278,7 @@ impl LogState {
         response
     }
 
-    pub fn get_last_event(&self) -> Option<&SignedEventMessage>{
+    pub fn get_last_event(&self) -> Option<&SignedEventMessage> {
         self.log.get_last()
     }
 

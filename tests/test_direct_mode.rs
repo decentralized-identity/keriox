@@ -9,7 +9,12 @@ fn test_direct_mode() -> Result<(), Error> {
     assert_eq!(alice.state.sn, 0);
     assert_eq!(alice.get_log_len(), 1);
     assert!(matches!(
-        alice.get_last_event().unwrap().event_message.event.event_data,
+        alice
+            .get_last_event()
+            .unwrap()
+            .event_message
+            .event
+            .event_data,
         EventData::Icp(_)
     ));
     assert!(alice.other_instances.is_empty());
