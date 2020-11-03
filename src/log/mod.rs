@@ -34,8 +34,8 @@ impl EventLog {
             .ok_or(Error::SemanticError("sn not found in log".into()))
     }
 
-    pub fn get_last(&self) -> Option<&SignedEventMessage> {
-        self.0.last()
+    pub fn get_last(&self) -> Option<SignedEventMessage> {
+        self.0.last().map(|x| x.clone())
     }
 
     pub fn get_len(&self) -> usize {
