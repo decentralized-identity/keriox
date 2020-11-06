@@ -4,15 +4,17 @@ pub mod signatory;
 use crate::error::Error;
 use crate::prefix::{IdentifierPrefix, SelfAddressingPrefix};
 use delegated::DelegatedIdentifierState;
+use serde::{Deserialize, Serialize};
 use signatory::Signatory;
 
 /// Identifier State
 ///
 /// represents the accumulated state after applying events, based on section 13 of the paper
-#[derive(Default, PartialEq, Debug, Clone)]
+#[derive(Default, PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct IdentifierState {
     pub prefix: IdentifierPrefix,
     pub sn: u64,
+    #[serde(skip)]
     pub last: Vec<u8>,
     pub current: Signatory,
     pub next: SelfAddressingPrefix,
