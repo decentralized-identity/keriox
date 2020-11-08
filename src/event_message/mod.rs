@@ -66,14 +66,15 @@ impl EventMessage {
         icp: &InceptionEvent,
         code: SelfAddressing,
         format: SerializationFormats,
-    ) -> Self {
+    ) -> Result<Vec<u8>, Error> {
         // use dummy prefix to get correct size info
+        // TODO: dynamically size dummy derivative, non-32 byte prefixes will fail
         let icp_event_data = Event {
             prefix: IdentifierPrefix::SelfAddressing(code.derive(&[0u8; 32])),
             sn: 0,
             event_data: EventData::Icp(icp.clone()),
         };
-        Self {
+        Ok(dfs_serializer::to_vec(&Self {
             serialization_info: icp_event_data
                 .clone()
                 .to_message(format)
@@ -84,7 +85,7 @@ impl EventMessage {
                 prefix: IdentifierPrefix::default(),
                 ..icp_event_data
             },
-        }
+        })?)
     }
 
     /// Serialize
@@ -190,11 +191,7 @@ pub fn verify_identifier_binding(icp_event: &EventMessage) -> Result<bool, Error
             IdentifierPrefix::Basic(bp) => Ok(icp.key_config.public_keys.len() == 1
                 && bp == icp.key_config.public_keys.first().unwrap()),
             IdentifierPrefix::SelfAddressing(sap) => Ok(sap.verify_binding(
-                &dfs_serializer::to_vec(&EventMessage::get_inception_data(
-                    &icp,
-                    sap.derivation,
-                    icp_event.serialization(),
-                ))?,
+                &EventMessage::get_inception_data(&icp, sap.derivation, icp_event.serialization())?,
             )),
             IdentifierPrefix::SelfSigning(_ssp) => todo!(),
         },
@@ -339,11 +336,10 @@ mod tests {
             &icp_data,
             SelfAddressing::Blake3_256,
             SerializationFormats::JSON,
-        );
+        )?;
 
-        let pref = IdentifierPrefix::SelfAddressing(
-            SelfAddressing::Blake3_256.derive(&dfs_serializer::to_vec(&icp_data_message)?),
-        );
+        let pref =
+            IdentifierPrefix::SelfAddressing(SelfAddressing::Blake3_256.derive(&icp_data_message));
 
         let icp_m = Event {
             prefix: pref.clone(),

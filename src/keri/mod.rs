@@ -65,11 +65,10 @@ impl Keri {
             &icp_data,
             SelfAddressing::Blake3_256,
             SerializationFormats::JSON,
-        );
+        )?;
 
-        let pref = IdentifierPrefix::SelfAddressing(
-            SelfAddressing::Blake3_256.derive(&dfs_serializer::to_vec(&icp_data_message)?),
-        );
+        let pref =
+            IdentifierPrefix::SelfAddressing(SelfAddressing::Blake3_256.derive(&icp_data_message));
 
         let icp_m = Event {
             prefix: pref,
