@@ -44,7 +44,7 @@ impl KeyConfig {
                         && self
                             .public_keys
                             .get(sig.index as usize)
-                            .ok_or(Error::SemanticError("Key not present in state".into()))
+                            .ok_or(Error::SemanticError("Key index not present in set".into()))
                             .and_then(|key: &BasicPrefix| key.verify(message, &sig.signature))?)
                 })?)
         } else {
@@ -66,12 +66,19 @@ impl KeyConfig {
     /// Serializes the KeyConfig for creation or verification of a threshold
     /// key digest commitment
     pub fn serialize_for_nxt(&self) -> Vec<u8> {
-        self.public_keys
-            .iter()
-            .fold(format!("{:x}", self.threshold).into(), |acc, pk| {
-                [acc, pk.to_str().into()].concat()
-            })
+        serialize_for_commitment(self.threshold, &self.public_keys)
     }
+}
+
+/// Serialize For Commitment
+///
+/// Serializes a threshold and key set into the form
+/// required for threshold key digest creation
+pub fn serialize_for_commitment(threshold: u64, keys: &[BasicPrefix]) -> Vec<u8> {
+    keys.iter()
+        .fold(format!("{:x}", threshold).into(), |acc, pk| {
+            [acc, pk.to_str().into()].concat()
+        })
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
