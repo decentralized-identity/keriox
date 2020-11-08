@@ -64,7 +64,7 @@ impl Keri {
         let icp_data_message = EventMessage::get_inception_data(
             &icp_data,
             SelfAddressing::Blake3_256,
-            &SerializationFormats::JSON,
+            SerializationFormats::JSON,
         );
 
         let pref = IdentifierPrefix::SelfAddressing(
@@ -76,7 +76,7 @@ impl Keri {
             sn: 0,
             event_data: EventData::Icp(icp_data),
         }
-        .to_message(&SerializationFormats::JSON)?;
+        .to_message(SerializationFormats::JSON)?;
 
         let sigged = icp_m.sign(vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
@@ -119,7 +119,7 @@ impl Keri {
                     data: vec![],
                 }),
             }
-            .to_message(&SerializationFormats::JSON)?
+            .to_message(SerializationFormats::JSON)?
         };
 
         let signature = self.key_manager.sign(&ev.serialize()?)?;
@@ -149,7 +149,7 @@ impl Keri {
                 data: vec![Seal::Digest(dig_seal)],
             }),
         }
-        .to_message(&SerializationFormats::JSON)?;
+        .to_message(SerializationFormats::JSON)?;
 
         let signature = self.key_manager.sign(&ev.serialize()?)?;
         let ixn = ev.sign(vec![AttachedSignaturePrefix::new(
@@ -274,7 +274,7 @@ impl Keri {
                 },
             }),
         }
-        .to_message(&SerializationFormats::JSON)?
+        .to_message(SerializationFormats::JSON)?
         .sign(vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
             signature,
