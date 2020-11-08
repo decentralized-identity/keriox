@@ -19,7 +19,7 @@ use crate::{
     },
     event::{
         event_data::EventData,
-        sections::{InceptionWitnessConfig, KeyConfig},
+        sections::{serialize_for_commitment, InceptionWitnessConfig, KeyConfig},
         Event, EventMessage, SerializationFormats,
     },
     event_message::parse::signed_event_stream,
@@ -47,16 +47,14 @@ impl Keri {
         let key_manager = CryptoBox::new()?;
 
         let icp = InceptionEvent::new(
-            KeyConfig {
-                threshold: 1,
-                public_keys: vec![Basic::Ed25519.derive(key_manager.public_key())],
-                threshold_key_digest: SelfAddressing::Blake3_256.derive(
-                    Basic::Ed25519
-                        .derive(key_manager.next_pub_key.clone())
-                        .to_str()
-                        .as_bytes(),
-                ),
-            },
+            KeyConfig::new(
+                vec![Basic::Ed25519.derive(key_manager.public_key())],
+                SelfAddressing::Blake3_256.derive(&serialize_for_commitment(
+                    1,
+                    &[Basic::Ed25519.derive(key_manager.next_pub_key.clone())],
+                )),
+                Some(1),
+            ),
             None,
             None,
         )
@@ -90,16 +88,14 @@ impl Keri {
                 sn: self.state.sn + 1,
                 event_data: EventData::Rot(RotationEvent {
                     previous_event_hash: SelfAddressing::Blake3_256.derive(&self.state.last),
-                    key_config: KeyConfig {
-                        threshold: 1,
-                        public_keys: vec![Basic::Ed25519.derive(self.key_manager.public_key())],
-                        threshold_key_digest: SelfAddressing::Blake3_256.derive(
-                            Basic::Ed25519
-                                .derive(self.key_manager.next_pub_key.clone())
-                                .to_str()
-                                .as_bytes(),
-                        ),
-                    },
+                    key_config: KeyConfig::new(
+                        vec![Basic::Ed25519.derive(self.key_manager.public_key())],
+                        SelfAddressing::Blake3_256.derive(&serialize_for_commitment(
+                            1,
+                            &[Basic::Ed25519.derive(self.key_manager.next_pub_key.clone())],
+                        )),
+                        Some(1),
+                    ),
                     witness_config: WitnessConfig::default(),
                     data: vec![],
                 }),

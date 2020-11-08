@@ -8,7 +8,7 @@ use crate::{
     event::Event,
     event_message::{serialization_info::SerializationFormats, EventMessage},
     prefix::IdentifierPrefix,
-    state::{signatory::Signatory, EventSemantics, IdentifierState},
+    state::{EventSemantics, IdentifierState},
 };
 use serde::{Deserialize, Serialize};
 
@@ -68,11 +68,7 @@ impl InceptionEvent {
 impl EventSemantics for InceptionEvent {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         Ok(IdentifierState {
-            current: Signatory {
-                threshold: self.key_config.threshold,
-                signers: self.key_config.public_keys.clone(),
-            },
-            next: self.key_config.threshold_key_digest.clone(),
+            current: self.key_config.clone(),
             witnesses: self.witness_config.initial_witnesses.clone(),
             tally: self.witness_config.tally,
             ..state

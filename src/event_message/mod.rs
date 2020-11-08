@@ -245,11 +245,7 @@ mod tests {
             prefix: IdentifierPrefix::Basic(pref0.clone()),
             sn: 0,
             event_data: EventData::Icp(InceptionEvent {
-                key_config: KeyConfig {
-                    threshold: 1,
-                    public_keys: vec![pref0.clone()],
-                    threshold_key_digest: nxt.clone(),
-                },
+                key_config: KeyConfig::new(vec![pref0.clone()], nxt.clone(), Some(1)),
                 witness_config: InceptionWitnessConfig::default(),
                 inception_configuration: vec![],
             }),
@@ -323,11 +319,11 @@ mod tests {
         );
 
         let icp = InceptionEvent::new(
-            KeyConfig {
-                public_keys: vec![sig_pref_0.clone(), enc_pref_0.clone()],
-                threshold_key_digest: nexter_pref.clone(),
-                threshold: 1,
-            },
+            KeyConfig::new(
+                vec![sig_pref_0.clone(), enc_pref_0.clone()],
+                nexter_pref.clone(),
+                Some(1),
+            ),
             None,
             None,
         )
