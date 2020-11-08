@@ -322,34 +322,18 @@ mod tests {
                 .as_bytes(),
         );
 
-        let icp_data = InceptionEvent {
-            key_config: KeyConfig {
-                threshold: 1,
-                public_keys: vec![sig_pref_0.clone(), enc_pref_0.clone()],
-                threshold_key_digest: nexter_pref.clone(),
-            },
-            witness_config: InceptionWitnessConfig::default(),
-            inception_configuration: vec![],
-        };
+        let icp = InceptionEvent::new(
+            KeyConfig::new(
+                vec![sig_pref_0.clone(), enc_pref_0.clone()],
+                nexter_pref.clone(),
+                Some(1),
+            ),
+            None,
+            None,
+        )
+        .incept_self_addressing(SelfAddressing::Blake3_256, SerializationFormats::JSON)?;
 
-        let icp_data_message = EventMessage::get_inception_data(
-            &icp_data,
-            SelfAddressing::Blake3_256,
-            SerializationFormats::JSON,
-        )?;
-
-        let pref =
-            IdentifierPrefix::SelfAddressing(SelfAddressing::Blake3_256.derive(&icp_data_message));
-
-        let icp_m = Event {
-            prefix: pref.clone(),
-            sn: 0,
-            event_data: EventData::Icp(icp_data),
-        }
-        .to_message(SerializationFormats::JSON)?;
-
-        // serialised extracted dataset
-        let serialized = icp_m.serialize()?;
+        let serialized = icp.serialize()?;
 
         // sign
         let sig = ed
@@ -359,13 +343,13 @@ mod tests {
 
         assert!(sig_pref_0.verify(&serialized, &attached_sig.signature)?);
 
-        let signed_event = icp_m.sign(vec![attached_sig]);
+        let signed_event = icp.sign(vec![attached_sig]);
 
         let s_ = IdentifierState::default();
 
         let s0 = s_.verify_and_apply(&signed_event)?;
 
-        assert_eq!(s0.prefix, pref);
+        assert_eq!(s0.prefix, icp.event.prefix);
         assert_eq!(s0.sn, 0);
         assert_eq!(s0.last, serialized);
         assert_eq!(s0.current.public_keys.len(), 2);

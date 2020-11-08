@@ -50,36 +50,20 @@ impl Keri {
             1,
             &[Basic::Ed25519.derive(key_manager.next_pub_key.clone())],
         ));
+        let icp = InceptionEvent::new(
+            KeyConfig::new(
+                vec![Basic::Ed25519.derive(key_manager.public_key())],
+                next_dig,
+                Some(1),
+            ),
+            None,
+            None,
+        )
+        .incept_self_addressing(SelfAddressing::Blake3_256, SerializationFormats::JSON)?;
 
-        let icp_data = InceptionEvent {
-            key_config: KeyConfig {
-                threshold: 1,
-                public_keys: vec![Basic::Ed25519.derive(key_manager.public_key())],
-                threshold_key_digest: next_dig,
-            },
-            witness_config: InceptionWitnessConfig::default(),
-            inception_configuration: vec![],
-        };
-
-        let icp_data_message = EventMessage::get_inception_data(
-            &icp_data,
-            SelfAddressing::Blake3_256,
-            SerializationFormats::JSON,
-        )?;
-
-        let pref =
-            IdentifierPrefix::SelfAddressing(SelfAddressing::Blake3_256.derive(&icp_data_message));
-
-        let icp_m = Event {
-            prefix: pref,
-            sn: 0,
-            event_data: EventData::Icp(icp_data),
-        }
-        .to_message(SerializationFormats::JSON)?;
-
-        let sigged = icp_m.sign(vec![AttachedSignaturePrefix::new(
+        let sigged = icp.sign(vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
-            key_manager.sign(&icp_m.serialize()?)?,
+            key_manager.sign(&icp.serialize()?)?,
             0,
         )]);
         let mut log = EventLog::new();
