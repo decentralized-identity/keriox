@@ -193,10 +193,10 @@ fn test_update_identifier_state(
     assert_eq!(new_state.prefix, IdentifierPrefix::Basic(identifier));
     assert_eq!(new_state.sn, state_data.sn);
     assert_eq!(new_state.last, sed);
-    assert_eq!(new_state.current.signers.len(), 1);
-    assert_eq!(new_state.current.signers[0], current_pref);
+    assert_eq!(new_state.current.public_keys.len(), 1);
+    assert_eq!(new_state.current.public_keys[0], current_pref);
     assert_eq!(new_state.current.threshold, 1);
-    assert_eq!(new_state.next, next_dig);
+    assert_eq!(new_state.current.threshold_key_digest, next_dig);
     assert_eq!(new_state.witnesses, vec![]);
     assert_eq!(new_state.tally, 0);
     assert_eq!(new_state.delegated_keys, vec![]);

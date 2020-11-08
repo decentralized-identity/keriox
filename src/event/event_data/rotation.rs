@@ -25,10 +25,14 @@ pub struct RotationEvent {
 
 impl EventSemantics for RotationEvent {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
-        Ok(IdentifierState {
-            current: self.key_config.clone(),
-            tally: self.witness_config.tally,
-            ..state
-        })
+        if state.current.verify_next(&self.key_config) {
+            Ok(IdentifierState {
+                current: self.key_config.clone(),
+                tally: self.witness_config.tally,
+                ..state
+            })
+        } else {
+            Err(Error::SemanticError("Incorrect Key Config binding".into()))
+        }
     }
 }
