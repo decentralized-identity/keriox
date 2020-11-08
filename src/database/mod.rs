@@ -1,4 +1,7 @@
-use crate::prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix};
+use crate::{
+    prefix::{AttachedSignaturePrefix, IdentifierPrefix, SelfAddressingPrefix},
+    state::IdentifierState,
+};
 pub mod lmdb;
 
 /// Event Database
@@ -20,14 +23,14 @@ pub trait EventDatabase {
         sn: u64,
     ) -> Result<Option<Vec<u8>>, Self::Error>;
 
-    /// Get Keys for Prefix
+    /// Get State for Prefix
     ///
-    /// Returns the current signing keys associated with
+    /// Returns the current State associated with
     /// the given Prefix
-    fn get_keys_for_prefix(
+    fn get_state_for_prefix(
         &self,
         pref: &IdentifierPrefix,
-    ) -> Result<Option<Vec<BasicPrefix>>, Self::Error>;
+    ) -> Result<Option<IdentifierState>, Self::Error>;
 
     /// Get Children of Prefix
     ///
