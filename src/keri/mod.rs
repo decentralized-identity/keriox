@@ -19,7 +19,7 @@ use crate::{
     },
     event::{
         event_data::EventData,
-        sections::{serialize_for_commitment, InceptionWitnessConfig, KeyConfig},
+        sections::{InceptionWitnessConfig, KeyConfig},
         Event, EventMessage, SerializationFormats,
     },
     event_message::parse::signed_event_stream,
@@ -46,41 +46,25 @@ impl Keri {
     pub fn new() -> Result<Keri, Error> {
         let key_manager = CryptoBox::new()?;
 
-        let next_dig = SelfAddressing::Blake3_256.derive(&serialize_for_commitment(
-            1,
-            &[Basic::Ed25519.derive(key_manager.next_pub_key.clone())],
-        ));
-
-        let icp_data = InceptionEvent {
-            key_config: KeyConfig {
+        let icp = InceptionEvent::new(
+            KeyConfig {
                 threshold: 1,
                 public_keys: vec![Basic::Ed25519.derive(key_manager.public_key())],
-                threshold_key_digest: next_dig,
+                threshold_key_digest: SelfAddressing::Blake3_256.derive(
+                    Basic::Ed25519
+                        .derive(key_manager.next_pub_key.clone())
+                        .to_str()
+                        .as_bytes(),
+                ),
             },
-            witness_config: InceptionWitnessConfig::default(),
-            inception_configuration: vec![],
-        };
+            None,
+            None,
+        )
+        .incept_self_addressing(SelfAddressing::Blake3_256, SerializationFormats::JSON)?;
 
-        let icp_data_message = EventMessage::get_inception_data(
-            &icp_data,
-            SelfAddressing::Blake3_256,
-            &SerializationFormats::JSON,
-        );
-
-        let pref = IdentifierPrefix::SelfAddressing(
-            SelfAddressing::Blake3_256.derive(&dfs_serializer::to_vec(&icp_data_message)?),
-        );
-
-        let icp_m = Event {
-            prefix: pref,
-            sn: 0,
-            event_data: EventData::Icp(icp_data),
-        }
-        .to_message(&SerializationFormats::JSON)?;
-
-        let sigged = icp_m.sign(vec![AttachedSignaturePrefix::new(
+        let sigged = icp.sign(vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
-            key_manager.sign(&icp_m.serialize()?)?,
+            key_manager.sign(&icp.serialize()?)?,
             0,
         )]);
         let mut log = EventLog::new();
@@ -100,10 +84,6 @@ impl Keri {
 
     pub fn rotate(&mut self) -> Result<SignedEventMessage, Error> {
         self.key_manager = self.key_manager.rotate()?;
-        let next_dig = SelfAddressing::Blake3_256.derive(&serialize_for_commitment(
-            1,
-            &[Basic::Ed25519.derive(self.key_manager.next_pub_key.clone())],
-        ));
         let ev = {
             Event {
                 prefix: self.state.prefix.clone(),
@@ -113,7 +93,12 @@ impl Keri {
                     key_config: KeyConfig {
                         threshold: 1,
                         public_keys: vec![Basic::Ed25519.derive(self.key_manager.public_key())],
-                        threshold_key_digest: next_dig,
+                        threshold_key_digest: SelfAddressing::Blake3_256.derive(
+                            Basic::Ed25519
+                                .derive(self.key_manager.next_pub_key.clone())
+                                .to_str()
+                                .as_bytes(),
+                        ),
                     },
                     witness_config: WitnessConfig::default(),
                     data: vec![],
