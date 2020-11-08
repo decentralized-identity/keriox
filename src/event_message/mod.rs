@@ -5,7 +5,7 @@ use crate::{
         event_data::{inception::InceptionEvent, EventData},
         Event,
     },
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix},
+    prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix},
     state::{EventSemantics, IdentifierState, Verifiable},
     util::dfs_serializer,
 };
@@ -179,21 +179,7 @@ impl Verifiable for SignedEventMessage {
     fn verify_against(&self, state: &IdentifierState) -> Result<bool, Error> {
         let serialized = self.event_message.serialize()?;
 
-        Ok(self.signatures.len() as u64 >= state.current.threshold
-            && self
-                .signatures
-                .iter()
-                .fold(Ok(true), |acc: Result<bool, Error>, sig| {
-                    Ok(acc?
-                        && state
-                            .current
-                            .signers
-                            .get(sig.index as usize)
-                            .ok_or(Error::SemanticError("Key not present in state".to_string()))
-                            .and_then(|key: &BasicPrefix| {
-                                key.verify(&serialized, &sig.signature)
-                            })?)
-                })?)
+        state.current.verify(&serialized, &self.signatures)
     }
 }
 
