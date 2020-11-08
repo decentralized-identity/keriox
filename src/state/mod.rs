@@ -1,7 +1,8 @@
-pub mod delegated;
-
-use crate::{error::Error, event::sections::KeyConfig, prefix::IdentifierPrefix};
-use delegated::DelegatedIdentifierState;
+use crate::{
+    error::Error,
+    event::sections::KeyConfig,
+    prefix::{BasicPrefix, IdentifierPrefix},
+};
 use serde::{Deserialize, Serialize};
 
 /// Identifier State
@@ -16,7 +17,7 @@ pub struct IdentifierState {
     pub current: KeyConfig,
     pub delegated_keys: Vec<IdentifierPrefix>,
     pub tally: u64,
-    pub witnesses: Vec<IdentifierPrefix>,
+    pub witnesses: Vec<BasicPrefix>,
 }
 
 impl IdentifierState {
