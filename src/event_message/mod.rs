@@ -140,8 +140,7 @@ impl EventSemantics for EventMessage {
             }
             EventData::Rot(ref rot) => {
                 // Check if hashes of state.last event and previous_event_hash matches.
-                if rot.previous_event_hash.derivation.derive(&state.last) == rot.previous_event_hash
-                {
+                if rot.previous_event_hash.verify_binding(&state.last) {
                     self.event.apply_to(IdentifierState {
                         last: self.serialize()?,
                         ..state
@@ -154,9 +153,7 @@ impl EventSemantics for EventMessage {
             }
             EventData::Ixn(ref inter) => {
                 // Check if hashes of state.last event and previous_event_hash matches.
-                if inter.previous_event_hash.derivation.derive(&state.last)
-                    == inter.previous_event_hash
-                {
+                if inter.previous_event_hash.verify_binding(&state.last) {
                     self.event.apply_to(IdentifierState {
                         last: self.serialize()?,
                         ..state
