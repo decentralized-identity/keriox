@@ -1,8 +1,6 @@
 use crate::{
     error::Error,
-    prefix::{
-        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
-    },
+    prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfAddressingPrefix},
 };
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
@@ -82,10 +80,10 @@ pub struct WitnessConfig {
     pub tally: u64,
 
     #[serde(rename = "cuts")]
-    pub prune: Vec<IdentifierPrefix>,
+    pub prune: Vec<BasicPrefix>,
 
     #[serde(rename = "adds")]
-    pub graft: Vec<IdentifierPrefix>,
+    pub graft: Vec<BasicPrefix>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -94,5 +92,5 @@ pub struct InceptionWitnessConfig {
     pub tally: u64,
 
     #[serde(rename = "wits")]
-    pub initial_witnesses: Vec<IdentifierPrefix>,
+    pub initial_witnesses: Vec<BasicPrefix>,
 }
