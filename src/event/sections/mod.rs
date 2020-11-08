@@ -36,7 +36,20 @@ impl KeyConfig {
     /// Verifies the given sigs against the given message using the KeyConfigs
     /// Public Keys, according to the indexes in the sigs.
     pub fn verify(&self, message: &[u8], sigs: &[AttachedSignaturePrefix]) -> Result<bool, Error> {
-        if sigs.len() as u64 >= self.threshold {
+        // ensure there's enough sigs
+        if sigs.len() as u64 >= self.threshold
+            // and that there are not too many
+            && sigs.len() <= self.public_keys.len()
+            // and that there are no duplicates
+            && sigs
+                .iter()
+                .fold(vec![0u64; self.public_keys.len()], |mut acc, sig| {
+                    acc[sig.index as usize] += 1;
+                    acc
+                })
+                .iter()
+                .all(|n| *n <= 1)
+        {
             Ok(sigs
                 .iter()
                 .fold(Ok(true), |acc: Result<bool, Error>, sig| {
@@ -48,7 +61,7 @@ impl KeyConfig {
                             .and_then(|key: &BasicPrefix| key.verify(message, &sig.signature))?)
                 })?)
         } else {
-            Err(Error::SemanticError("Not enough signatures".into()))
+            Err(Error::SemanticError("Invalid signatures set".into()))
         }
     }
 
