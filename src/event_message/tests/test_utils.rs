@@ -10,7 +10,7 @@ use crate::{
         inception::InceptionEvent, interaction::InteractionEvent, rotation::RotationEvent,
         EventData,
     },
-    event::sections::{InceptionWitnessConfig, KeyConfig, WitnessConfig},
+    event::sections::{serialize_for_commitment, InceptionWitnessConfig, KeyConfig, WitnessConfig},
     event::Event,
     event::SerializationFormats,
     prefix::{
@@ -141,7 +141,7 @@ fn test_update_identifier_state(
 
     let current_pref = Basic::Ed25519.derive(cur_pk.clone());
     let next_prefix = Basic::Ed25519.derive(next_pk.clone());
-    let next_dig = SelfAddressing::Blake3_256.derive(next_prefix.to_str().as_bytes());
+    let next_dig = SelfAddressing::Blake3_256.derive(&serialize_for_commitment(1, &[next_prefix]));
 
     // If `history_prefs` isn't empty, set its first prefix, as identifier prefix.
     // Otherwise set current_prefix as identifier prefix. (It's inception event).
@@ -193,10 +193,10 @@ fn test_update_identifier_state(
     assert_eq!(new_state.prefix, IdentifierPrefix::Basic(identifier));
     assert_eq!(new_state.sn, state_data.sn);
     assert_eq!(new_state.last, sed);
-    assert_eq!(new_state.current.signers.len(), 1);
-    assert_eq!(new_state.current.signers[0], current_pref);
+    assert_eq!(new_state.current.public_keys.len(), 1);
+    assert_eq!(new_state.current.public_keys[0], current_pref);
     assert_eq!(new_state.current.threshold, 1);
-    assert_eq!(new_state.next, next_dig);
+    assert_eq!(new_state.current.threshold_key_digest, next_dig);
     assert_eq!(new_state.witnesses, vec![]);
     assert_eq!(new_state.tally, 0);
     assert_eq!(new_state.delegated_keys, vec![]);

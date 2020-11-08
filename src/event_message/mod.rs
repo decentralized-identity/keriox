@@ -5,7 +5,7 @@ use crate::{
         event_data::{inception::InceptionEvent, EventData},
         Event,
     },
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix},
+    prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix},
     state::{EventSemantics, IdentifierState, Verifiable},
     util::dfs_serializer,
 };
@@ -140,8 +140,7 @@ impl EventSemantics for EventMessage {
             }
             EventData::Rot(ref rot) => {
                 // Check if hashes of state.last event and previous_event_hash matches.
-                if rot.previous_event_hash.derivation.derive(&state.last) == rot.previous_event_hash
-                {
+                if rot.previous_event_hash.verify_binding(&state.last) {
                     self.event.apply_to(IdentifierState {
                         last: self.serialize()?,
                         ..state
@@ -154,9 +153,7 @@ impl EventSemantics for EventMessage {
             }
             EventData::Ixn(ref inter) => {
                 // Check if hashes of state.last event and previous_event_hash matches.
-                if inter.previous_event_hash.derivation.derive(&state.last)
-                    == inter.previous_event_hash
-                {
+                if inter.previous_event_hash.verify_binding(&state.last) {
                     self.event.apply_to(IdentifierState {
                         last: self.serialize()?,
                         ..state
@@ -182,21 +179,7 @@ impl Verifiable for SignedEventMessage {
     fn verify_against(&self, state: &IdentifierState) -> Result<bool, Error> {
         let serialized = self.event_message.serialize()?;
 
-        Ok(self.signatures.len() as u64 >= state.current.threshold
-            && self
-                .signatures
-                .iter()
-                .fold(Ok(true), |acc: Result<bool, Error>, sig| {
-                    Ok(acc?
-                        && state
-                            .current
-                            .signers
-                            .get(sig.index as usize)
-                            .ok_or(Error::SemanticError("Key not present in state".to_string()))
-                            .and_then(|key: &BasicPrefix| {
-                                key.verify(&serialized, &sig.signature)
-                            })?)
-                })?)
+        state.current.verify(&serialized, &self.signatures)
     }
 }
 
@@ -296,10 +279,10 @@ mod tests {
         assert_eq!(s0.prefix, IdentifierPrefix::Basic(pref0.clone()));
         assert_eq!(s0.sn, 0);
         assert_eq!(s0.last, sed);
-        assert_eq!(s0.current.signers.len(), 1);
-        assert_eq!(s0.current.signers[0], pref0);
+        assert_eq!(s0.current.public_keys.len(), 1);
+        assert_eq!(s0.current.public_keys[0], pref0);
         assert_eq!(s0.current.threshold, 1);
-        assert_eq!(s0.next, nxt);
+        assert_eq!(s0.current.threshold_key_digest, nxt);
         assert_eq!(s0.witnesses, vec![]);
         assert_eq!(s0.tally, 0);
         assert_eq!(s0.delegated_keys, vec![]);
@@ -388,11 +371,11 @@ mod tests {
         assert_eq!(s0.prefix, pref);
         assert_eq!(s0.sn, 0);
         assert_eq!(s0.last, serialized);
-        assert_eq!(s0.current.signers.len(), 2);
-        assert_eq!(s0.current.signers[0], sig_pref_0);
-        assert_eq!(s0.current.signers[1], enc_pref_0);
+        assert_eq!(s0.current.public_keys.len(), 2);
+        assert_eq!(s0.current.public_keys[0], sig_pref_0);
+        assert_eq!(s0.current.public_keys[1], enc_pref_0);
         assert_eq!(s0.current.threshold, 1);
-        assert_eq!(s0.next, nexter_pref);
+        assert_eq!(s0.current.threshold_key_digest, nexter_pref);
         assert_eq!(s0.witnesses, vec![]);
         assert_eq!(s0.tally, 0);
         assert_eq!(s0.delegated_keys, vec![]);

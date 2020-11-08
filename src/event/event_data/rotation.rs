@@ -1,12 +1,14 @@
 use super::super::sections::{seal::*, KeyConfig, WitnessConfig};
-use crate::error::Error;
-use crate::state::IdentifierState;
-use crate::{prefix::SelfAddressingPrefix, state::signatory::Signatory, state::EventSemantics};
+use crate::{
+    error::Error,
+    prefix::SelfAddressingPrefix,
+    state::{EventSemantics, IdentifierState},
+};
 use serde::{Deserialize, Serialize};
 
 /// Rotation Event
 ///
-/// Describtes the rotation (rot) event data
+/// Describes the rotation (rot) event data
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RotationEvent {
     #[serde(rename = "dig")]
@@ -23,14 +25,14 @@ pub struct RotationEvent {
 
 impl EventSemantics for RotationEvent {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
-        Ok(IdentifierState {
-            current: Signatory {
-                threshold: self.key_config.threshold,
-                signers: self.key_config.public_keys.clone(),
-            },
-            next: self.key_config.threshold_key_digest.clone(),
-            tally: self.witness_config.tally,
-            ..state
-        })
+        if state.current.verify_next(&self.key_config) {
+            Ok(IdentifierState {
+                current: self.key_config.clone(),
+                tally: self.witness_config.tally,
+                ..state
+            })
+        } else {
+            Err(Error::SemanticError("Incorrect Key Config binding".into()))
+        }
     }
 }

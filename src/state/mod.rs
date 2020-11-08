@@ -1,11 +1,9 @@
-pub mod delegated;
-pub mod signatory;
-
-use crate::error::Error;
-use crate::prefix::{IdentifierPrefix, SelfAddressingPrefix};
-use delegated::DelegatedIdentifierState;
+use crate::{
+    error::Error,
+    event::sections::KeyConfig,
+    prefix::{BasicPrefix, IdentifierPrefix},
+};
 use serde::{Deserialize, Serialize};
-use signatory::Signatory;
 
 /// Identifier State
 ///
@@ -16,11 +14,10 @@ pub struct IdentifierState {
     pub sn: u64,
     #[serde(skip)]
     pub last: Vec<u8>,
-    pub current: Signatory,
-    pub next: SelfAddressingPrefix,
-    pub delegated_keys: Vec<DelegatedIdentifierState>,
+    pub current: KeyConfig,
+    pub delegated_keys: Vec<IdentifierPrefix>,
     pub tally: u64,
-    pub witnesses: Vec<IdentifierPrefix>,
+    pub witnesses: Vec<BasicPrefix>,
 }
 
 impl IdentifierState {

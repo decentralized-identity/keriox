@@ -19,7 +19,7 @@ use crate::{
     },
     event::{
         event_data::EventData,
-        sections::{InceptionWitnessConfig, KeyConfig},
+        sections::{serialize_for_commitment, InceptionWitnessConfig, KeyConfig},
         Event, EventMessage, SerializationFormats,
     },
     event_message::parse::signed_event_stream,
@@ -46,16 +46,16 @@ impl Keri {
     pub fn new() -> Result<Keri, Error> {
         let key_manager = CryptoBox::new()?;
 
+        let next_dig = SelfAddressing::Blake3_256.derive(&serialize_for_commitment(
+            1,
+            &[Basic::Ed25519.derive(key_manager.next_pub_key.clone())],
+        ));
+
         let icp_data = InceptionEvent {
             key_config: KeyConfig {
                 threshold: 1,
                 public_keys: vec![Basic::Ed25519.derive(key_manager.public_key())],
-                threshold_key_digest: SelfAddressing::Blake3_256.derive(
-                    Basic::Ed25519
-                        .derive(key_manager.next_pub_key.clone())
-                        .to_str()
-                        .as_bytes(),
-                ),
+                threshold_key_digest: next_dig,
             },
             witness_config: InceptionWitnessConfig::default(),
             inception_configuration: vec![],
@@ -100,6 +100,10 @@ impl Keri {
 
     pub fn rotate(&mut self) -> Result<SignedEventMessage, Error> {
         self.key_manager = self.key_manager.rotate()?;
+        let next_dig = SelfAddressing::Blake3_256.derive(&serialize_for_commitment(
+            1,
+            &[Basic::Ed25519.derive(self.key_manager.next_pub_key.clone())],
+        ));
         let ev = {
             Event {
                 prefix: self.state.prefix.clone(),
@@ -109,12 +113,7 @@ impl Keri {
                     key_config: KeyConfig {
                         threshold: 1,
                         public_keys: vec![Basic::Ed25519.derive(self.key_manager.public_key())],
-                        threshold_key_digest: SelfAddressing::Blake3_256.derive(
-                            Basic::Ed25519
-                                .derive(self.key_manager.next_pub_key.clone())
-                                .to_str()
-                                .as_bytes(),
-                        ),
+                        threshold_key_digest: next_dig,
                     },
                     witness_config: WitnessConfig::default(),
                     data: vec![],
