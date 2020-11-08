@@ -160,7 +160,7 @@ fn test_update_identifier_state(
             current_pref.clone(),
             next_dig.clone(),
         );
-        event?.to_message(&SerializationFormats::JSON)
+        event?.to_message(SerializationFormats::JSON)
     }?;
 
     // Serialise event message before signing.

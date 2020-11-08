@@ -119,7 +119,7 @@ impl Keri {
                     data: vec![],
                 }),
             }
-            .to_message(&SerializationFormats::JSON)?
+            .to_message(SerializationFormats::JSON)?
         };
 
         let signature = self.key_manager.sign(&ev.serialize()?)?;
@@ -149,7 +149,7 @@ impl Keri {
                 data: vec![Seal::Digest(dig_seal)],
             }),
         }
-        .to_message(&SerializationFormats::JSON)?;
+        .to_message(SerializationFormats::JSON)?;
 
         let signature = self.key_manager.sign(&ev.serialize()?)?;
         let ixn = ev.sign(vec![AttachedSignaturePrefix::new(
@@ -274,7 +274,7 @@ impl Keri {
                 },
             }),
         }
-        .to_message(&SerializationFormats::JSON)?
+        .to_message(SerializationFormats::JSON)?
         .sign(vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
             signature,
