@@ -52,6 +52,47 @@ impl From<SequenceIndex<'_>> for Vec<u8> {
     }
 }
 
+impl LmdbEventDatabase {
+    pub fn new<'p, P>(path: P) -> Result<Self, StoreError>
+    where
+        P: Into<&'p Path>,
+    {
+        let mut m = Manager::<SafeModeEnvironment>::singleton().write()?;
+        let created_arc = m.get_or_create(path, Rkv::new::<SafeMode>)?;
+        let env = created_arc.read()?;
+
+        Ok(Self {
+            events: env.open_single("evts", StoreOptions::create())?,
+            datetime_stamps: env.open_single("dtss", StoreOptions::create())?,
+            signatures: env.open_multi("sigs", StoreOptions::create())?,
+            receipts_nt: env.open_multi("rcts", StoreOptions::create())?,
+            escrowed_receipts_nt: env.open_multi("ures", StoreOptions::create())?,
+            receipts_t: env.open_multi("vrcs", StoreOptions::create())?,
+            escrowed_receipts_t: env.open_multi("vres", StoreOptions::create())?,
+            key_event_logs: env.open_multi("kels", StoreOptions::create())?,
+            partially_signed_events: env.open_multi("pses", StoreOptions::create())?,
+            out_of_order_events: env.open_multi("ooes", StoreOptions::create())?,
+            likely_duplicitous_events: env.open_multi("ldes", StoreOptions::create())?,
+            duplicitous_events: env.open_multi("dels", StoreOptions::create())?,
+            env: created_arc.clone(),
+        })
+    }
+
+    fn write_ref_multi(
+        &self,
+        table: &MultiStore<SafeModeDatabase>,
+        key: &[u8],
+        data: &str,
+    ) -> Result<(), StoreError> {
+        let lock = self.env.read()?;
+        let mut writer = lock.write()?;
+
+        table.put(&mut writer, &key, &Value::Str(&data))?;
+
+        writer.commit()
+    }
+}
+
 impl EventDatabase for LmdbEventDatabase {
     type Error = StoreError;
 
@@ -153,14 +194,11 @@ impl EventDatabase for LmdbEventDatabase {
         sn: u64,
         dig: &SelfAddressingPrefix,
     ) -> Result<(), Self::Error> {
-        let lock = self.env.read()?;
-        let mut writer = lock.write()?;
-        let key: Vec<u8> = SequenceIndex(pref, sn).into();
-
-        self.key_event_logs
-            .put(&mut writer, &key, &Value::Str(&dig.to_str()))?;
-
-        writer.commit()
+        self.write_ref_multi(
+            &self.key_event_logs,
+            &Vec::from(SequenceIndex(pref, sn)),
+            &dig.to_str(),
+        )
     }
 
     fn escrow_partially_signed_event(
@@ -169,14 +207,11 @@ impl EventDatabase for LmdbEventDatabase {
         sn: u64,
         dig: &SelfAddressingPrefix,
     ) -> Result<(), Self::Error> {
-        let lock = self.env.read()?;
-        let mut writer = lock.write()?;
-        let key: Vec<u8> = SequenceIndex(pref, sn).into();
-
-        self.partially_signed_events
-            .put(&mut writer, &key, &Value::Str(&dig.to_str()))?;
-
-        writer.commit()
+        self.write_ref_multi(
+            &self.partially_signed_events,
+            &Vec::from(SequenceIndex(pref, sn)),
+            &dig.to_str(),
+        )
     }
 
     fn escrow_out_of_order_event(
@@ -185,14 +220,11 @@ impl EventDatabase for LmdbEventDatabase {
         sn: u64,
         dig: &SelfAddressingPrefix,
     ) -> Result<(), Self::Error> {
-        let lock = self.env.read()?;
-        let mut writer = lock.write()?;
-        let key: Vec<u8> = SequenceIndex(pref, sn).into();
-
-        self.partially_signed_events
-            .put(&mut writer, &key, &Value::Str(&dig.to_str()))?;
-
-        writer.commit()
+        self.write_ref_multi(
+            &self.out_of_order_events,
+            &Vec::from(SequenceIndex(pref, sn)),
+            &dig.to_str(),
+        )
     }
 
     fn likely_duplicitous_event(
@@ -201,14 +233,11 @@ impl EventDatabase for LmdbEventDatabase {
         sn: u64,
         dig: &SelfAddressingPrefix,
     ) -> Result<(), Self::Error> {
-        let lock = self.env.read()?;
-        let mut writer = lock.write()?;
-        let key: Vec<u8> = SequenceIndex(pref, sn).into();
-
-        self.likely_duplicitous_events
-            .put(&mut writer, &key, &Value::Str(&dig.to_str()))?;
-
-        writer.commit()
+        self.write_ref_multi(
+            &self.likely_duplicitous_events,
+            &Vec::from(SequenceIndex(pref, sn)),
+            &dig.to_str(),
+        )
     }
 
     fn duplicitous_event(
@@ -217,14 +246,11 @@ impl EventDatabase for LmdbEventDatabase {
         sn: u64,
         dig: &SelfAddressingPrefix,
     ) -> Result<(), Self::Error> {
-        let lock = self.env.read()?;
-        let mut writer = lock.write()?;
-        let key: Vec<u8> = SequenceIndex(pref, sn).into();
-
-        self.duplicitous_events
-            .put(&mut writer, &key, &Value::Str(&dig.to_str()))?;
-
-        writer.commit()
+        self.write_ref_multi(
+            &self.duplicitous_events,
+            &Vec::from(SequenceIndex(pref, sn)),
+            &dig.to_str(),
+        )
     }
 
     fn add_nt_receipt_for_event(
@@ -234,17 +260,11 @@ impl EventDatabase for LmdbEventDatabase {
         signer: &IdentifierPrefix,
         sig: &AttachedSignaturePrefix,
     ) -> Result<(), Self::Error> {
-        let lock = self.env.read()?;
-        let mut writer = lock.write()?;
-        let key: Vec<u8> = ContentIndex(pref, dig).into();
-
-        self.duplicitous_events.put(
-            &mut writer,
-            &key,
-            &Value::Str(&[signer.to_str(), sig.to_str()].concat()),
-        )?;
-
-        writer.commit()
+        self.write_ref_multi(
+            &self.receipts_nt,
+            &Vec::from(ContentIndex(pref, dig)),
+            &[signer.to_str(), sig.to_str()].concat(),
+        )
     }
 
     fn add_t_receipt_for_event(
@@ -254,16 +274,10 @@ impl EventDatabase for LmdbEventDatabase {
         signer: &IdentifierPrefix,
         sig: &AttachedSignaturePrefix,
     ) -> Result<(), Self::Error> {
-        let lock = self.env.read()?;
-        let mut writer = lock.write()?;
-        let key: Vec<u8> = ContentIndex(pref, dig).into();
-
-        self.duplicitous_events.put(
-            &mut writer,
-            &key,
-            &Value::Str(&[signer.to_str(), sig.to_str()].concat()),
-        )?;
-
-        writer.commit()
+        self.write_ref_multi(
+            &self.receipts_t,
+            &Vec::from(ContentIndex(pref, dig)),
+            &[signer.to_str(), sig.to_str()].concat(),
+        )
     }
 }
