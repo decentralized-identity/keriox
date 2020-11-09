@@ -2,6 +2,7 @@ use crate::{
     prefix::{AttachedSignaturePrefix, IdentifierPrefix, SelfAddressingPrefix},
     state::IdentifierState,
 };
+#[cfg(feature = "lmdb")]
 pub mod lmdb;
 
 /// Event Database

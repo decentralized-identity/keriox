@@ -1,17 +1,21 @@
 use super::EventDatabase;
-use crate::prefix::{
-    AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
+use crate::{
+    prefix::{
+        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
+    },
+    state::IdentifierState,
 };
+use bincode;
 use chrono::prelude::*;
 use rkv::{
-    backend::{BackendDatabase, BackendEnvironment, SafeModeDatabase, SafeModeEnvironment},
+    backend::{
+        BackendDatabase, BackendEnvironment, SafeMode, SafeModeDatabase, SafeModeEnvironment,
+    },
     value::Type,
-    DataError, Manager, MultiStore, Rkv, SingleStore, StoreError, Value,
+    DataError, Manager, MultiStore, Rkv, SingleStore, StoreError, StoreOptions, Value,
 };
-use std::{
-    str::FromStr,
-    sync::{Arc, RwLock},
-};
+use std::path::Path;
+use std::sync::{Arc, RwLock};
 
 pub struct LmdbEventDatabase {
     events: SingleStore<SafeModeDatabase>,
@@ -60,9 +64,14 @@ impl EventDatabase for LmdbEventDatabase {
         let reader = lock.read()?;
         let seq_index: Vec<u8> = SequenceIndex(pref, sn).into();
 
-        let dig = match self.key_event_logs.get(&reader, &seq_index)?.last() {
+        let dig: SelfAddressingPrefix = match self.key_event_logs.get(&reader, &seq_index)?.last() {
             Some(v) => match v?.1 {
-                Value::Str(s) => SelfAddressingPrefix::from_str(s).map_err(|e| StoreError)?,
+                Value::Blob(b) => {
+                    bincode::deserialize(b).map_err(|e| DataError::DecodingError {
+                        value_type: Type::Blob,
+                        err: e,
+                    })?
+                }
                 _ => {
                     return Err(StoreError::DataError(DataError::UnexpectedType {
                         expected: Type::Str,
@@ -90,14 +99,10 @@ impl EventDatabase for LmdbEventDatabase {
         ret
     }
 
-    fn get_keys_for_prefix(
+    fn get_state_for_prefix(
         &self,
         pref: &IdentifierPrefix,
-    ) -> Result<Option<Vec<BasicPrefix>>, Self::Error> {
-        let lock = self.env.read()?;
-        let reader = lock.read()?;
-        let key: Vec<u8> = SequenceIndex(pref, 0).into();
-
+    ) -> Result<Option<IdentifierState>, Self::Error> {
         todo!()
     }
 

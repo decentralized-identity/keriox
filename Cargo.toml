@@ -13,7 +13,7 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 exp_ursa = []
-lmdb = ["rkv"]
+lmdb = ["rkv", "bincode"]
 default = ["lmdb"]
 
 [dependencies]
@@ -32,3 +32,4 @@ blake3 = { version = "0.3", default-features = false }
 chrono = "0.4"
 
 rkv = { version = "0.15", optional = true }
+bincode = { version = "1.3.1", optional = true }
