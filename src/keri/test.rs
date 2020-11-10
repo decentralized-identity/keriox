@@ -22,7 +22,7 @@ fn test_direct_mode() -> Result<(), Error> {
     let mut msg_to_bob = alice.get_last_event();
 
     // Send it to bob.
-    let mut msg_to_alice = bob.process_events(&msg_to_bob)?;
+    let mut msg_to_alice = bob.process_events(&msg_to_bob.as_bytes())?;
     {
         // Check if bob's state of alice is the same as current alice state.
         let alice_state_in_bob = bob
@@ -33,7 +33,7 @@ fn test_direct_mode() -> Result<(), Error> {
     }
 
     // Send message from bob to alice and get alice's receipts.
-    msg_to_bob = alice.process_events(&msg_to_alice)?;
+    msg_to_bob = alice.process_events(&msg_to_alice.as_bytes())?;
 
     {
         // Check if alice's state of bob is the same as current bob state.
@@ -46,7 +46,7 @@ fn test_direct_mode() -> Result<(), Error> {
     }
 
     // Send it to bob.
-    bob.process_events(&msg_to_bob)?;
+    bob.process_events(&msg_to_bob.as_bytes())?;
     assert_eq!(bob.receipts[&0].len(), 1);
 
     // Rotation event.
@@ -56,7 +56,7 @@ fn test_direct_mode() -> Result<(), Error> {
 
     // Send rotation event to bob.
     msg_to_bob = alice.get_last_event();
-    msg_to_alice = bob.process_events(&msg_to_bob)?;
+    msg_to_alice = bob.process_events(&msg_to_bob.as_bytes())?;
     {
         // Check if bob's state of alice is the same as current alice state.
         let alice_state_in_bob = bob
@@ -67,7 +67,7 @@ fn test_direct_mode() -> Result<(), Error> {
     }
 
     // Send bob's receipt to alice.
-    alice.process_events(&msg_to_alice)?;
+    alice.process_events(&msg_to_alice.as_bytes())?;
     assert_eq!(alice.receipts.len(), 2);
     assert_eq!(alice.escrow_sigs.len(), 0);
 
@@ -78,7 +78,7 @@ fn test_direct_mode() -> Result<(), Error> {
 
     // Send interaction event to bob.
     msg_to_bob = alice.get_last_event();
-    msg_to_alice = bob.process_events(&msg_to_bob)?;
+    msg_to_alice = bob.process_events(&msg_to_bob.as_bytes())?;
 
     {
         // Check if bob's state of alice is the same as current alice state.
@@ -89,7 +89,7 @@ fn test_direct_mode() -> Result<(), Error> {
         assert_eq!(*alice_state_in_bob, alice.get_state());
     }
 
-    alice.process_events(&msg_to_alice)?;
+    alice.process_events(&msg_to_alice.as_bytes())?;
     assert_eq!(alice.receipts.len(), 3);
     assert_eq!(alice.escrow_sigs.len(), 0);
 

@@ -10,11 +10,15 @@ use nom::{
 };
 
 // TODO this could be a lot nicer, but is currently written to be careful and "easy" to follow
-pub fn attached_signature(s: &str) -> nom::IResult<&str, AttachedSignaturePrefix> {
+pub fn attached_signature(s: &[u8]) -> nom::IResult<&[u8], AttachedSignaturePrefix> {
     let (more, type_c) = take(1u8)(s)?;
 
+    const a: &'static [u8] = "A".as_bytes();
+    const b: &'static [u8] = "B".as_bytes();
+    const z: &'static [u8] = "0".as_bytes();
+
     match type_c {
-        "A" => {
+        a => {
             let (maybe_sig, index_c) = take(1u8)(more)?;
 
             let index =
@@ -30,7 +34,7 @@ pub fn attached_signature(s: &str) -> nom::IResult<&str, AttachedSignaturePrefix
                 AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig, index),
             ))
         }
-        "B" => {
+        b => {
             let (maybe_sig, index_c) = take(1u8)(more)?;
 
             let index =
@@ -46,10 +50,10 @@ pub fn attached_signature(s: &str) -> nom::IResult<&str, AttachedSignaturePrefix
                 AttachedSignaturePrefix::new(SelfSigning::ECDSAsecp256k1Sha256, sig, index),
             ))
         }
-        "0" => {
+        z => {
             let (maybe_count, type_c_2) = take(1u8)(more)?;
             match type_c_2 {
-                "A" => {
+                a => {
                     let (maybe_sig, index_c) = take(2u8)(maybe_count)?;
 
                     let index = b64_to_num(index_c)
@@ -75,12 +79,12 @@ pub fn attached_signature(s: &str) -> nom::IResult<&str, AttachedSignaturePrefix
 #[test]
 fn test() {
     assert_eq!(
-        attached_signature("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
-        Ok(("", AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, vec![0u8; 64], 0)))
+        attached_signature("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".as_bytes()),
+        Ok(("".as_bytes(), AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, vec![0u8; 64], 0)))
     );
 
     assert_eq!(
-        attached_signature("BCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
-        Ok(("AA", AttachedSignaturePrefix::new(SelfSigning::ECDSAsecp256k1Sha256, vec![0u8; 64], 2)))
+        attached_signature("BCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".as_bytes()),
+        Ok(("AA".as_bytes(), AttachedSignaturePrefix::new(SelfSigning::ECDSAsecp256k1Sha256, vec![0u8; 64], 2)))
     );
 }

@@ -163,7 +163,7 @@ impl Keri {
         Ok(ixn)
     }
 
-    pub fn process_events(&mut self, msg: &str) -> Result<String, Error> {
+    pub fn process_events(&mut self, msg: &[u8]) -> Result<String, Error> {
         let events = signed_event_stream(msg)
             .map_err(|_| Error::DeserializationError)?
             .1;
