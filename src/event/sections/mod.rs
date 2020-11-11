@@ -139,7 +139,7 @@ fn threshold() {
         "B8T4xkb8En6o0Uo5ZImco1_08gT5zcYnXzizUPVNzicw",
     ]
     .iter()
-    .map(|k| BasicPrefix::from_str(k).unwrap())
+    .map(|k| k.parse().unwrap())
     .collect();
 
     let nxt = nxt_commitment(sith, &keys, SelfAddressing::Blake3_256);
