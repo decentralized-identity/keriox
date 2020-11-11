@@ -32,7 +32,40 @@ pub trait EventDatabase {
     fn get_state_for_prefix(
         &self,
         pref: &IdentifierPrefix,
-    ) -> Result<Option<IdentifierState>, Self::Error>;
+    ) -> Result<Option<IdentifierState>, Self::Error> {
+        // start with empty state
+        let mut state = IdentifierState::default();
+
+        // starting from inception
+        for sn in 0.. {
+            // read the latest raw event
+            let raw = match self.last_event_at_sn(pref, sn)? {
+                Some(r) => r,
+                None => {
+                    if sn == 0 {
+                        // no inception event, no state
+                        return Ok(None);
+                    } else {
+                        // end of KEL, stop looping
+                        break;
+                    }
+                }
+            };
+            // parse event
+            // FIXME, DONT UNWRAP
+            let parsed = message(&String::from_utf8(raw).unwrap()).unwrap().1;
+            // apply it to the state
+            // TODO avoid .clone()
+            state = match state.clone().apply(&parsed) {
+                Ok(s) => s,
+                // will happen when a recovery has overridden some part of the KEL,
+                // stop processing here
+                Err(_) => break,
+            }
+        }
+
+        Ok(Some(state))
+    }
 
     /// Get Children of Prefix
     ///
@@ -40,8 +73,10 @@ pub trait EventDatabase {
     /// given Prefix
     fn get_children_of_prefix(
         &self,
-        pref: &IdentifierPrefix,
-    ) -> Result<Option<Vec<IdentifierPrefix>>, Self::Error>;
+        _pref: &IdentifierPrefix,
+    ) -> Result<Option<Vec<IdentifierPrefix>>, Self::Error> {
+        todo!()
+    }
 
     /// Get Parent of Prefix
     ///
@@ -49,8 +84,10 @@ pub trait EventDatabase {
     /// if there is one
     fn get_parent_of_prefix(
         &self,
-        pref: &IdentifierPrefix,
-    ) -> Result<Option<IdentifierPrefix>, Self::Error>;
+        _pref: &IdentifierPrefix,
+    ) -> Result<Option<IdentifierPrefix>, Self::Error> {
+        todo!()
+    }
 
     /// Log Event
     ///

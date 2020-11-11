@@ -127,41 +127,16 @@ impl EventDatabase for LmdbEventDatabase {
         };
 
         let dig_index: Vec<u8> = ContentIndex(pref, &dig).into();
-        let ret = match self.events.get(&reader, &dig_index)? {
+        match self.events.get(&reader, &dig_index)? {
             Some(v) => match v {
                 Value::Blob(b) => Ok(Some(b.to_vec())),
-                _ => {
-                    return Err(StoreError::DataError(DataError::UnexpectedType {
-                        expected: Type::Str,
-                        actual: Type::from_tag(0u8)?,
-                    }))
-                }
+                _ => Err(StoreError::DataError(DataError::UnexpectedType {
+                    expected: Type::Blob,
+                    actual: Type::from_tag(0u8)?,
+                })),
             },
-            None => return Ok(None),
-        };
-
-        ret
-    }
-
-    fn get_state_for_prefix(
-        &self,
-        pref: &IdentifierPrefix,
-    ) -> Result<Option<IdentifierState>, Self::Error> {
-        todo!()
-    }
-
-    fn get_children_of_prefix(
-        &self,
-        pref: &IdentifierPrefix,
-    ) -> Result<Option<Vec<IdentifierPrefix>>, Self::Error> {
-        todo!()
-    }
-
-    fn get_parent_of_prefix(
-        &self,
-        pref: &IdentifierPrefix,
-    ) -> Result<Option<IdentifierPrefix>, Self::Error> {
-        todo!()
+            None => Ok(None),
+        }
     }
 
     fn log_event(
