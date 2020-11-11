@@ -5,6 +5,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
+use std::str::FromStr;
 pub mod seal;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
@@ -126,4 +127,25 @@ pub struct InceptionWitnessConfig {
 
     #[serde(rename = "wits")]
     pub initial_witnesses: Vec<BasicPrefix>,
+}
+
+#[test]
+fn threshold() {
+    // test data taken from kid0003
+    let sith = 2;
+    let keys: Vec<BasicPrefix> = [
+        "BrHLayDN-mXKv62DAjFLX1_Y5yEUe0vA9YPe_ihiKYHE",
+        "BujP_71bmWFVcvFmkE9uS8BTZ54GIstZ20nj_UloF8Rk",
+        "B8T4xkb8En6o0Uo5ZImco1_08gT5zcYnXzizUPVNzicw",
+    ]
+    .iter()
+    .map(|k| BasicPrefix::from_str(k).unwrap())
+    .collect();
+
+    let nxt = nxt_commitment(sith, &keys, SelfAddressing::Blake3_256);
+
+    assert_eq!(
+        &nxt.to_str(),
+        "ED8YvDrXvGuaIVZ69XsBVA5YN2pNTfQOFwgeloVHeWKs"
+    )
 }
