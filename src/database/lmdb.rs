@@ -287,3 +287,17 @@ impl EventDatabase for LmdbEventDatabase {
         )
     }
 }
+
+#[test]
+fn basic() -> Result<(), StoreError> {
+    use super::test_db;
+    use std::fs;
+    use tempfile::Builder;
+
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    fs::create_dir_all(root.path()).unwrap();
+
+    let db = LmdbEventDatabase::new(root.path())?;
+
+    test_db(db)
+}

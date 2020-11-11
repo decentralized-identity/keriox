@@ -1,4 +1,5 @@
 use crate::{
+    event_message::parse::message,
     prefix::{AttachedSignaturePrefix, IdentifierPrefix, SelfAddressingPrefix},
     state::IdentifierState,
 };
@@ -133,4 +134,38 @@ pub trait EventDatabase {
         signer: &IdentifierPrefix,
         sig: &AttachedSignaturePrefix,
     ) -> Result<(), Self::Error>;
+}
+
+pub(crate) fn test_db<D: EventDatabase>(db: D) -> Result<(), D::Error> {
+    use crate::{derivation::self_addressing::SelfAddressing, event::event_data::EventData};
+
+    let raw = r#"{"vs":"KERI10JSON000159_","pre":"ECui-E44CqN2U7uffCikRCp_YKLkPrA4jsTZ_A0XRLzc","sn":"0","ilk":"icp","sith":"2","keys":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"nxt":"Evhf3437ZRRnVhT0zOxo_rBX_GxpGoAnLuzrVlDK8ZdM","toad":"0","wits":[],"cnfg":[]}extra data"#;
+    let sigs: Vec<AttachedSignaturePrefix> = [
+        "AAJ66nrRaNjltE31FZ4mELVGUMc_XOqOAOXZQjZCEAvbeJQ8r3AnccIe1aepMwgoQUeFdIIQLeEDcH8veLdud_DQ",
+        "ABTQYtYWKh3ScYij7MOZz3oA6ZXdIDLRrv0ObeSb4oc6LYrR1LfkICfXiYDnp90tAdvaJX5siCLjSD3vfEM9ADDA",
+        "ACQTgUl4zF6U8hfDy8wwUva-HCAiS8LQuP7elKAHqgS8qtqv5hEj3aTjwE91UtgAX2oCgaw98BCYSeT5AuY1SpDA",
+    ]
+    .iter()
+    .map(|raw| raw.parse().unwrap())
+    .collect();
+
+    let event = message(raw).unwrap().1.event;
+    let dig = SelfAddressing::Blake3_256.derive(raw.as_bytes());
+
+    db.log_event(&event.prefix, &dig, raw.as_bytes(), &sigs)?;
+    db.finalise_event(&event.prefix, 0, &dig)?;
+
+    let written = db.last_event_at_sn(&event.prefix, 0)?;
+
+    assert_eq!(written, Some(raw.as_bytes().to_vec()));
+
+    let state = db.get_state_for_prefix(&event.prefix)?.unwrap();
+
+    assert_eq!(&state.prefix, &event.prefix);
+    assert!(match event.event_data {
+        EventData::Icp(icp) => icp.key_config == state.current,
+        _ => false,
+    });
+
+    Ok(())
 }
