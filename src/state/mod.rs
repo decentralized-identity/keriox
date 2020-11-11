@@ -31,7 +31,7 @@ impl IdentifierState {
     /// Apply
     ///
     /// validates and applies the semantic rules of the event to the event state
-    fn apply<T: EventSemantics>(self, event: &T) -> Result<Self, Error> {
+    pub fn apply<T: EventSemantics>(self, event: &T) -> Result<Self, Error> {
         event.apply_to(self)
     }
 

@@ -22,7 +22,7 @@ fn cbor_message(s: &str) -> nom::IResult<&str, EventMessage> {
     }
 }
 
-fn message(s: &str) -> nom::IResult<&str, EventMessage> {
+pub fn message(s: &str) -> nom::IResult<&str, EventMessage> {
     alt((json_message, cbor_message))(s)
 }
 

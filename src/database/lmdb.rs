@@ -1,9 +1,6 @@
 use super::EventDatabase;
-use crate::{
-    prefix::{
-        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
-    },
-    state::IdentifierState,
+use crate::prefix::{
+    AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
 };
 use bincode;
 use chrono::prelude::*;
@@ -14,6 +11,7 @@ use rkv::{
     value::Type,
     DataError, Manager, MultiStore, Rkv, SingleStore, StoreError, StoreOptions, Value,
 };
+use serde::Serialize;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 
@@ -58,7 +56,8 @@ impl LmdbEventDatabase {
         P: Into<&'p Path>,
     {
         let mut m = Manager::<SafeModeEnvironment>::singleton().write()?;
-        let created_arc = m.get_or_create(path, Rkv::new::<SafeMode>)?;
+        let created_arc =
+            m.get_or_create_with_capacity(path, 12, Rkv::with_capacity::<SafeMode>)?;
         let env = created_arc.read()?;
 
         Ok(Self {
@@ -78,16 +77,20 @@ impl LmdbEventDatabase {
         })
     }
 
-    fn write_ref_multi(
+    fn write_ref_multi<D: Serialize>(
         &self,
         table: &MultiStore<SafeModeDatabase>,
         key: &[u8],
-        data: &str,
+        data: &D,
     ) -> Result<(), StoreError> {
         let lock = self.env.read()?;
         let mut writer = lock.write()?;
 
-        table.put(&mut writer, &key, &Value::Str(&data))?;
+        table.put(
+            &mut writer,
+            &key,
+            &Value::Blob(&bincode::serialize(data).unwrap()),
+        )?;
 
         writer.commit()
     }
@@ -115,7 +118,7 @@ impl EventDatabase for LmdbEventDatabase {
                 }
                 _ => {
                     return Err(StoreError::DataError(DataError::UnexpectedType {
-                        expected: Type::Str,
+                        expected: Type::Blob,
                         actual: Type::from_tag(0u8)?,
                     }))
                 }
@@ -178,8 +181,11 @@ impl EventDatabase for LmdbEventDatabase {
 
         // insert signatures for event
         for sig in sigs.iter() {
-            self.signatures
-                .put(&mut writer, &key, &Value::Str(&sig.to_str()))?;
+            self.signatures.put(
+                &mut writer,
+                &key,
+                &Value::Blob(&bincode::serialize(&sig).unwrap()),
+            )?;
         }
 
         // insert event itself
@@ -197,7 +203,7 @@ impl EventDatabase for LmdbEventDatabase {
         self.write_ref_multi(
             &self.key_event_logs,
             &Vec::from(SequenceIndex(pref, sn)),
-            &dig.to_str(),
+            dig,
         )
     }
 
@@ -210,7 +216,7 @@ impl EventDatabase for LmdbEventDatabase {
         self.write_ref_multi(
             &self.partially_signed_events,
             &Vec::from(SequenceIndex(pref, sn)),
-            &dig.to_str(),
+            dig,
         )
     }
 
@@ -223,7 +229,7 @@ impl EventDatabase for LmdbEventDatabase {
         self.write_ref_multi(
             &self.out_of_order_events,
             &Vec::from(SequenceIndex(pref, sn)),
-            &dig.to_str(),
+            dig,
         )
     }
 
@@ -236,7 +242,7 @@ impl EventDatabase for LmdbEventDatabase {
         self.write_ref_multi(
             &self.likely_duplicitous_events,
             &Vec::from(SequenceIndex(pref, sn)),
-            &dig.to_str(),
+            dig,
         )
     }
 
@@ -249,7 +255,7 @@ impl EventDatabase for LmdbEventDatabase {
         self.write_ref_multi(
             &self.duplicitous_events,
             &Vec::from(SequenceIndex(pref, sn)),
-            &dig.to_str(),
+            dig,
         )
     }
 
@@ -263,7 +269,7 @@ impl EventDatabase for LmdbEventDatabase {
         self.write_ref_multi(
             &self.receipts_nt,
             &Vec::from(ContentIndex(pref, dig)),
-            &[signer.to_str(), sig.to_str()].concat(),
+            &(signer, sig),
         )
     }
 
@@ -277,7 +283,7 @@ impl EventDatabase for LmdbEventDatabase {
         self.write_ref_multi(
             &self.receipts_t,
             &Vec::from(ContentIndex(pref, dig)),
-            &[signer.to_str(), sig.to_str()].concat(),
+            &(signer, sig),
         )
     }
 }
