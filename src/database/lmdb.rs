@@ -1,6 +1,9 @@
 use super::EventDatabase;
-use crate::prefix::{
-    AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
+use crate::{
+    error::Error,
+    prefix::{
+        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
+    },
 };
 use bincode;
 use chrono::prelude::*;

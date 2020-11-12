@@ -52,4 +52,7 @@ pub enum Error {
 
     #[error("Improper Prefix Type")]
     ImproperPrefixType,
+
+    #[error("Storage error")]
+    StorageError,
 }
