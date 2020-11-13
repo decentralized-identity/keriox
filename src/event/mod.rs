@@ -33,15 +33,18 @@ impl EventSemantics for Event {
             EventData::Icp(_) => {
                 // ICP events require the state to be uninitialized
                 if state.prefix != IdentifierPrefix::default() || self.sn != 0 {
-                    return Err(Error::SemanticError("SN is not correct".to_string()));
+                    return Err(Error::EventDuplicateError);
                 }
             }
             _ => {
-                // prefix must equal. sn must be incremented
+                // prefix must equal.
                 if self.prefix != state.prefix {
                     return Err(Error::SemanticError("Prefix does not match".to_string()));
-                } else if self.sn != state.sn + 1 {
-                    return Err(Error::SemanticError("SN is not correct".to_string()));
+                // sn must be incremented
+                } else if self.sn < state.sn + 1 {
+                    return Err(Error::EventDuplicateError);
+                } else if self.sn > state.sn + 1 {
+                    return Err(Error::EventOutOfOrderError);
                 }
             }
         };

@@ -4,6 +4,7 @@ use crate::{
     error::Error,
     event::sections::KeyConfig,
     event_message::{parse::message, SignedEventMessage},
+    prefix::AttachedSignaturePrefix,
     prefix::IdentifierPrefix,
     state::IdentifierState,
 };
@@ -27,6 +28,8 @@ pub trait Processable {
     fn sn(&self) -> u64;
 
     fn raw(&self) -> &[u8];
+
+    fn sigs(&self) -> &[AttachedSignaturePrefix];
 }
 
 impl Processable for Deserialized<'_, SignedEventMessage> {
@@ -48,6 +51,10 @@ impl Processable for Deserialized<'_, SignedEventMessage> {
 
     fn raw(&self) -> &[u8] {
         &self.raw
+    }
+
+    fn sigs(&self) -> &[AttachedSignaturePrefix] {
+        &self.deserialized.signatures
     }
 }
 
@@ -104,15 +111,34 @@ impl<D: EventDatabase> EventProcessor<D> {
         E: Processable,
     {
         let dig = SelfAddressing::Blake3_256.derive(event.raw());
-        self.db.log_event(event.id(), &dig, event.raw(), sigs)?;
+        self.db
+            .log_event(event.id(), &dig, event.raw(), event.sigs())
+            .map_err(|_| Error::StorageError)?;
         // get state for id (TODO cache?)
         self.compute_state(event.id())
             // get empty state if there is no state yet
             .and_then(|opt| Ok(opt.map_or_else(|| IdentifierState::default(), |s| s)))
             // process the event update
             .and_then(|state| event.apply_to(state))
-            // TODO see why application failed and reject or escrow accordingly
-            .map_err(|e| e)
+            // see why application failed and reject or escrow accordingly
+            .map_err(|e| match e {
+                Error::EventOutOfOrderError => {
+                    match self
+                        .db
+                        .escrow_out_of_order_event(event.id(), event.sn(), &dig)
+                    {
+                        Err(_) => Error::StorageError,
+                        _ => e,
+                    }
+                }
+                Error::EventDuplicateError => {
+                    match self.db.duplicitous_event(event.id(), event.sn(), &dig) {
+                        Err(_) => Error::StorageError,
+                        _ => e,
+                    }
+                }
+                _ => e,
+            })
             // verify the signatures on the event
             .and_then(|state| {
                 event.verify_using(&state.current)?;
