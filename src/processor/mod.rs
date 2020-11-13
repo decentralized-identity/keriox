@@ -141,7 +141,22 @@ impl<D: EventDatabase> EventProcessor<D> {
             })
             // verify the signatures on the event
             .and_then(|state| {
-                event.verify_using(&state.current)?;
+                event
+                    .verify_using(&state.current)
+                    // escrow partially signed event
+                    .map_err(|e| match e {
+                        Error::NotEnoughSigsError => {
+                            match self.db.escrow_partially_signed_event(
+                                event.id(),
+                                event.sn(),
+                                &dig,
+                            ) {
+                                Err(_) => Error::StorageError,
+                                _ => e,
+                            }
+                        }
+                        _ => e,
+                    })?;
                 self.db
                     .finalise_event(event.id(), event.sn(), &dig)
                     .map_err(|_| Error::StorageError)?;
