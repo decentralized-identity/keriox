@@ -235,8 +235,7 @@ fn test_process() -> Result<(), Error> {
     // Process the same rotation event one more time.
     let id_state = event_processor.process(&deserialized_rot);
     assert!(id_state.is_err());
-    // TODO Not proper error: Err(SemanticError("Last event does not match previous event"))
-    // assert!(matches!(id_state, Err(Error::EventDuplicateError)));
+    assert!(matches!(id_state, Err(Error::EventDuplicateError)));
 
     // Construct partially signed interaction event.
     let deserialized_ixn = {
@@ -248,8 +247,7 @@ fn test_process() -> Result<(), Error> {
         ];
         let msg = message(ixn_raw).unwrap().1;
         // Sign event with 1 of 3 signatures.
-        let sigs = vec![ixn_sigs[0]
-            .parse().unwrap()];
+        let sigs = vec![ixn_sigs[0].parse().unwrap()];
         Deserialized {
             raw: &msg.serialize().unwrap(),
             deserialized: msg.sign(sigs),
@@ -287,8 +285,7 @@ fn test_process() -> Result<(), Error> {
 
     let id_state = event_processor.process(&out_of_order_ixn);
     assert!(id_state.is_err());
-    // TODO Not proper error: Err(SemanticError("Last event does not match previous event"))
-    // assert!(matches!(id_state, Err(Error::EventOutOfOrderError)));
+    assert!(matches!(id_state, Err(Error::EventOutOfOrderError)));
 
     // Check if processed event is in kel. It shouldn't.
     let ixn_from_db = event_processor

@@ -139,30 +139,36 @@ impl EventSemantics for EventMessage {
                 }
             }
             EventData::Rot(ref rot) => {
-                // Check if hashes of state.last event and previous_event_hash matches.
-                if rot.previous_event_hash.verify_binding(&state.last) {
-                    self.event.apply_to(IdentifierState {
-                        last: self.serialize()?,
-                        ..state
-                    })
-                } else {
-                    return Err(Error::SemanticError(
-                        "Last event does not match previous event".to_string(),
-                    ));
-                }
+                // Event may be out of order or duplicated, so before checking
+                // previous event hash binding and update state last, apply it
+                // to the state. It will return EventOutOfOrderError or
+                // EventDuplicateError in that cases.
+                self.event.apply_to(state.clone()).and_then(|next_state| {
+                    if rot.previous_event_hash.verify_binding(&state.last) {
+                        Ok(IdentifierState {
+                            last: self.serialize()?,
+                            ..next_state
+                        })
+                    } else {
+                        Err(Error::SemanticError(
+                            "Last event does not match previous event".to_string(),
+                        ))
+                    }
+                })
             }
             EventData::Ixn(ref inter) => {
-                // Check if hashes of state.last event and previous_event_hash matches.
-                if inter.previous_event_hash.verify_binding(&state.last) {
-                    self.event.apply_to(IdentifierState {
-                        last: self.serialize()?,
-                        ..state
-                    })
-                } else {
-                    return Err(Error::SemanticError(
-                        "Last event does not match previous event".to_string(),
-                    ));
-                }
+                self.event.apply_to(state.clone()).and_then(|next_state| {
+                    if inter.previous_event_hash.verify_binding(&state.last) {
+                        Ok(IdentifierState {
+                            last: self.serialize()?,
+                            ..next_state
+                        })
+                    } else {
+                        Err(Error::SemanticError(
+                            "Last event does not match previous event".to_string(),
+                        ))
+                    }
+                })
             }
             _ => todo!(),
         }
