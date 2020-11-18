@@ -38,6 +38,15 @@ pub enum Error {
     #[error("Error while applying event: {0}")]
     SemanticError(String),
 
+    #[error("Error while applying event: out of order event")]
+    EventOutOfOrderError,
+
+    #[error("Error while aplying event: duplicate event")]
+    EventDuplicateError,
+
+    #[error("Not enough signatures while verifing")]
+    NotEnoughSigsError,
+
     #[error("validation error")]
     CryptoError(CryptoError),
 
