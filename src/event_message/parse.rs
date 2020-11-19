@@ -22,7 +22,7 @@ fn cbor_message(s: &[u8]) -> nom::IResult<&[u8], EventMessage> {
     }
 }
 
-fn message(s: &[u8]) -> nom::IResult<&[u8], EventMessage> {
+pub fn message(s: &[u8]) -> nom::IResult<&[u8], EventMessage> {
     alt((json_message, cbor_message))(s)
 }
 
