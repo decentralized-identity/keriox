@@ -10,7 +10,7 @@ use crate::{
         inception::InceptionEvent, interaction::InteractionEvent, rotation::RotationEvent,
         EventData,
     },
-    event::sections::{serialize_for_commitment, InceptionWitnessConfig, KeyConfig, WitnessConfig},
+    event::sections::{nxt_commitment, InceptionWitnessConfig, KeyConfig, WitnessConfig},
     event::Event,
     event::SerializationFormats,
     prefix::{
@@ -133,7 +133,7 @@ fn test_update_identifier_state(
 
     let current_pref = Basic::Ed25519.derive(cur_pk.clone());
     let next_prefix = Basic::Ed25519.derive(next_pk.clone());
-    let next_dig = SelfAddressing::Blake3_256.derive(&serialize_for_commitment(1, &[next_prefix]));
+    let next_dig = nxt_commitment(1, &[next_prefix], SelfAddressing::Blake3_256);
 
     // If `history_prefs` isn't empty, set its first prefix, as identifier prefix.
     // Otherwise set current_prefix as identifier prefix. (It's inception event).

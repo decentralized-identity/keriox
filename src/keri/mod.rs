@@ -19,7 +19,7 @@ use crate::{
     },
     event::{
         event_data::EventData,
-        sections::{serialize_for_commitment, InceptionWitnessConfig, KeyConfig},
+        sections::{nxt_commitment, InceptionWitnessConfig, KeyConfig},
         Event, EventMessage, SerializationFormats,
     },
     event_message::parse::signed_event_stream,
@@ -46,13 +46,15 @@ impl Keri {
     pub fn new() -> Result<Keri, Error> {
         let key_manager = CryptoBox::new()?;
 
+
         let icp = InceptionEvent::new(
             KeyConfig::new(
                 vec![Basic::Ed25519.derive(key_manager.public_key())],
-                SelfAddressing::Blake3_256.derive(&serialize_for_commitment(
+                nxt_commitment(
                     1,
                     &[Basic::Ed25519.derive(key_manager.next_pub_key.clone())],
-                )),
+                    SelfAddressing::Blake3_256,
+                ),
                 Some(1),
             ),
             None,
@@ -82,6 +84,7 @@ impl Keri {
 
     pub fn rotate(&mut self) -> Result<SignedEventMessage, Error> {
         self.key_manager = self.key_manager.rotate()?;
+
         let ev = {
             Event {
                 prefix: self.state.prefix.clone(),
@@ -90,10 +93,11 @@ impl Keri {
                     previous_event_hash: SelfAddressing::Blake3_256.derive(&self.state.last),
                     key_config: KeyConfig::new(
                         vec![Basic::Ed25519.derive(self.key_manager.public_key())],
-                        SelfAddressing::Blake3_256.derive(&serialize_for_commitment(
+                        nxt_commitment(
                             1,
                             &[Basic::Ed25519.derive(self.key_manager.next_pub_key.clone())],
-                        )),
+                            SelfAddressing::Blake3_256,
+                        ),
                         Some(1),
                     ),
                     witness_config: WitnessConfig::default(),
