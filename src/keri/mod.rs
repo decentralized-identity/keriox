@@ -46,42 +46,25 @@ impl Keri {
     pub fn new() -> Result<Keri, Error> {
         let key_manager = CryptoBox::new()?;
 
-        let next_dig = nxt_commitment(
-            1,
-            &[Basic::Ed25519.derive(key_manager.next_pub_key.clone())],
-            SelfAddressing::Blake3_256,
-        );
 
-        let icp_data = InceptionEvent {
-            key_config: KeyConfig {
-                threshold: 1,
-                public_keys: vec![Basic::Ed25519.derive(key_manager.public_key())],
-                threshold_key_digest: next_dig,
-            },
-            witness_config: InceptionWitnessConfig::default(),
-            inception_configuration: vec![],
-        };
+        let icp = InceptionEvent::new(
+            KeyConfig::new(
+                vec![Basic::Ed25519.derive(key_manager.public_key())],
+                nxt_commitment(
+                    1,
+                    &[Basic::Ed25519.derive(key_manager.next_pub_key.clone())],
+                    SelfAddressing::Blake3_256,
+                ),
+                Some(1),
+            ),
+            None,
+            None,
+        )
+        .incept_self_addressing(SelfAddressing::Blake3_256, SerializationFormats::JSON)?;
 
-        let icp_data_message = EventMessage::get_inception_data(
-            &icp_data,
-            SelfAddressing::Blake3_256,
-            &SerializationFormats::JSON,
-        );
-
-        let pref = IdentifierPrefix::SelfAddressing(
-            SelfAddressing::Blake3_256.derive(&dfs_serializer::to_vec(&icp_data_message)?),
-        );
-
-        let icp_m = Event {
-            prefix: pref,
-            sn: 0,
-            event_data: EventData::Icp(icp_data),
-        }
-        .to_message(&SerializationFormats::JSON)?;
-
-        let sigged = icp_m.sign(vec![AttachedSignaturePrefix::new(
+        let sigged = icp.sign(vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
-            key_manager.sign(&icp_m.serialize()?)?,
+            key_manager.sign(&icp.serialize()?)?,
             0,
         )]);
         let mut log = EventLog::new();
@@ -101,27 +84,27 @@ impl Keri {
 
     pub fn rotate(&mut self) -> Result<SignedEventMessage, Error> {
         self.key_manager = self.key_manager.rotate()?;
-        let next_dig = nxt_commitment(
-            1,
-            &[Basic::Ed25519.derive(self.key_manager.next_pub_key.clone())],
-            SelfAddressing::Blake3_256,
-        );
+
         let ev = {
             Event {
                 prefix: self.state.prefix.clone(),
                 sn: self.state.sn + 1,
                 event_data: EventData::Rot(RotationEvent {
                     previous_event_hash: SelfAddressing::Blake3_256.derive(&self.state.last),
-                    key_config: KeyConfig {
-                        threshold: 1,
-                        public_keys: vec![Basic::Ed25519.derive(self.key_manager.public_key())],
-                        threshold_key_digest: next_dig,
-                    },
+                    key_config: KeyConfig::new(
+                        vec![Basic::Ed25519.derive(self.key_manager.public_key())],
+                        nxt_commitment(
+                            1,
+                            &[Basic::Ed25519.derive(self.key_manager.next_pub_key.clone())],
+                            SelfAddressing::Blake3_256,
+                        ),
+                        Some(1),
+                    ),
                     witness_config: WitnessConfig::default(),
                     data: vec![],
                 }),
             }
-            .to_message(&SerializationFormats::JSON)?
+            .to_message(SerializationFormats::JSON)?
         };
 
         let signature = self.key_manager.sign(&ev.serialize()?)?;
@@ -151,7 +134,7 @@ impl Keri {
                 data: vec![Seal::Digest(dig_seal)],
             }),
         }
-        .to_message(&SerializationFormats::JSON)?;
+        .to_message(SerializationFormats::JSON)?;
 
         let signature = self.key_manager.sign(&ev.serialize()?)?;
         let ixn = ev.sign(vec![AttachedSignaturePrefix::new(
@@ -276,7 +259,7 @@ impl Keri {
                 },
             }),
         }
-        .to_message(&SerializationFormats::JSON)?
+        .to_message(SerializationFormats::JSON)?
         .sign(vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
             signature,

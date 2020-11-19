@@ -49,11 +49,7 @@ fn create_mock_event(
             prefix: IdentifierPrefix::Basic(identifier),
             sn: sn,
             event_data: EventData::Icp(InceptionEvent {
-                key_config: KeyConfig {
-                    threshold: 1,
-                    public_keys: vec![curr_key],
-                    threshold_key_digest: nxt,
-                },
+                key_config: KeyConfig::new(vec![curr_key], nxt, Some(1)),
                 witness_config: InceptionWitnessConfig::default(),
                 inception_configuration: vec![],
             }),
@@ -63,11 +59,7 @@ fn create_mock_event(
             sn: sn,
             event_data: EventData::Rot(RotationEvent {
                 previous_event_hash: prev_event,
-                key_config: KeyConfig {
-                    threshold: 1,
-                    public_keys: vec![curr_key],
-                    threshold_key_digest: nxt,
-                },
+                key_config: KeyConfig::new(vec![curr_key], nxt, Some(1)),
                 witness_config: WitnessConfig::default(),
                 data: vec![],
             }),
@@ -160,7 +152,7 @@ fn test_update_identifier_state(
             current_pref.clone(),
             next_dig.clone(),
         );
-        event?.to_message(&SerializationFormats::JSON)
+        event?.to_message(SerializationFormats::JSON)
     }?;
 
     // Serialise event message before signing.
