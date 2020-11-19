@@ -1,6 +1,13 @@
-use super::super::sections::{InceptionWitnessConfig, KeyConfig};
+use super::{
+    super::sections::{InceptionWitnessConfig, KeyConfig},
+    EventData,
+};
 use crate::{
+    derivation::self_addressing::SelfAddressing,
     error::Error,
+    event::Event,
+    event_message::{serialization_info::SerializationFormats, EventMessage},
+    prefix::IdentifierPrefix,
     state::{EventSemantics, IdentifierState},
 };
 use serde::{Deserialize, Serialize};
@@ -18,6 +25,44 @@ pub struct InceptionEvent {
 
     #[serde(rename = "cnfg")]
     pub inception_configuration: Vec<String>,
+}
+
+impl InceptionEvent {
+    pub fn new(
+        key_config: KeyConfig,
+        witness_config: Option<InceptionWitnessConfig>,
+        inception_config: Option<Vec<String>>,
+    ) -> Self {
+        Self {
+            key_config,
+            witness_config: witness_config.map_or_else(|| InceptionWitnessConfig::default(), |w| w),
+            inception_configuration: inception_config.map_or_else(|| vec![], |c| c),
+        }
+    }
+
+    /// Incept Self Addressing
+    ///
+    /// Takes the inception data and creates an EventMessage based on it, with
+    /// using the given format and deriving a Self Addressing Identifier with the
+    /// given derivation method
+    pub fn incept_self_addressing(
+        self,
+        derivation: SelfAddressing,
+        format: SerializationFormats,
+    ) -> Result<EventMessage, Error> {
+        let prefix = IdentifierPrefix::SelfAddressing(derivation.derive(
+            &EventMessage::get_inception_data(&self, derivation, format)?,
+        ));
+
+        EventMessage::new(
+            Event {
+                prefix,
+                sn: 0,
+                event_data: EventData::Icp(self),
+            },
+            format,
+        )
+    }
 }
 
 impl EventSemantics for InceptionEvent {

@@ -51,12 +51,12 @@ pub struct SerializationInfo {
 }
 
 impl SerializationInfo {
-    pub fn new(kind: &SerializationFormats, size: usize) -> Self {
+    pub fn new(kind: SerializationFormats, size: usize) -> Self {
         Self {
             major_version: 1,
             minor_version: 0,
             size,
-            kind: *kind,
+            kind,
         }
     }
     pub fn to_str(&self) -> String {
@@ -120,7 +120,7 @@ impl Default for SerializationInfo {
 
 #[test]
 fn basic_serialize() -> Result<(), Error> {
-    let si = SerializationInfo::new(&SerializationFormats::JSON, 100);
+    let si = SerializationInfo::new(SerializationFormats::JSON, 100);
 
     let version_string = si.to_str();
     assert_eq!("KERI10JSON000064_".to_string(), version_string);
