@@ -52,13 +52,19 @@ impl FromStr for AttachedSignatureCode {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match &s[..1] {
-            "A" => Ok(Self::new(SelfSigning::Ed25519Sha512, b64_to_num(&s[1..2])?)),
+            "A" => Ok(Self::new(
+                SelfSigning::Ed25519Sha512,
+                b64_to_num(&s.as_bytes()[1..2])?,
+            )),
             "B" => Ok(Self::new(
                 SelfSigning::ECDSAsecp256k1Sha256,
-                b64_to_num(&s[1..2])?,
+                b64_to_num(&s.as_bytes()[1..2])?,
             )),
             "0" => match &s[1..3] {
-                "AA" => Ok(Self::new(SelfSigning::Ed448, b64_to_num(&s[3..4])?)),
+                "AA" => Ok(Self::new(
+                    SelfSigning::Ed448,
+                    b64_to_num(&s.as_bytes()[3..4])?,
+                )),
                 _ => Err(Error::DeserializationError),
             },
             _ => Err(Error::DeserializationError),
@@ -68,12 +74,12 @@ impl FromStr for AttachedSignatureCode {
 
 // returns the u16 from the lowest 2 bytes of the b64 string
 // currently only works for strings 4 chars or less
-pub fn b64_to_num(b64: &str) -> Result<u16, Error> {
+pub fn b64_to_num(b64: &[u8]) -> Result<u16, Error> {
     let slice = decode_config(
         match b64.len() {
-            1 => ["AAA", b64].join(""),
-            2 => ["AA", b64].join(""),
-            _ => b64.to_string(),
+            1 => [r"AAA".as_bytes(), b64].concat(),
+            2 => [r"AA".as_bytes(), b64].concat(),
+            _ => b64.to_owned(),
         },
         base64::URL_SAFE,
     )

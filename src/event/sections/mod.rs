@@ -1,9 +1,11 @@
 use crate::{
+    derivation::self_addressing::SelfAddressing,
     error::Error,
     prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfAddressingPrefix},
 };
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
+use std::str::FromStr;
 pub mod seal;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
@@ -70,16 +72,15 @@ impl KeyConfig {
     /// Verifies that the given next KeyConfig matches that which is committed
     /// to in the threshold_key_digest of this KeyConfig
     pub fn verify_next(&self, next: &KeyConfig) -> bool {
-        self.threshold_key_digest
-            .verify_binding(&next.serialize_for_nxt())
+        self.threshold_key_digest == next.commit(self.threshold_key_digest.derivation)
     }
 
     /// Serialize For Next
     ///
     /// Serializes the KeyConfig for creation or verification of a threshold
     /// key digest commitment
-    pub fn serialize_for_nxt(&self) -> Vec<u8> {
-        serialize_for_commitment(self.threshold, &self.public_keys)
+    pub fn commit(&self, derivation: SelfAddressing) -> SelfAddressingPrefix {
+        nxt_commitment(self.threshold, &self.public_keys, derivation)
     }
 }
 
@@ -87,11 +88,24 @@ impl KeyConfig {
 ///
 /// Serializes a threshold and key set into the form
 /// required for threshold key digest creation
-pub fn serialize_for_commitment(threshold: u64, keys: &[BasicPrefix]) -> Vec<u8> {
-    keys.iter()
-        .fold(format!("{:x}", threshold).into(), |acc, pk| {
-            [acc, pk.to_str().into()].concat()
-        })
+pub fn nxt_commitment(
+    threshold: u64,
+    keys: &[BasicPrefix],
+    derivation: SelfAddressing,
+) -> SelfAddressingPrefix {
+    keys.iter().fold(
+        derivation.derive(format!("{:x}", threshold).as_bytes()),
+        |acc, pk| {
+            SelfAddressingPrefix::new(
+                derivation,
+                acc.derivative()
+                    .iter()
+                    .zip(derivation.derive(pk.to_str().as_bytes()).derivative())
+                    .map(|(acc_byte, pk_byte)| acc_byte ^ pk_byte)
+                    .collect(),
+            )
+        },
+    )
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -113,4 +127,25 @@ pub struct InceptionWitnessConfig {
 
     #[serde(rename = "wits")]
     pub initial_witnesses: Vec<BasicPrefix>,
+}
+
+#[test]
+fn threshold() {
+    // test data taken from kid0003
+    let sith = 2;
+    let keys: Vec<BasicPrefix> = [
+        "BrHLayDN-mXKv62DAjFLX1_Y5yEUe0vA9YPe_ihiKYHE",
+        "BujP_71bmWFVcvFmkE9uS8BTZ54GIstZ20nj_UloF8Rk",
+        "B8T4xkb8En6o0Uo5ZImco1_08gT5zcYnXzizUPVNzicw",
+    ]
+    .iter()
+    .map(|k| k.parse().unwrap())
+    .collect();
+
+    let nxt = nxt_commitment(sith, &keys, SelfAddressing::Blake3_256);
+
+    assert_eq!(
+        &nxt.to_str(),
+        "ED8YvDrXvGuaIVZ69XsBVA5YN2pNTfQOFwgeloVHeWKs"
+    )
 }
