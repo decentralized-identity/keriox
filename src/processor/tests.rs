@@ -123,3 +123,62 @@ fn test_process() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[test]
+fn test_process_receipt() -> Result<(), Error> {
+    use tempfile::Builder;
+
+    // Create test db and event processor.
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    fs::create_dir_all(root.path()).unwrap();
+
+    let db = LmdbEventDatabase::new(root.path()).unwrap();
+    let event_processor = EventProcessor::new(db);
+    let mut raw = vec![];
+
+    // Events and sigs are from keripy `test_direct_mode` test.
+    let icp = {
+        let icp_raw = r#"{"vs":"KERI10JSON0000fb_","pre":"EvEnZMhz52iTrJU8qKwtDxzmypyosgG70m6LIjkiCdoI","sn":"0","ilk":"icp","sith":"1","keys":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"nxt":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","toad":"0","wits":[],"cnfg":[]}"#;
+        let icp_sigs = vec![
+            "AApYcYd1cppVg7Inh2YCslWKhUwh59TrPpIoqWxN2A38NCbTljvmBPBjSGIFDBNOvVjHpdZlty3Hgk6ilF8pVpAQ",
+        ];
+        let msg = message(icp_raw).unwrap().1;
+        let sigs = icp_sigs.iter().map(|raw| raw.parse().unwrap()).collect();
+        raw = msg.serialize().unwrap();
+        Deserialized::new(&raw, msg.sign(sigs))
+    };
+
+    event_processor.process(&icp)?;
+
+    let val_icp = {
+        let val_icp_raw = r#"{"vs":"KERI10JSON0000fb_","pre":"E0uTVILY2KXdcxX40MSM9Fr8EpGwfjMNap6ulAAzVt0M","sn":"0","ilk":"icp","sith":"1","keys":["D8KY1sKmgyjAiUDdUBPNPyrSz_ad_Qf9yzhDNZlEKiMc"],"nxt":"EOWDAJvex5dZzDxeHBANyaIoUG3F4-ic81G6GwtnC4f4","toad":"0","wits":[],"cnfg":[]}"#;
+        let val_icp_sigs = vec![
+            "AAR5dawnJxU_Gbb8EK2xUMLb2AU7wLlZDHlDzHvovP-YIowqFq719VMQc9hrEwW9JKs90leAm2rUp3_DOi7-olBg"
+        ];
+
+        let msg = message(val_icp_raw).unwrap().1;
+        let sigs = val_icp_sigs
+            .iter()
+            .map(|raw| raw.parse().unwrap())
+            .collect();
+        raw = msg.serialize().unwrap();
+        Deserialized::new(&raw, msg.sign(sigs))
+    };
+
+    event_processor.process(&val_icp)?;
+
+    let rcp = {
+        let vrc_raw = r#"{"vs":"KERI10JSON00010c_","pre":"EvEnZMhz52iTrJU8qKwtDxzmypyosgG70m6LIjkiCdoI","sn":"0","ilk":"vrc","dig":"EdpkS5j6xIAnPFjovQKLaou1jF7XcLny-pYZde4p35jc","seal":{"pre":"E0uTVILY2KXdcxX40MSM9Fr8EpGwfjMNap6ulAAzVt0M","dig":"Es0RthuviC_p-qHut_JCfMKSFwpljZ-WoppazqZIid-A"}}"#;
+        let vrc_sigs = vec![
+            "AAcQJDHTzG8k1WYCR6LahLCIlcDED21Slz66piD9tcZo4VEmyWHYDccj4aRvVdy9xHqHsn38FMGN26x4S2skJGCw",
+        ];
+        let msg = message(vrc_raw).unwrap().1;
+        let sigs = vrc_sigs.iter().map(|raw| raw.parse().unwrap()).collect();
+        raw = msg.serialize().unwrap();
+        Deserialized::new(&raw, msg.sign(sigs))
+    };
+
+    event_processor.process(&rcp)?;
+
+    Ok(())
+}
