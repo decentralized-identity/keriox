@@ -13,8 +13,30 @@ pub struct EventProcessor<D: EventDatabase> {
     db: D,
 }
 
+// Enum needed to decide how to verify event. Key events needs only KeyConfig
+// for verification, but Validator Receipts needs also original event which they
+// confirm.
+pub enum EventType {
+    KeyEvent,
+    ValidatorReceiptEvent(IdentifierPrefix),
+}
+
 pub trait Processable {
     fn verify_using(&self, kc: &KeyConfig) -> Result<bool, Error>;
+
+    fn verify_event_using(
+        &self,
+        db_event: &[u8],
+        validator: &KeyConfig,
+    ) -> Result<bool, Error>;
+
+    fn check_receipt_bindings(
+        &self,
+        validator_last: &[u8],
+        original_event: &[u8],
+    ) -> Result<(), Error>;
+
+    fn to_event_type(&self) -> EventType;
 
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error>;
 
@@ -75,14 +97,54 @@ impl<D: EventDatabase> EventProcessor<D> {
         Ok(Some(state))
     }
 
+    /// Process Event
+    ///
+    /// Verify signed event, apply it to State associated with prefix of the
+    /// event and update the database. Returns updated state.
     pub fn process<E>(&self, event: &E) -> Result<IdentifierState, Error>
     where
         E: Processable,
     {
         let dig = SelfAddressing::Blake3_256.derive(event.raw());
+
+        // Log event.
         self.db
             .log_event(event.id(), &dig, event.raw(), event.sigs())
             .map_err(|_| Error::StorageError)?;
+
+        self.apply_to_state(event)
+            // verify the signatures on the event and add it to db.
+            .and_then(|state| {
+                match event.to_event_type() {
+                    EventType::KeyEvent => {
+                        self.verify_key_event(&state, event)?;
+
+                        // Add event to db.
+                        self.db
+                            .finalise_event(event.id(), event.sn(), &dig)
+                            .map_err(|_| Error::StorageError)?;
+                    }
+                    EventType::ValidatorReceiptEvent(ref validator_prefix) => {
+                        self.verify_validator_receipt(event, validator_prefix)?;
+
+                        // Add receipt to db.
+                        // How should be receipt with multiple sigs added to db?
+                        for sig in event.sigs() {
+                            self.db
+                                .add_t_receipt_for_event(event.id(), &dig, &validator_prefix, &sig)
+                                .map_err(|_| Error::StorageError)?;
+                        }
+                    }
+                }
+                Ok(state)
+            })
+    }
+
+    fn apply_to_state<E>(&self, event: &E) -> Result<IdentifierState, Error>
+    where
+        E: Processable,
+    {
+        let dig = SelfAddressing::Blake3_256.derive(event.raw());
         // get state for id (TODO cache?)
         self.compute_state(event.id())
             // get empty state if there is no state yet
@@ -108,28 +170,47 @@ impl<D: EventDatabase> EventProcessor<D> {
                 }
                 _ => e,
             })
-            // verify the signatures on the event
-            .and_then(|state| {
-                event
-                    .verify_using(&state.current)
-                    // escrow partially signed event
-                    .map_err(|e| match e {
-                        Error::NotEnoughSigsError => {
-                            match self.db.escrow_partially_signed_event(
-                                event.id(),
-                                event.sn(),
-                                &dig,
-                            ) {
-                                Err(_) => Error::StorageError,
-                                _ => e,
-                            }
-                        }
+    }
+
+    fn verify_key_event<E>(&self, state: &IdentifierState, event: &E) -> Result<bool, Error>
+    where
+        E: Processable,
+    {
+        let dig = SelfAddressing::Blake3_256.derive(event.raw());
+        event
+            .verify_using(&state.current)
+            // escrow partially signed event
+            .map_err(|e| match e {
+                Error::NotEnoughSigsError => {
+                    match self
+                        .db
+                        .escrow_partially_signed_event(event.id(), event.sn(), &dig)
+                    {
+                        Err(_) => Error::StorageError,
                         _ => e,
-                    })?;
-                self.db
-                    .finalise_event(event.id(), event.sn(), &dig)
-                    .map_err(|_| Error::StorageError)?;
-                Ok(state)
+                    }
+                }
+                _ => e,
             })
+    }
+
+    fn verify_validator_receipt<E>(&self, event: &E, validator_pre: &IdentifierPrefix) -> Result<bool, Error>
+    where
+        E: Processable,
+    {
+        // Get event at sn for prefix which made receipted event.
+        let event_from_db = self
+            .db
+            .last_event_at_sn(event.id(), event.sn())
+            .map_err(|_| Error::StorageError)?
+            .ok_or(Error::SemanticError("Event not yet in db".to_string()))?;
+
+        // Get state of prefix which made receipt.
+        let validator = self
+            .compute_state(validator_pre)?
+            .ok_or(Error::SemanticError("Validator not yet in db".to_string()))?;
+
+        event.check_receipt_bindings(&validator.last, &event_from_db)?;
+        event.verify_event_using(&event_from_db, &validator.current)
     }
 }
