@@ -13,9 +13,10 @@ pub struct EventProcessor<D: EventDatabase> {
     db: D,
 }
 
-// Enum needed to decide how to verify event. Key events needs only KeyConfig
-// for verification, but Validator Receipts needs also original event which they
-// confirm.
+/// Event type representation used to determine processing method.
+///
+///`KeyEvent` needs only `KeyConfig` for verification, but
+///`ValidatorReceiptEvent` needs also original event which it confirm.
 pub enum EventType {
     KeyEvent,
     ValidatorReceiptEvent(IdentifierPrefix),
@@ -24,11 +25,7 @@ pub enum EventType {
 pub trait Processable {
     fn verify_using(&self, kc: &KeyConfig) -> Result<bool, Error>;
 
-    fn verify_event_using(
-        &self,
-        db_event: &[u8],
-        validator: &KeyConfig,
-    ) -> Result<bool, Error>;
+    fn verify_event_using(&self, db_event: &[u8], validator: &KeyConfig) -> Result<bool, Error>;
 
     fn check_receipt_bindings(
         &self,
@@ -82,8 +79,9 @@ impl<D: EventDatabase> EventProcessor<D> {
                 }
             };
             // parse event
-            // FIXME, DONT UNWRAP
-            let parsed = message(&String::from_utf8(raw).unwrap()).unwrap().1;
+            let parsed = message(&String::from_utf8(raw).map_err(|_| Error::DeserializationError)?)
+                .map_err(|_| Error::DeserializationError)?
+                .1;
             // apply it to the state
             // TODO avoid .clone()
             state = match state.clone().apply(&parsed) {
@@ -128,7 +126,6 @@ impl<D: EventDatabase> EventProcessor<D> {
                         self.verify_validator_receipt(event, validator_prefix)?;
 
                         // Add receipt to db.
-                        // How should be receipt with multiple sigs added to db?
                         for sig in event.sigs() {
                             self.db
                                 .add_t_receipt_for_event(event.id(), &dig, &validator_prefix, &sig)
@@ -194,7 +191,11 @@ impl<D: EventDatabase> EventProcessor<D> {
             })
     }
 
-    fn verify_validator_receipt<E>(&self, event: &E, validator_pre: &IdentifierPrefix) -> Result<bool, Error>
+    fn verify_validator_receipt<E>(
+        &self,
+        event: &E,
+        validator_pre: &IdentifierPrefix,
+    ) -> Result<bool, Error>
     where
         E: Processable,
     {

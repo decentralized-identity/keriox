@@ -135,8 +135,10 @@ fn test_process_receipt() -> Result<(), Error> {
     let db = LmdbEventDatabase::new(root.path()).unwrap();
     let event_processor = EventProcessor::new(db);
     let mut raw = vec![];
+    let mut rcp_raw = vec![];
 
     // Events and sigs are from keripy `test_direct_mode` test.
+    // Construct and process controller's inception event.
     let icp = {
         let icp_raw = r#"{"vs":"KERI10JSON0000fb_","pre":"EvEnZMhz52iTrJU8qKwtDxzmypyosgG70m6LIjkiCdoI","sn":"0","ilk":"icp","sith":"1","keys":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"nxt":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","toad":"0","wits":[],"cnfg":[]}"#;
         let icp_sigs = vec![
@@ -148,8 +150,25 @@ fn test_process_receipt() -> Result<(), Error> {
         Deserialized::new(&raw, msg.sign(sigs))
     };
 
-    event_processor.process(&icp)?;
+    let controller_id_state = event_processor.process(&icp)?;
 
+    // Construct receipt of controller's inception event.
+    let rcp = {
+        let vrc_raw = r#"{"vs":"KERI10JSON00010c_","pre":"EvEnZMhz52iTrJU8qKwtDxzmypyosgG70m6LIjkiCdoI","sn":"0","ilk":"vrc","dig":"EdpkS5j6xIAnPFjovQKLaou1jF7XcLny-pYZde4p35jc","seal":{"pre":"E0uTVILY2KXdcxX40MSM9Fr8EpGwfjMNap6ulAAzVt0M","dig":"Es0RthuviC_p-qHut_JCfMKSFwpljZ-WoppazqZIid-A"}}"#;
+        let vrc_sigs = vec![
+            "AAcQJDHTzG8k1WYCR6LahLCIlcDED21Slz66piD9tcZo4VEmyWHYDccj4aRvVdy9xHqHsn38FMGN26x4S2skJGCw",
+        ];
+        let msg = message(vrc_raw).unwrap().1;
+        let sigs = vrc_sigs.iter().map(|raw| raw.parse().unwrap()).collect();
+        rcp_raw = msg.serialize().unwrap();
+        Deserialized::new(&rcp_raw, msg.sign(sigs))
+    };
+
+    let id_state = event_processor.process(&rcp);
+    // Validator not yet in db. Event should be escrowed.
+    assert!(id_state.is_err());
+
+    // Contruct and process validator's inception event.
     let val_icp = {
         let val_icp_raw = r#"{"vs":"KERI10JSON0000fb_","pre":"E0uTVILY2KXdcxX40MSM9Fr8EpGwfjMNap6ulAAzVt0M","sn":"0","ilk":"icp","sith":"1","keys":["D8KY1sKmgyjAiUDdUBPNPyrSz_ad_Qf9yzhDNZlEKiMc"],"nxt":"EOWDAJvex5dZzDxeHBANyaIoUG3F4-ic81G6GwtnC4f4","toad":"0","wits":[],"cnfg":[]}"#;
         let val_icp_sigs = vec![
@@ -167,18 +186,11 @@ fn test_process_receipt() -> Result<(), Error> {
 
     event_processor.process(&val_icp)?;
 
-    let rcp = {
-        let vrc_raw = r#"{"vs":"KERI10JSON00010c_","pre":"EvEnZMhz52iTrJU8qKwtDxzmypyosgG70m6LIjkiCdoI","sn":"0","ilk":"vrc","dig":"EdpkS5j6xIAnPFjovQKLaou1jF7XcLny-pYZde4p35jc","seal":{"pre":"E0uTVILY2KXdcxX40MSM9Fr8EpGwfjMNap6ulAAzVt0M","dig":"Es0RthuviC_p-qHut_JCfMKSFwpljZ-WoppazqZIid-A"}}"#;
-        let vrc_sigs = vec![
-            "AAcQJDHTzG8k1WYCR6LahLCIlcDED21Slz66piD9tcZo4VEmyWHYDccj4aRvVdy9xHqHsn38FMGN26x4S2skJGCw",
-        ];
-        let msg = message(vrc_raw).unwrap().1;
-        let sigs = vrc_sigs.iter().map(|raw| raw.parse().unwrap()).collect();
-        raw = msg.serialize().unwrap();
-        Deserialized::new(&raw, msg.sign(sigs))
-    };
-
-    event_processor.process(&rcp)?;
+    // Process receipt once again.
+    let id_state = event_processor.process(&rcp);
+    assert!(id_state.is_ok());
+    // Controller's state shouldn't change after processing receipt.
+    assert_eq!(controller_id_state, id_state?);
 
     Ok(())
 }

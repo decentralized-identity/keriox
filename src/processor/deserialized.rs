@@ -47,11 +47,7 @@ impl Processable for Deserialized<'_, SignedEventMessage> {
         &self.deserialized.signatures
     }
 
-    fn verify_event_using(
-        &self,
-        db_event: &[u8],
-        validator: &KeyConfig,
-    ) -> Result<bool, Error> {
+    fn verify_event_using(&self, db_event: &[u8], validator: &KeyConfig) -> Result<bool, Error> {
         validator.verify(db_event, &self.deserialized.signatures)
     }
 
