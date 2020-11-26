@@ -170,7 +170,7 @@ impl EventSemantics for EventMessage {
                     }
                 })
             }
-            _ => todo!(),
+            _ => self.event.apply_to(state),
         }
     }
 }
