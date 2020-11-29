@@ -79,9 +79,7 @@ impl<D: EventDatabase> EventProcessor<D> {
                 }
             };
             // parse event
-            let parsed = message(&String::from_utf8(raw).map_err(|_| Error::DeserializationError)?)
-                .map_err(|_| Error::DeserializationError)?
-                .1;
+            let parsed = message(&raw).map_err(|_| Error::DeserializationError)?.1;
             // apply it to the state
             // TODO avoid .clone()
             state = match state.clone().apply(&parsed) {

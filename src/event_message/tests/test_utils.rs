@@ -10,7 +10,7 @@ use crate::{
         inception::InceptionEvent, interaction::InteractionEvent, rotation::RotationEvent,
         EventData,
     },
-    event::sections::{serialize_for_commitment, InceptionWitnessConfig, KeyConfig, WitnessConfig},
+    event::sections::{nxt_commitment, InceptionWitnessConfig, KeyConfig, WitnessConfig},
     event::Event,
     event::SerializationFormats,
     prefix::{
@@ -49,11 +49,7 @@ fn create_mock_event(
             prefix: IdentifierPrefix::Basic(identifier),
             sn: sn,
             event_data: EventData::Icp(InceptionEvent {
-                key_config: KeyConfig {
-                    threshold: 1,
-                    public_keys: vec![curr_key],
-                    threshold_key_digest: nxt,
-                },
+                key_config: KeyConfig::new(vec![curr_key], nxt, Some(1)),
                 witness_config: InceptionWitnessConfig::default(),
                 inception_configuration: vec![],
             }),
@@ -63,11 +59,7 @@ fn create_mock_event(
             sn: sn,
             event_data: EventData::Rot(RotationEvent {
                 previous_event_hash: prev_event,
-                key_config: KeyConfig {
-                    threshold: 1,
-                    public_keys: vec![curr_key],
-                    threshold_key_digest: nxt,
-                },
+                key_config: KeyConfig::new(vec![curr_key], nxt, Some(1)),
                 witness_config: WitnessConfig::default(),
                 data: vec![],
             }),
@@ -141,7 +133,7 @@ fn test_update_identifier_state(
 
     let current_pref = Basic::Ed25519.derive(cur_pk.clone());
     let next_prefix = Basic::Ed25519.derive(next_pk.clone());
-    let next_dig = SelfAddressing::Blake3_256.derive(&serialize_for_commitment(1, &[next_prefix]));
+    let next_dig = nxt_commitment(1, &[next_prefix], SelfAddressing::Blake3_256);
 
     // If `history_prefs` isn't empty, set its first prefix, as identifier prefix.
     // Otherwise set current_prefix as identifier prefix. (It's inception event).
@@ -160,7 +152,7 @@ fn test_update_identifier_state(
             current_pref.clone(),
             next_dig.clone(),
         );
-        event?.to_message(&SerializationFormats::JSON)
+        event?.to_message(SerializationFormats::JSON)
     }?;
 
     // Serialise event message before signing.

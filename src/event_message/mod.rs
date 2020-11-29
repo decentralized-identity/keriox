@@ -38,14 +38,14 @@ pub struct SignedEventMessage {
 }
 
 impl EventMessage {
-    pub fn new(event: &Event, format: &SerializationFormats) -> Result<Self, Error> {
+    pub fn new(event: Event, format: SerializationFormats) -> Result<Self, Error> {
         Ok(Self {
-            serialization_info: SerializationInfo::new(format, Self::get_size(event, format)?),
-            event: event.clone(),
+            serialization_info: SerializationInfo::new(format, Self::get_size(&event, format)?),
+            event,
         })
     }
 
-    fn get_size(event: &Event, format: &SerializationFormats) -> Result<usize, Error> {
+    fn get_size(event: &Event, format: SerializationFormats) -> Result<usize, Error> {
         Ok(Self {
             serialization_info: SerializationInfo::new(format, 0),
             event: event.clone(),
@@ -65,16 +65,18 @@ impl EventMessage {
     pub fn get_inception_data(
         icp: &InceptionEvent,
         code: SelfAddressing,
-        format: &SerializationFormats,
-    ) -> Self {
+        format: SerializationFormats,
+    ) -> Result<Vec<u8>, Error> {
         // use dummy prefix to get correct size info
+        // TODO: dynamically size dummy derivative, non-32 byte prefixes will fail
         let icp_event_data = Event {
             prefix: IdentifierPrefix::SelfAddressing(code.derive(&[0u8; 32])),
             sn: 0,
             event_data: EventData::Icp(icp.clone()),
         };
-        Self {
+        Ok(dfs_serializer::to_vec(&Self {
             serialization_info: icp_event_data
+                .clone()
                 .to_message(format)
                 .unwrap()
                 .serialization_info,
@@ -83,7 +85,7 @@ impl EventMessage {
                 prefix: IdentifierPrefix::default(),
                 ..icp_event_data
             },
-        }
+        })?)
     }
 
     /// Serialize
@@ -195,11 +197,7 @@ pub fn verify_identifier_binding(icp_event: &EventMessage) -> Result<bool, Error
             IdentifierPrefix::Basic(bp) => Ok(icp.key_config.public_keys.len() == 1
                 && bp == icp.key_config.public_keys.first().unwrap()),
             IdentifierPrefix::SelfAddressing(sap) => Ok(sap.verify_binding(
-                &dfs_serializer::to_vec(&EventMessage::get_inception_data(
-                    &icp,
-                    sap.derivation,
-                    &icp_event.serialization(),
-                ))?,
+                &EventMessage::get_inception_data(&icp, sap.derivation, icp_event.serialization())?,
             )),
             IdentifierPrefix::SelfSigning(_ssp) => todo!(),
         },
@@ -253,17 +251,13 @@ mod tests {
             prefix: IdentifierPrefix::Basic(pref0.clone()),
             sn: 0,
             event_data: EventData::Icp(InceptionEvent {
-                key_config: KeyConfig {
-                    threshold: 1,
-                    public_keys: vec![pref0.clone()],
-                    threshold_key_digest: nxt.clone(),
-                },
+                key_config: KeyConfig::new(vec![pref0.clone()], nxt.clone(), Some(1)),
                 witness_config: InceptionWitnessConfig::default(),
                 inception_configuration: vec![],
             }),
         };
 
-        let icp_m = icp.to_message(&SerializationFormats::JSON)?;
+        let icp_m = icp.to_message(SerializationFormats::JSON)?;
 
         // serialised extracted dataset
         let sed = icp_m.serialize()?;
@@ -330,35 +324,19 @@ mod tests {
                 .as_bytes(),
         );
 
-        let icp_data = InceptionEvent {
-            key_config: KeyConfig {
-                threshold: 1,
-                public_keys: vec![sig_pref_0.clone(), enc_pref_0.clone()],
-                threshold_key_digest: nexter_pref.clone(),
-            },
-            witness_config: InceptionWitnessConfig::default(),
-            inception_configuration: vec![],
-        };
+        let icp = InceptionEvent::new(
+            KeyConfig::new(
+                vec![sig_pref_0.clone(), enc_pref_0.clone()],
+                nexter_pref.clone(),
+                Some(1),
+            ),
+            None,
+            None,
+        )
+        .incept_self_addressing(SelfAddressing::Blake3_256, SerializationFormats::JSON)?;
 
-        let icp_data_message = EventMessage::get_inception_data(
-            &icp_data,
-            SelfAddressing::Blake3_256,
-            &SerializationFormats::JSON,
-        );
-
-        let pref = IdentifierPrefix::SelfAddressing(
-            SelfAddressing::Blake3_256.derive(&dfs_serializer::to_vec(&icp_data_message)?),
-        );
-
-        let icp_m = Event {
-            prefix: pref.clone(),
-            sn: 0,
-            event_data: EventData::Icp(icp_data),
-        }
-        .to_message(&SerializationFormats::JSON)?;
-
-        // serialised extracted dataset
-        let serialized = icp_m.serialize()?;
+        // serialised
+        let serialized = icp.serialize()?;
 
         // sign
         let sig = ed
@@ -368,13 +346,13 @@ mod tests {
 
         assert!(sig_pref_0.verify(&serialized, &attached_sig.signature)?);
 
-        let signed_event = icp_m.sign(vec![attached_sig]);
+        let signed_event = icp.sign(vec![attached_sig]);
 
         let s_ = IdentifierState::default();
 
         let s0 = s_.verify_and_apply(&signed_event)?;
 
-        assert_eq!(s0.prefix, pref);
+        assert_eq!(s0.prefix, icp.event.prefix);
         assert_eq!(s0.sn, 0);
         assert_eq!(s0.last, serialized);
         assert_eq!(s0.current.public_keys.len(), 2);

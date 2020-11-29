@@ -1,4 +1,8 @@
-use crate::prefix::{AttachedSignaturePrefix, IdentifierPrefix, SelfAddressingPrefix};
+use crate::{
+    event_message::parse::message,
+    prefix::{AttachedSignaturePrefix, IdentifierPrefix, SelfAddressingPrefix},
+    state::IdentifierState,
+};
 #[cfg(feature = "lmdb")]
 pub mod lmdb;
 
@@ -21,6 +25,70 @@ pub trait EventDatabase {
         pref: &IdentifierPrefix,
         sn: u64,
     ) -> Result<Option<Vec<u8>>, Self::Error>;
+
+    /// Get State for Prefix
+    ///
+    /// Returns the current State associated with
+    /// the given Prefix
+    fn get_state_for_prefix(
+        &self,
+        pref: &IdentifierPrefix,
+    ) -> Result<Option<IdentifierState>, Self::Error> {
+        // start with empty state
+        let mut state = IdentifierState::default();
+
+        // starting from inception
+        for sn in 0.. {
+            // read the latest raw event
+            let raw = match self.last_event_at_sn(pref, sn)? {
+                Some(r) => r,
+                None => {
+                    if sn == 0 {
+                        // no inception event, no state
+                        return Ok(None);
+                    } else {
+                        // end of KEL, stop looping
+                        break;
+                    }
+                }
+            };
+            // parse event
+            // FIXME, DONT UNWRAP
+            let parsed = message(&raw).unwrap().1;
+            // apply it to the state
+            // TODO avoid .clone()
+            state = match state.clone().apply(&parsed) {
+                Ok(s) => s,
+                // will happen when a recovery has overridden some part of the KEL,
+                // stop processing here
+                Err(_) => break,
+            }
+        }
+
+        Ok(Some(state))
+    }
+
+    /// Get Children of Prefix
+    ///
+    /// Returns the Identifiers delegated to by the
+    /// given Prefix
+    fn get_children_of_prefix(
+        &self,
+        _pref: &IdentifierPrefix,
+    ) -> Result<Option<Vec<IdentifierPrefix>>, Self::Error> {
+        todo!()
+    }
+
+    /// Get Parent of Prefix
+    ///
+    /// Returns the delegator for the given Prefix,
+    /// if there is one
+    fn get_parent_of_prefix(
+        &self,
+        _pref: &IdentifierPrefix,
+    ) -> Result<Option<IdentifierPrefix>, Self::Error> {
+        todo!()
+    }
 
     /// Log Event
     ///
@@ -122,7 +190,7 @@ pub(crate) fn test_db<D: EventDatabase>(db: D) -> Result<(), D::Error> {
     .map(|raw| raw.parse().unwrap())
     .collect();
 
-    let event = message(raw).unwrap().1.event;
+    let event = message(raw.as_bytes()).unwrap().1.event;
     let dig = SelfAddressing::Blake3_256.derive(raw.as_bytes());
 
     db.log_event(&event.prefix, &dig, raw.as_bytes(), &sigs)?;
