@@ -10,12 +10,17 @@ use crate::{
     util::dfs_serializer,
 };
 pub mod serialization_info;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serialization_info::*;
 pub mod parse;
 
+/// Message
+///
+/// Combines a serializable piece of data with serialization information
+/// TODO: D should have the bound Serialize + DeserializeOwned + Clone, but
+/// there is a bug in the rust compiler https://github.com/serde-rs/serde/issues/1296
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct EventMessage {
+pub struct Message<D> {
     /// Serialization Information
     ///
     /// Encodes the version, size and serialization format of the event
@@ -23,7 +28,7 @@ pub struct EventMessage {
     pub serialization_info: SerializationInfo,
 
     #[serde(flatten)]
-    pub event: Event,
+    pub data: D,
     // Additional Data for forwards compat
     //
     // TODO: Currently seems to be bugged, it captures and duplicates every element in the event
@@ -31,24 +36,21 @@ pub struct EventMessage {
     // pub extra: HashMap<String, Value>,
 }
 
-#[derive(Debug, Clone)]
-pub struct SignedEventMessage {
-    pub event_message: EventMessage,
-    pub signatures: Vec<AttachedSignaturePrefix>,
-}
-
-impl EventMessage {
-    pub fn new(event: Event, format: SerializationFormats) -> Result<Self, Error> {
+impl<D> Message<D>
+where
+    D: Serialize + DeserializeOwned + Clone,
+{
+    pub fn new(data: D, format: SerializationFormats) -> Result<Self, Error> {
         Ok(Self {
-            serialization_info: SerializationInfo::new(format, Self::get_size(&event, format)?),
-            event,
+            serialization_info: SerializationInfo::new(format, Self::get_size(&data, format)?),
+            data,
         })
     }
 
-    fn get_size(event: &Event, format: SerializationFormats) -> Result<usize, Error> {
+    fn get_size(event: &D, format: SerializationFormats) -> Result<usize, Error> {
         Ok(Self {
             serialization_info: SerializationInfo::new(format, 0),
-            event: event.clone(),
+            data: event.clone(),
         }
         .serialize()?
         .len())
@@ -58,6 +60,18 @@ impl EventMessage {
         self.serialization_info.kind
     }
 
+    /// Serialize
+    ///
+    /// returns the serialized event message
+    /// NOTE: this method, for deserialized events, will be UNABLE to preserve ordering
+    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
+        self.serialization().encode(self)
+    }
+}
+
+pub type EventMessage = Message<Event>;
+
+impl EventMessage {
     /// Get Inception Data
     ///
     /// Strips prefix and version string length info from an event
@@ -80,7 +94,7 @@ impl EventMessage {
                 .to_message(format)
                 .unwrap()
                 .serialization_info,
-            event: Event {
+            data: Event {
                 // default prefix serializes to empty string
                 prefix: IdentifierPrefix::default(),
                 ..icp_event_data
@@ -88,21 +102,19 @@ impl EventMessage {
         })?)
     }
 
-    /// Serialize
-    ///
-    /// returns the serialized event message
-    /// NOTE: this method, for deserialized events, will be UNABLE to preserve ordering
-    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        self.serialization().encode(self)
-    }
-
     pub fn sign(&self, sigs: Vec<AttachedSignaturePrefix>) -> SignedEventMessage {
         SignedEventMessage::new(self, sigs)
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct SignedEventMessage {
+    pub event_message: EventMessage,
+    pub signatures: Vec<AttachedSignaturePrefix>,
+}
+
 impl SignedEventMessage {
-    pub fn new(message: &EventMessage, sigs: Vec<AttachedSignaturePrefix>) -> Self {
+    pub fn new(message: &Message<Event>, sigs: Vec<AttachedSignaturePrefix>) -> Self {
         Self {
             event_message: message.clone(),
             signatures: sigs,
@@ -124,13 +136,13 @@ impl SignedEventMessage {
     }
 }
 
-impl EventSemantics for EventMessage {
+impl EventSemantics for Message<Event> {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         // Update state.last with serialized current event message.
-        match self.event.event_data {
+        match self.data.event_data {
             EventData::Icp(_) => {
                 if verify_identifier_binding(self)? {
-                    self.event.apply_to(IdentifierState {
+                    self.data.apply_to(IdentifierState {
                         last: self.serialize()?,
                         ..state
                     })
@@ -143,7 +155,7 @@ impl EventSemantics for EventMessage {
             EventData::Rot(ref rot) => {
                 // Check if hashes of state.last event and previous_event_hash matches.
                 if rot.previous_event_hash.verify_binding(&state.last) {
-                    self.event.apply_to(IdentifierState {
+                    self.data.apply_to(IdentifierState {
                         last: self.serialize()?,
                         ..state
                     })
@@ -156,7 +168,7 @@ impl EventSemantics for EventMessage {
             EventData::Ixn(ref inter) => {
                 // Check if hashes of state.last event and previous_event_hash matches.
                 if inter.previous_event_hash.verify_binding(&state.last) {
-                    self.event.apply_to(IdentifierState {
+                    self.data.apply_to(IdentifierState {
                         last: self.serialize()?,
                         ..state
                     })
@@ -186,8 +198,8 @@ impl Verifiable for SignedEventMessage {
 }
 
 pub fn verify_identifier_binding(icp_event: &EventMessage) -> Result<bool, Error> {
-    match &icp_event.event.event_data {
-        EventData::Icp(icp) => match &icp_event.event.prefix {
+    match &icp_event.data.event_data {
+        EventData::Icp(icp) => match &icp_event.data.prefix {
             IdentifierPrefix::Basic(bp) => Ok(icp.key_config.public_keys.len() == 1
                 && bp == icp.key_config.public_keys.first().unwrap()),
             IdentifierPrefix::SelfAddressing(sap) => Ok(sap.verify_binding(
@@ -346,7 +358,7 @@ mod tests {
 
         let s0 = s_.verify_and_apply(&signed_event)?;
 
-        assert_eq!(s0.prefix, icp.event.prefix);
+        assert_eq!(s0.prefix, icp.data.prefix);
         assert_eq!(s0.sn, 0);
         assert_eq!(s0.last, serialized);
         assert_eq!(s0.current.public_keys.len(), 2);

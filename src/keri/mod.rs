@@ -46,7 +46,6 @@ impl Keri {
     pub fn new() -> Result<Keri, Error> {
         let key_manager = CryptoBox::new()?;
 
-
         let icp = InceptionEvent::new(
             KeyConfig::new(
                 vec![Basic::Ed25519.derive(key_manager.public_key())],
@@ -154,7 +153,7 @@ impl Keri {
             .1;
         let mut response: Vec<SignedEventMessage> = vec![];
         for ev in events {
-            match ev.event_message.event.event_data {
+            match ev.event_message.data.event_data {
                 EventData::Vrc(ref rct) => {
                     let prefix_str = rct.validator_location_seal.prefix.to_str();
                     let validator = self.other_instances.get(&prefix_str).unwrap().clone();
@@ -162,7 +161,7 @@ impl Keri {
                     self.process_receipt(validator, ev).unwrap();
                 }
                 EventData::Icp(_) => {
-                    let ev_prefix = ev.event_message.event.prefix.to_str();
+                    let ev_prefix = ev.event_message.data.prefix.to_str();
                     let state = IdentifierState::default().verify_and_apply(&ev)?;
 
                     if !self.other_instances.contains_key(&ev_prefix) {
@@ -175,7 +174,7 @@ impl Keri {
                     response.push(rct);
                 }
                 _ => {
-                    let prefix_str = ev.event_message.event.prefix.to_str();
+                    let prefix_str = ev.event_message.data.prefix.to_str();
 
                     let state = self
                         .other_instances
@@ -203,13 +202,13 @@ impl Keri {
         validator: IdentifierState,
         sigs: SignedEventMessage,
     ) -> Result<(), Error> {
-        match sigs.event_message.event.event_data.clone() {
+        match sigs.event_message.data.event_data.clone() {
             EventData::Vrc(rct) => {
-                let event = self.kel.get(sigs.event_message.event.sn)?;
+                let event = self.kel.get(sigs.event_message.data.sn)?;
 
                 // This logic can in future be moved to the correct place in the Kever equivalent here
                 // receipt pref is the ID who made the event being receipted
-                if sigs.event_message.event.prefix == self.state.prefix
+                if sigs.event_message.data.prefix == self.state.prefix
                             // dig is the digest of the event being receipted
                             && rct.receipted_event_digest
                                 == rct
@@ -229,7 +228,7 @@ impl Keri {
                         // seal dig is the digest of the last establishment event for the validator, verify the rct
                         validator.verify(&event.event_message.sign(sigs.signatures.clone()))?;
                         self.receipts
-                            .entry(sigs.event_message.event.sn)
+                            .entry(sigs.event_message.data.sn)
                             .or_insert_with(|| vec![])
                             .push(sigs);
                     } else {
@@ -249,8 +248,8 @@ impl Keri {
         let ser = event.serialize()?;
         let signature = self.key_manager.sign(&ser)?;
         Ok(Event {
-            prefix: event.event.prefix,
-            sn: event.event.sn,
+            prefix: event.data.prefix,
+            sn: event.data.sn,
             event_data: EventData::Vrc(ReceiptTransferable {
                 receipted_event_digest: SelfAddressing::Blake3_256.derive(&ser),
                 validator_location_seal: EventSeal {

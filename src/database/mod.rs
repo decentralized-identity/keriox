@@ -186,7 +186,7 @@ pub(crate) fn test_db<D: EventDatabase>(db: D) -> Result<(), D::Error> {
     .map(|raw| raw.parse().unwrap())
     .collect();
 
-    let event = message(raw.as_bytes()).unwrap().1.event;
+    let event = message(raw.as_bytes()).unwrap().1.data;
     let dig = SelfAddressing::Blake3_256.derive(raw.as_bytes());
 
     db.log_event(&event.prefix, &dig, raw.as_bytes(), &sigs)?;
