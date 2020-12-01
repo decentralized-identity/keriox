@@ -1,18 +1,18 @@
 use crate::{
     derivation::{attached_signature_code::get_sig_count, self_addressing::SelfAddressing},
     error::Error,
-    event::{
-        event_data::{inception::InceptionEvent, EventData},
-        Event,
-    },
+    event::{inception::InceptionEvent, Event, EventData},
     prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix},
     state::{EventSemantics, IdentifierState, Verifiable},
     util::dfs_serializer,
 };
-pub mod serialization_info;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use serialization_info::*;
 pub mod parse;
+pub mod serialization_info;
+
+pub use serialization_info::SerializationFormats;
+
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serialization_info::SerializationInfo;
 
 /// Message
 ///

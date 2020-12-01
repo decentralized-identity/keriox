@@ -1,18 +1,5 @@
-use super::super::sections::seal::EventSeal;
-use crate::prefix::SelfAddressingPrefix;
-use crate::state::EventSemantics;
+use crate::{prefix::SelfAddressingPrefix, sections::EventSeal};
 use serde::{Deserialize, Serialize};
-
-/// Non-Transferrable Receipt
-///
-/// A receipt created by an Identifier of a non-transferrable type.
-/// Mostly intended for use by Witnesses.
-/// NOTE: This receipt has a unique structure to it's appended
-/// signatures
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ReceiptNonTransferable {}
-
-impl EventSemantics for ReceiptNonTransferable {}
 
 /// Transferrable Receipt
 ///
@@ -35,5 +22,3 @@ pub struct ReceiptTransferable {
     #[serde(rename = "seal")]
     pub validator_location_seal: EventSeal,
 }
-
-impl EventSemantics for ReceiptTransferable {}

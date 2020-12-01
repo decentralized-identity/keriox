@@ -174,7 +174,7 @@ pub trait EventDatabase {
 }
 
 pub(crate) fn test_db<D: EventDatabase>(db: D) -> Result<(), D::Error> {
-    use crate::{derivation::self_addressing::SelfAddressing, event::event_data::EventData};
+    use crate::{derivation::self_addressing::SelfAddressing, event::EventData};
 
     let raw = r#"{"vs":"KERI10JSON000159_","pre":"ECui-E44CqN2U7uffCikRCp_YKLkPrA4jsTZ_A0XRLzc","sn":"0","ilk":"icp","sith":"2","keys":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"nxt":"Evhf3437ZRRnVhT0zOxo_rBX_GxpGoAnLuzrVlDK8ZdM","toad":"0","wits":[],"cnfg":[]}extra data"#;
     let sigs: Vec<AttachedSignaturePrefix> = [

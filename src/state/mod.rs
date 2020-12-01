@@ -1,7 +1,7 @@
 use crate::{
     error::Error,
-    event::sections::KeyConfig,
     prefix::{BasicPrefix, IdentifierPrefix},
+    sections::KeyConfig,
 };
 use serde::{Deserialize, Serialize};
 

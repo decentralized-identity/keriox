@@ -5,29 +5,17 @@ use crate::{
     derivation::self_addressing::SelfAddressing,
     derivation::self_signing::SelfSigning,
     error::Error,
-    event::event_data::inception::InceptionEvent,
-    event::{
-        event_data::interaction::InteractionEvent,
-        sections::{
-            seal::{DigestSeal, Seal},
-            WitnessConfig,
-        },
+    event::{Event, EventData, InceptionEvent, InteractionEvent, RotationEvent},
+    event_message::{
+        parse::signed_event_stream, EventMessage, SerializationFormats, SignedEventMessage,
     },
-    event::{
-        event_data::receipt::ReceiptTransferable, event_data::rotation::RotationEvent,
-        sections::seal::EventSeal,
-    },
-    event::{
-        event_data::EventData,
-        sections::{nxt_commitment, InceptionWitnessConfig, KeyConfig},
-        Event, EventMessage, SerializationFormats,
-    },
-    event_message::parse::signed_event_stream,
-    event_message::SignedEventMessage,
     log::EventLog,
-    prefix::AttachedSignaturePrefix,
-    prefix::IdentifierPrefix,
-    prefix::Prefix,
+    prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix},
+    receipt::{Receipt, ReceiptTransferable},
+    sections::{
+        nxt_commitment, DigestSeal, EventSeal, InceptionWitnessConfig, KeyConfig, Seal,
+        WitnessConfig,
+    },
     signer::CryptoBox,
     state::IdentifierState,
     util::dfs_serializer,

@@ -1,13 +1,48 @@
-pub use crate::event_message::{serialization_info::SerializationFormats, EventMessage};
-use crate::prefix::IdentifierPrefix;
-use crate::state::IdentifierState;
+pub mod delegated;
+pub mod inception;
+pub mod interaction;
+pub mod rotation;
+
+use super::{
+    error::Error,
+    event_message::{EventMessage, SerializationFormats},
+    prefix::IdentifierPrefix,
+    state::{EventSemantics, IdentifierState},
+};
 use serde::{Deserialize, Serialize};
-pub mod event_data;
-pub mod sections;
-use self::event_data::EventData;
-use crate::error::Error;
-use crate::state::EventSemantics;
 use serde_hex::{Compact, SerHex};
+
+pub use self::{
+    delegated::{DelegatedInceptionEvent, DelegatedRotationEvent},
+    inception::InceptionEvent,
+    interaction::InteractionEvent,
+    rotation::RotationEvent,
+};
+
+/// Event Data
+///
+/// Event Data conveys the semantic content of a KERI event.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(tag = "ilk", rename_all = "lowercase")]
+pub enum EventData {
+    Icp(InceptionEvent),
+    Rot(RotationEvent),
+    Ixn(InteractionEvent),
+    Dip(DelegatedInceptionEvent),
+    Drt(DelegatedRotationEvent),
+}
+
+impl EventSemantics for EventData {
+    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
+        match self {
+            Self::Icp(e) => e.apply_to(state),
+            Self::Rot(e) => e.apply_to(state),
+            Self::Ixn(e) => e.apply_to(state),
+            Self::Dip(e) => e.apply_to(state),
+            Self::Drt(e) => e.apply_to(state),
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Event {
