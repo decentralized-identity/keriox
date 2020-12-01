@@ -46,7 +46,6 @@ impl Keri {
     pub fn new() -> Result<Keri, Error> {
         let key_manager = CryptoBox::new()?;
 
-
         let icp = InceptionEvent::new(
             KeyConfig::new(
                 vec![Basic::Ed25519.derive(key_manager.public_key())],
@@ -153,7 +152,8 @@ impl Keri {
             .map_err(|_| Error::DeserializationError)?
             .1;
         let mut response: Vec<SignedEventMessage> = vec![];
-        for ev in events {
+        for dev in events {
+            let ev: SignedEventMessage = dev.into();
             match ev.event_message.event.event_data {
                 EventData::Vrc(ref rct) => {
                     let prefix_str = rct.validator_location_seal.prefix.to_str();
