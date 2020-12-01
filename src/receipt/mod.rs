@@ -1,7 +1,10 @@
 pub mod nontransferable;
 pub mod transferable;
 
-use crate::prefix::IdentifierPrefix;
+use crate::{
+    event_message::Message,
+    prefix::{AttachedSignaturePrefix, IdentifierPrefix, SelfSigningPrefix},
+};
 pub use nontransferable::ReceiptNonTransferable;
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
@@ -38,4 +41,18 @@ pub struct Receipt {
 pub enum ReceiptData {
     Rct(ReceiptNonTransferable),
     Vrc(ReceiptTransferable),
+}
+
+pub type ReceiptMessage = Message<Receipt>;
+
+// these two signed types are different because of the different
+// structure of the signatures
+pub struct SignedTransferableReceiptMessage {
+    pub receipt_message: ReceiptMessage,
+    pub signatures: Vec<AttachedSignaturePrefix>,
+}
+
+pub struct SignedNontransferableReceiptMessage {
+    pub receipt_message: ReceiptMessage,
+    pub signature_couplets: (IdentifierPrefix, SelfSigningPrefix),
 }
