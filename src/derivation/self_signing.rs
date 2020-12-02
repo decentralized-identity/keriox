@@ -1,5 +1,5 @@
 use super::DerivationCode;
-use crate::error::Error;
+use crate::{error::Error, prefix::SelfSigningPrefix};
 use core::str::FromStr;
 
 /// Self Signing Derivations
@@ -10,6 +10,12 @@ pub enum SelfSigning {
     Ed25519Sha512,
     ECDSAsecp256k1Sha256,
     Ed448,
+}
+
+impl SelfSigning {
+    pub fn derive(&self, sig: Vec<u8>) -> SelfSigningPrefix {
+        SelfSigningPrefix::new(*self, sig)
+    }
 }
 
 impl DerivationCode for SelfSigning {

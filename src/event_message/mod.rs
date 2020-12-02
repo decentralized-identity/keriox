@@ -5,7 +5,7 @@ use crate::{
         event_data::{inception::InceptionEvent, EventData},
         Event,
     },
-    prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
     state::{EventSemantics, IdentifierState, Verifiable},
     util::dfs_serializer,
 };
@@ -35,6 +35,12 @@ pub struct EventMessage {
 pub struct SignedEventMessage {
     pub event_message: EventMessage,
     pub signatures: Vec<AttachedSignaturePrefix>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SignedNontransferableReciept {
+    pub body: EventMessage,
+    pub couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
 }
 
 impl EventMessage {

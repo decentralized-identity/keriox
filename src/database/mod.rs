@@ -56,7 +56,7 @@ pub trait EventDatabase {
             let parsed = message(&raw).unwrap().1;
             // apply it to the state
             // TODO avoid .clone()
-            state = match state.clone().apply(&parsed) {
+            state = match state.clone().apply(&parsed.event) {
                 Ok(s) => s,
                 // will happen when a recovery has overridden some part of the KEL,
                 // stop processing here
@@ -186,20 +186,20 @@ pub(crate) fn test_db<D: EventDatabase>(db: D) -> Result<(), D::Error> {
     .map(|raw| raw.parse().unwrap())
     .collect();
 
-    let event = message(raw.as_bytes()).unwrap().1.event;
+    let message = message(raw.as_bytes()).unwrap().1.event;
     let dig = SelfAddressing::Blake3_256.derive(raw.as_bytes());
 
-    db.log_event(&event.prefix, &dig, raw.as_bytes(), &sigs)?;
-    db.finalise_event(&event.prefix, 0, &dig)?;
+    db.log_event(&message.event.prefix, &dig, raw.as_bytes(), &sigs)?;
+    db.finalise_event(&message.event.prefix, 0, &dig)?;
 
-    let written = db.last_event_at_sn(&event.prefix, 0)?;
+    let written = db.last_event_at_sn(&message.event.prefix, 0)?;
 
     assert_eq!(written, Some(raw.as_bytes().to_vec()));
 
-    let state = db.get_state_for_prefix(&event.prefix)?.unwrap();
+    let state = db.get_state_for_prefix(&message.event.prefix)?.unwrap();
 
-    assert_eq!(&state.prefix, &event.prefix);
-    assert!(match event.event_data {
+    assert_eq!(&state.prefix, &message.event.prefix);
+    assert!(match message.event.event_data {
         EventData::Icp(icp) => icp.key_config == state.current,
         _ => false,
     });
