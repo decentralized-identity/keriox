@@ -1,13 +1,16 @@
 use crate::{
     derivation::{
         attached_signature_code::{b64_to_num, AttachedSignatureCode},
+        basic::Basic,
         self_signing::SelfSigning,
+        DerivationCode,
     },
-    prefix::{AttachedSignaturePrefix, SelfSigningPrefix},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix},
 };
 use nom::{
     branch::*, bytes::complete::take, combinator::*, error::ErrorKind, multi::*, sequence::*,
 };
+use ursa::keys::PublicKey;
 
 // TODO this could be a lot nicer, but is currently written to be careful and "easy" to follow
 pub fn attached_signature(s: &[u8]) -> nom::IResult<&[u8], AttachedSignaturePrefix> {
@@ -74,6 +77,46 @@ pub fn attached_signature(s: &[u8]) -> nom::IResult<&[u8], AttachedSignaturePref
         }
         _ => Err(nom::Err::Error((type_c, ErrorKind::IsNot))),
     }
+}
+
+pub fn basic_prefix(s: &[u8]) -> nom::IResult<&[u8], BasicPrefix> {
+    const EXT: &'static [u8] = "1".as_bytes();
+
+    let (_, type_c) = take(1u8)(s)?;
+
+    let (rest, code_str) = take(match type_c {
+        EXT => 4u8,
+        _ => 1u8,
+    })(s)?;
+
+    let code: Basic = String::from_utf8(code_str.to_vec())
+        .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?
+        .parse()
+        .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
+
+    let (extra, b) = take(code.derivative_b64_len())(rest)?;
+
+    Ok((extra, code.derive(PublicKey(b.to_vec()))))
+}
+
+pub fn self_signing_prefix(s: &[u8]) -> nom::IResult<&[u8], SelfSigningPrefix> {
+    const EXT: &'static [u8] = "1".as_bytes();
+
+    let (_, type_c) = take(1u8)(s)?;
+
+    let (rest, code_str) = take(match type_c {
+        EXT => 4u8,
+        _ => 2u8,
+    })(s)?;
+
+    let code: SelfSigning = String::from_utf8(code_str.to_vec())
+        .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?
+        .parse()
+        .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
+
+    let (extra, b) = take(code.derivative_b64_len())(rest)?;
+
+    Ok((extra, code.derive(b.to_vec())))
 }
 
 #[test]

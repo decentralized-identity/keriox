@@ -82,7 +82,7 @@ impl<D: EventDatabase> EventProcessor<D> {
             let parsed = message(&raw).map_err(|_| Error::DeserializationError)?.1;
             // apply it to the state
             // TODO avoid .clone()
-            state = match state.clone().apply(&parsed) {
+            state = match state.clone().apply(&parsed.event) {
                 Ok(s) => s,
                 // will happen when a recovery has overridden some part of the KEL,
                 // stop processing here
