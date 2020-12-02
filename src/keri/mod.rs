@@ -22,7 +22,7 @@ use crate::{
         sections::{nxt_commitment, InceptionWitnessConfig, KeyConfig},
         Event, EventMessage, SerializationFormats,
     },
-    event_message::parse::signed_event_stream,
+    event_message::parse::{signed_event_stream, Deserialized},
     event_message::SignedEventMessage,
     log::EventLog,
     prefix::AttachedSignaturePrefix,
@@ -153,40 +153,49 @@ impl Keri {
             .1;
         let mut response: Vec<SignedEventMessage> = vec![];
         for dev in events {
-            let ev: SignedEventMessage = dev.into();
-            match ev.event_message.event.event_data {
-                EventData::Vrc(ref rct) => {
-                    let prefix_str = rct.validator_location_seal.prefix.to_str();
-                    let validator = self.other_instances.get(&prefix_str).unwrap().clone();
+            match dev {
+                Deserialized::Event(e) => {
+                    let ev: SignedEventMessage = e.into();
+                    match ev.event_message.event.event_data {
+                        EventData::Icp(_) => {
+                            let ev_prefix = ev.event_message.event.prefix.to_str();
+                            let state = IdentifierState::default().verify_and_apply(&ev)?;
 
-                    self.process_receipt(validator, ev).unwrap();
-                }
-                EventData::Icp(_) => {
-                    let ev_prefix = ev.event_message.event.prefix.to_str();
-                    let state = IdentifierState::default().verify_and_apply(&ev)?;
+                            if !self.other_instances.contains_key(&ev_prefix) {
+                                if let Some(icp) = self.kel.get_last() {
+                                    response.push(icp);
+                                }
+                            }
+                            self.other_instances.insert(ev_prefix.clone(), state);
+                            let rct = self.make_rct(ev.event_message)?;
+                            response.push(rct);
+                        }
+                        _ => {
+                            let prefix_str = ev.event_message.event.prefix.to_str();
 
-                    if !self.other_instances.contains_key(&ev_prefix) {
-                        if let Some(icp) = self.kel.get_last() {
-                            response.push(icp);
+                            let state = self
+                                .other_instances
+                                .remove(&prefix_str)
+                                .unwrap_or(IdentifierState::default());
+                            self.other_instances
+                                .insert(prefix_str.clone(), state.verify_and_apply(&ev)?);
+
+                            let rct = self.make_rct(ev.event_message)?;
+                            response.push(rct);
                         }
                     }
-                    self.other_instances.insert(ev_prefix.clone(), state);
-                    let rct = self.make_rct(ev.event_message)?;
-                    response.push(rct);
                 }
-                _ => {
-                    let prefix_str = ev.event_message.event.prefix.to_str();
+                Deserialized::Vrc(r) => match r.event_message.event.event_data {
+                    EventData::Vrc(ref rct) => {
+                        let prefix_str = rct.validator_location_seal.prefix.to_str();
+                        let validator = self.other_instances.get(&prefix_str).unwrap().clone();
 
-                    let state = self
-                        .other_instances
-                        .remove(&prefix_str)
-                        .unwrap_or(IdentifierState::default());
-                    self.other_instances
-                        .insert(prefix_str.clone(), state.verify_and_apply(&ev)?);
-
-                    let rct = self.make_rct(ev.event_message)?;
-                    response.push(rct);
-                }
+                        self.process_receipt(validator, r).unwrap();
+                    }
+                    // NOTE should never happen
+                    _ => Err(Error::SemanticError("Incorrect Receipt Structure".into()))?,
+                },
+                Deserialized::Rct(_) => todo!(),
             }
         }
         let str_res = response
