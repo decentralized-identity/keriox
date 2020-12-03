@@ -129,6 +129,7 @@ fn blake3_512_digest(input: &[u8]) -> Vec<u8> {
 }
 
 fn blake2b_512_digest(input: &[u8]) -> Vec<u8> {
+    use ursa::blake2::Digest;
     Blake2::digest(input).to_vec()
 }
 
