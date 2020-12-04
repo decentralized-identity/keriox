@@ -52,4 +52,7 @@ pub enum Error {
 
     #[error("Improper Prefix Type")]
     ImproperPrefixType,
+
+    #[error(transparent)]
+    NomIResult(#[from] nom::Err<Box<dyn std::error::Error>>),
 }
