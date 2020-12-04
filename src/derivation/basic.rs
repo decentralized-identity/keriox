@@ -1,7 +1,7 @@
 use super::DerivationCode;
 use crate::{error::Error, prefix::BasicPrefix};
 use core::str::FromStr;
-use ursa::keys::PublicKey;
+pub use ursa::keys::PublicKey;
 
 /// Basic Derivations
 ///
