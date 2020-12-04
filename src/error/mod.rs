@@ -54,5 +54,5 @@ pub enum Error {
     ImproperPrefixType,
 
     #[error(transparent)]
-    NomIResult(#[from] nom::Err<(&'static [u8], nom::error::ErrorKind)>),
+    NomIResult(#[from] nom::Err<(&'static[u8], nom::error::ErrorKind)>),
 }

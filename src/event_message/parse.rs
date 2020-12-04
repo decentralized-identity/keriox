@@ -273,12 +273,15 @@ fn test_stream2() {
 }
 
 #[test]
-fn test_stream3() {
+fn test_stream3() -> Result<(), Error> {
     // should fail to verify with incorrect signature
     let stream = r#"{"vs":"KERI10JSON00012a_","pre":"E4_CHZxqydVAvJEI7beqk3TZwUR92nQydi1nI8UqUTxk","sn":"0","ilk":"icp","sith":"1","keys":["DLfozZ0uGvLED22X3K8lX6ciwhl02jdjt1DQ_EHnJro0","C6KROFI5gWRXhAiIMiHLCDa-Oj09kmVMr2btCE96k_3g"],"nxt":"E99mhvP0pLkGtxymQkspRqcdoIFOqdigCf_F3rpg7rfk","toad":"0","wits":[],"cnfg":[]}-AABAAlxZyoxbADu-x9Ho6EC7valjC4bNn7muWvqC_uAEBd1P9xIeOSxmcYdhyvBg1-o-25ebv66Q3Td5bZ730wqLjBA"#.as_bytes();
 
     assert!(signed_message(stream).is_ok());
-    assert!(!signed_event_stream_validate(stream).is_ok())
+    let result = signed_event_stream_validate(stream);
+    assert!(!result.is_ok());
+    result?; // Check error propagation 
+    Ok(())
 }
 
 #[test]
