@@ -195,9 +195,21 @@ pub fn signed_event_stream_validate(s: &[u8]) -> nom::IResult<&[u8], IdentifierS
         signed_message,
         Ok(IdentifierState::default()),
         |acc, next| match next {
-            Deserialized::Event(e) => Ok(acc?
-                .verify_and_apply(&SignedEventMessage::from(e))
-                .map_err(|_| nom::Err::Error((s, ErrorKind::Verify)))?),
+            Deserialized::Event(e) => {
+                let new_state = acc?
+                    .apply(&e.event.event)
+                    .map_err(|_| nom::Err::Error((s, ErrorKind::Verify)))?;
+                if new_state
+                    .current
+                    .verify(e.event.raw, &e.signatures)
+                    .map_err(|_| nom::Err::Error((s, ErrorKind::Verify)))?
+                {
+                    Ok(new_state)
+                } else {
+                    Err(nom::Err::Error((s, ErrorKind::Verify)))
+                }
+            }
+            // TODO this probably should not just skip non-events
             _ => acc,
         },
     )(s)?;
