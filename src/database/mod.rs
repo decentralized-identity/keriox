@@ -1,6 +1,9 @@
 use crate::{
     event_message::parse::message,
-    prefix::{AttachedSignaturePrefix, IdentifierPrefix, SelfAddressingPrefix},
+    prefix::{
+        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
+        SelfSigningPrefix,
+    },
     state::IdentifierState,
 };
 #[cfg(feature = "lmdb")]
@@ -158,8 +161,8 @@ pub trait EventDatabase {
         &self,
         pref: &IdentifierPrefix,
         dig: &SelfAddressingPrefix,
-        signer: &IdentifierPrefix,
-        sig: &AttachedSignaturePrefix,
+        signer: &BasicPrefix,
+        sig: &SelfSigningPrefix,
     ) -> Result<(), Self::Error>;
 
     /// Add Transferrable Receipt

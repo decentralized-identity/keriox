@@ -3,6 +3,7 @@ use crate::{
     error::Error,
     prefix::{
         AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
+        SelfSigningPrefix,
     },
 };
 use bincode;
@@ -241,8 +242,8 @@ impl EventDatabase for LmdbEventDatabase {
         &self,
         pref: &IdentifierPrefix,
         dig: &SelfAddressingPrefix,
-        signer: &IdentifierPrefix,
-        sig: &AttachedSignaturePrefix,
+        signer: &BasicPrefix,
+        sig: &SelfSigningPrefix,
     ) -> Result<(), Self::Error> {
         self.write_ref_multi(
             &self.receipts_nt,

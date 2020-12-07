@@ -5,7 +5,6 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
-use std::str::FromStr;
 pub mod seal;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
