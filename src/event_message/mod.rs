@@ -6,7 +6,7 @@ use crate::{
         Event,
     },
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
-    state::{EventSemantics, IdentifierState, Verifiable},
+    state::{EventSemantics, IdentifierState},
     util::dfs_serializer,
 };
 pub mod serialization_info;
@@ -38,7 +38,7 @@ pub struct SignedEventMessage {
 }
 
 #[derive(Debug, Clone)]
-pub struct SignedNontransferableReciept {
+pub struct SignedNontransferableReceipt {
     pub body: EventMessage,
     pub couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
 }
@@ -186,14 +186,6 @@ impl EventSemantics for EventMessage {
 impl EventSemantics for SignedEventMessage {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         self.event_message.apply_to(state)
-    }
-}
-
-impl Verifiable for SignedEventMessage {
-    fn verify_against(&self, state: &IdentifierState) -> Result<bool, Error> {
-        let serialized = self.event_message.serialize()?;
-
-        state.current.verify(&serialized, &self.signatures)
     }
 }
 
