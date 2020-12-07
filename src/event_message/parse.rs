@@ -1,5 +1,5 @@
 use super::{
-    AttachedSignaturePrefix, EventMessage, SignedEventMessage, SignedNontransferableReciept,
+    AttachedSignaturePrefix, EventMessage, SignedEventMessage, SignedNontransferableReceipt,
 };
 use crate::{
     derivation::attached_signature_code::b64_to_num,
@@ -32,9 +32,12 @@ impl From<DeserializedSignedEvent<'_>> for SignedEventMessage {
 }
 
 pub enum Deserialized<'a> {
+    // Event verification requires raw bytes, so use DesrializedSignedEvent
     Event(DeserializedSignedEvent<'a>),
+    // Vrc's dont need raw bytes and have a normal structure, use SignedEventMessage
     Vrc(SignedEventMessage),
-    Rct(SignedNontransferableReciept),
+    // Rct's have an alternative appended signature structure, use SignedNontransferableReceipt
+    Rct(SignedNontransferableReceipt),
 }
 
 fn json_message(s: &[u8]) -> nom::IResult<&[u8], DeserializedEvent> {
@@ -154,7 +157,7 @@ pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], Deserialized> {
             let (extra, couplets) = couplets(rest)?;
             Ok((
                 extra,
-                Deserialized::Rct(SignedNontransferableReciept {
+                Deserialized::Rct(SignedNontransferableReceipt {
                     body: e.event,
                     couplets,
                 }),

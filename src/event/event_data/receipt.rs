@@ -10,7 +10,13 @@ use serde::{Deserialize, Serialize};
 /// NOTE: This receipt has a unique structure to it's appended
 /// signatures
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ReceiptNonTransferable {}
+pub struct ReceiptNonTransferable {
+    /// Receipted Event Digest
+    ///
+    /// A Qualified Digest of the event which this receipt is made for.
+    #[serde(rename = "dig")]
+    pub receipted_event_digest: SelfAddressingPrefix,
+}
 
 impl EventSemantics for ReceiptNonTransferable {}
 
