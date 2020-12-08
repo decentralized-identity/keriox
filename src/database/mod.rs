@@ -175,6 +175,24 @@ pub trait EventDatabase {
         signer: &IdentifierPrefix,
         sig: &AttachedSignaturePrefix,
     ) -> Result<(), Self::Error>;
+
+    /// Escrow Non-Transferrable Receipt
+    fn escrow_nt_receipt(
+        &self,
+        pref: &IdentifierPrefix,
+        dig: &SelfAddressingPrefix,
+        signer: &BasicPrefix,
+        sig: &SelfSigningPrefix,
+    ) -> Result<(), Self::Error>;
+
+    /// Escrow Transferrable Receipt
+    fn escrow_t_receipt(
+        &self,
+        pref: &IdentifierPrefix,
+        dig: &SelfAddressingPrefix,
+        signer: &IdentifierPrefix,
+        sig: &AttachedSignaturePrefix,
+    ) -> Result<(), Self::Error>;
 }
 
 pub(crate) fn test_db<D: EventDatabase>(db: D) -> Result<(), D::Error> {

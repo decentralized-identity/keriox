@@ -265,6 +265,34 @@ impl EventDatabase for LmdbEventDatabase {
             &(signer, sig),
         )
     }
+
+    fn escrow_nt_receipt(
+        &self,
+        pref: &IdentifierPrefix,
+        dig: &SelfAddressingPrefix,
+        signer: &BasicPrefix,
+        sig: &SelfSigningPrefix,
+    ) -> Result<(), Self::Error> {
+        self.write_ref_multi(
+            &self.escrowed_receipts_nt,
+            &Vec::from(ContentIndex(pref, dig)),
+            &(signer, sig),
+        )
+    }
+
+    fn escrow_t_receipt(
+        &self,
+        pref: &IdentifierPrefix,
+        dig: &SelfAddressingPrefix,
+        signer: &IdentifierPrefix,
+        sig: &AttachedSignaturePrefix,
+    ) -> Result<(), Self::Error> {
+        self.write_ref_multi(
+            &self.escrowed_receipts_nt,
+            &Vec::from(ContentIndex(pref, dig)),
+            &(signer, sig),
+        )
+    }
 }
 
 #[test]
