@@ -1,49 +1,21 @@
 use crate::{
-    database::EventDatabase, derivation::self_addressing::SelfAddressing, error::Error,
-    event::sections::KeyConfig, event_message::parse::message, prefix::AttachedSignaturePrefix,
-    prefix::IdentifierPrefix, state::IdentifierState,
+    database::EventDatabase,
+    derivation::self_addressing::SelfAddressing,
+    error::Error,
+    event::{event_data::EventData, sections::KeyConfig, Event},
+    event_message::{
+        parse::{message, Deserialized, DeserializedSignedEvent},
+        SignedEventMessage, SignedNontransferableReceipt,
+    },
+    prefix::{IdentifierPrefix, SelfAddressingPrefix},
+    state::{EventSemantics, IdentifierState},
 };
-
-mod deserialized;
 
 #[cfg(test)]
 mod tests;
 
 pub struct EventProcessor<D: EventDatabase> {
     db: D,
-}
-
-/// Event type representation used to determine processing method.
-///
-///`KeyEvent` needs only `KeyConfig` for verification, but
-///`ValidatorReceiptEvent` needs also original event which it confirm.
-pub enum EventType {
-    KeyEvent,
-    ValidatorReceiptEvent(IdentifierPrefix),
-}
-
-pub trait Processable {
-    fn verify_using(&self, kc: &KeyConfig) -> Result<bool, Error>;
-
-    fn verify_event_using(&self, db_event: &[u8], validator: &KeyConfig) -> Result<bool, Error>;
-
-    fn check_receipt_bindings(
-        &self,
-        validator_last: &[u8],
-        original_event: &[u8],
-    ) -> Result<(), Error>;
-
-    fn to_event_type(&self) -> EventType;
-
-    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error>;
-
-    fn id(&self) -> &IdentifierPrefix;
-
-    fn sn(&self) -> u64;
-
-    fn raw(&self) -> &[u8];
-
-    fn sigs(&self) -> &[AttachedSignaturePrefix];
 }
 
 impl<D: EventDatabase> EventProcessor<D> {
@@ -93,123 +65,240 @@ impl<D: EventDatabase> EventProcessor<D> {
         Ok(Some(state))
     }
 
+    /// Get keys from Establishment Event
+    ///
+    /// Returns the current Key Config associated with
+    /// the given Prefix at the establishment event
+    /// represented by Event Digest
+    fn get_keys_at_event(
+        &self,
+        id: &IdentifierPrefix,
+        event_digest: &SelfAddressingPrefix,
+    ) -> Result<Option<KeyConfig>, Error> {
+        // starting from inception
+        for sn in 0.. {
+            // read the latest raw event
+            let raw = match self
+                .db
+                .last_event_at_sn(id, sn)
+                .map_err(|_| Error::StorageError)?
+            {
+                Some(r) => r,
+                // end of KEL and no matching event found
+                None => return Ok(None),
+            };
+
+            // if it's the event we're looking for
+            if event_digest.verify_binding(&raw) {
+                // parse event
+                let parsed = message(&raw).map_err(|_| Error::DeserializationError)?.1;
+
+                // return the config or error if it's not an establishment event
+                return Ok(Some(match parsed.event.event.event_data {
+                    EventData::Icp(icp) => icp.key_config,
+                    EventData::Rot(rot) => rot.key_config,
+                    EventData::Dip(dip) => dip.inception_data.key_config,
+                    EventData::Drt(drt) => drt.rotation_data.key_config,
+                    // the receipt has a binding but it's NOT an establishment event
+                    _ => Err(Error::SemanticError("Receipt binding incorrect".into()))?,
+                }));
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Process
+    ///
+    /// Process a deserialized KERI message
+    pub fn process(&self, data: Deserialized) -> Result<Option<IdentifierState>, Error> {
+        match data {
+            Deserialized::Event(e) => self.process_event(e),
+            Deserialized::Vrc(r) => self.process_validator_receipt(r),
+            Deserialized::Rct(r) => self.process_witness_receipt(r),
+        }
+    }
+
     /// Process Event
     ///
-    /// Verify signed event, apply it to State associated with prefix of the
-    /// event and update the database. Returns updated state.
-    pub fn process<E>(&self, event: &E) -> Result<IdentifierState, Error>
-    where
-        E: Processable,
-    {
-        let dig = SelfAddressing::Blake3_256.derive(event.raw());
+    /// Validates a Key Event against the latest state
+    /// of the Identifier and applies it to update the state
+    /// returns the updated state
+    pub fn process_event<'a>(
+        &self,
+        event: DeserializedSignedEvent<'a>,
+    ) -> Result<Option<IdentifierState>, Error> {
+        // extract some useful info from the event for readability
+        let dig = SelfAddressing::Blake3_256.derive(event.event.raw);
+        let pref = &event.event.event.event.prefix;
+        let sn = event.event.event.event.sn;
+        let raw = &event.event.raw;
+        let event_message = event.event.event;
 
         // Log event.
         self.db
-            .log_event(event.id(), &dig, event.raw(), event.sigs())
+            .log_event(pref, &dig, raw, &event.signatures)
             .map_err(|_| Error::StorageError)?;
 
-        self.apply_to_state(event)
-            // verify the signatures on the event and add it to db.
-            .and_then(|state| {
-                match event.to_event_type() {
-                    EventType::KeyEvent => {
-                        self.verify_key_event(&state, event)?;
-
-                        // Add event to db.
+        self.apply_to_state(event.event.event.event)
+            .and_then(|new_state| {
+                // match on verification result
+                new_state
+                    .current
+                    .verify(raw, &event.signatures)
+                    .and_then(|result| {
+                        // TODO should check if there are enough receipts and probably escrow
                         self.db
-                            .finalise_event(event.id(), event.sn(), &dig)
+                            .finalise_event(pref, sn, &dig)
                             .map_err(|_| Error::StorageError)?;
-                    }
-                    EventType::ValidatorReceiptEvent(ref validator_prefix) => {
-                        self.verify_validator_receipt(event, validator_prefix)?;
-
-                        // Add receipt to db.
-                        for sig in event.sigs() {
-                            self.db
-                                .add_t_receipt_for_event(event.id(), &dig, &validator_prefix, &sig)
-                                .map_err(|_| Error::StorageError)?;
+                        Ok(Some(new_state))
+                    })
+                    .map_err(|e| match e {
+                        Error::NotEnoughSigsError => {
+                            match self.db.escrow_partially_signed_event(pref, sn, &dig) {
+                                Ok(_) => e,
+                                Err(_) => Error::StorageError,
+                            }
                         }
+                        _ => e,
+                    })
+            })
+            .map_err(|e| {
+                match e {
+                    // see why application failed and reject or escrow accordingly
+                    Error::EventOutOfOrderError => {
+                        self.db.escrow_out_of_order_event(pref, sn, &dig)
                     }
-                }
-                Ok(state)
+                    Error::EventDuplicateError => self.db.duplicitous_event(pref, sn, &dig),
+                    _ => Ok(()),
+                };
+                e
             })
     }
 
-    fn apply_to_state<E>(&self, event: &E) -> Result<IdentifierState, Error>
-    where
-        E: Processable,
-    {
-        let dig = SelfAddressing::Blake3_256.derive(event.raw());
+    /// Process Validator Receipt
+    ///
+    /// Checks the receipt against the receipted event
+    /// and the state of the validator, returns the state
+    /// of the identifier being receipted
+    pub fn process_validator_receipt(
+        &self,
+        vrc: SignedEventMessage,
+    ) -> Result<Option<IdentifierState>, Error> {
+        match vrc.event_message.event.event_data {
+            EventData::Vrc(r) => self
+                .db
+                .last_event_at_sn(&vrc.event_message.event.prefix, vrc.event_message.event.sn)
+                .map_err(|_| Error::StorageError)?
+                .map_or_else(
+                    // No event found, escrow the receipt
+                    || {
+                        for sig in vrc.signatures {
+                            self.db
+                                .escrow_t_receipt(
+                                    &vrc.event_message.event.prefix,
+                                    &r.receipted_event_digest,
+                                    &r.validator_location_seal.prefix,
+                                    &sig,
+                                )
+                                .map_err(|_| Error::StorageError)?
+                        }
+                        Ok(())
+                    },
+                    // Event found, verify receipt and store
+                    |event| {
+                        let keys = self
+                            .get_keys_at_event(
+                                &r.validator_location_seal.prefix,
+                                &r.validator_location_seal.event_digest,
+                            )?
+                            .ok_or(Error::SemanticError("No establishment Event found".into()))?;
+                        if keys.verify(&event, &vrc.signatures)? {
+                            for sig in vrc.signatures {
+                                self.db
+                                    .add_t_receipt_for_event(
+                                        &vrc.event_message.event.prefix,
+                                        &SelfAddressing::Blake3_256.derive(&event),
+                                        &r.validator_location_seal.prefix,
+                                        &sig,
+                                    )
+                                    .map_err(|_| Error::StorageError);
+                            }
+                            Ok(())
+                        } else {
+                            Err(Error::SemanticError("Incorrect receipt signatures".into()))
+                        }
+                    },
+                )
+                .map(|_| self.compute_state(&vrc.event_message.event.prefix))?,
+            _ => Err(Error::SemanticError("incorrect receipt structure".into())),
+        }
+    }
+
+    /// Process Witness Receipt
+    ///
+    /// Checks the receipt against the receipted event
+    /// returns the state of the Identifier being receipted,
+    /// which may have been updated by un-escrowing events
+    pub fn process_witness_receipt(
+        &self,
+        rct: SignedNontransferableReceipt,
+    ) -> Result<Option<IdentifierState>, Error> {
+        match rct.body.event.event_data {
+            EventData::Rct(r) => {
+                // get event which is being receipted
+                self.db
+                    .last_event_at_sn(&rct.body.event.prefix, rct.body.event.sn)
+                    // return if lookup fails
+                    .map_err(|_| Error::StorageError)?
+                    .map_or_else::<Result<(), Error>, _, _>(
+                        // event not found, escrow sig
+                        || {
+                            for (witness, receipt) in rct.couplets {
+                                self.db
+                                    .escrow_nt_receipt(
+                                        &rct.body.event.prefix,
+                                        &r.receipted_event_digest,
+                                        &witness,
+                                        &receipt,
+                                    )
+                                    .map_err(|_| Error::StorageError)?
+                            }
+                            Ok(())
+                        },
+                        // event found, verify and store
+                        |event| {
+                            // verify receipts and store or discard
+                            let cas_dig = SelfAddressing::Blake3_256.derive(&event);
+                            for (witness, receipt) in rct.couplets {
+                                witness.verify(&event, &receipt).map(|result| {
+                                    if result {
+                                        self.db
+                                            .add_nt_receipt_for_event(
+                                                &rct.body.event.prefix,
+                                                &cas_dig,
+                                                &witness,
+                                                &receipt,
+                                            )
+                                            .map_err(|_| Error::StorageError);
+                                    }
+                                });
+                            }
+                            Ok(())
+                        },
+                    )
+                    .map(|_| self.compute_state(&rct.body.event.prefix))?
+            }
+            _ => Err(Error::SemanticError("incorrect receipt structure".into())),
+        }
+    }
+
+    fn apply_to_state(&self, event: Event) -> Result<IdentifierState, Error> {
         // get state for id (TODO cache?)
-        self.compute_state(event.id())
+        self.compute_state(&event.prefix)
             // get empty state if there is no state yet
             .and_then(|opt| Ok(opt.map_or_else(|| IdentifierState::default(), |s| s)))
             // process the event update
             .and_then(|state| event.apply_to(state))
-            // see why application failed and reject or escrow accordingly
-            .map_err(|e| match e {
-                Error::EventOutOfOrderError => {
-                    match self
-                        .db
-                        .escrow_out_of_order_event(event.id(), event.sn(), &dig)
-                    {
-                        Err(_) => Error::StorageError,
-                        _ => e,
-                    }
-                }
-                Error::EventDuplicateError => {
-                    match self.db.duplicitous_event(event.id(), event.sn(), &dig) {
-                        Err(_) => Error::StorageError,
-                        _ => e,
-                    }
-                }
-                _ => e,
-            })
-    }
-
-    fn verify_key_event<E>(&self, state: &IdentifierState, event: &E) -> Result<bool, Error>
-    where
-        E: Processable,
-    {
-        let dig = SelfAddressing::Blake3_256.derive(event.raw());
-        event
-            .verify_using(&state.current)
-            // escrow partially signed event
-            .map_err(|e| match e {
-                Error::NotEnoughSigsError => {
-                    match self
-                        .db
-                        .escrow_partially_signed_event(event.id(), event.sn(), &dig)
-                    {
-                        Err(_) => Error::StorageError,
-                        _ => e,
-                    }
-                }
-                _ => e,
-            })
-    }
-
-    fn verify_validator_receipt<E>(
-        &self,
-        event: &E,
-        validator_pre: &IdentifierPrefix,
-    ) -> Result<bool, Error>
-    where
-        E: Processable,
-    {
-        // Get event at sn for prefix which made receipted event.
-        let event_from_db = self
-            .db
-            .last_event_at_sn(event.id(), event.sn())
-            .map_err(|_| Error::StorageError)?
-            .ok_or(Error::SemanticError("Event not yet in db".to_string()))?;
-
-        // Get state of prefix which made receipt.
-        let validator = self
-            .compute_state(validator_pre)?
-            .ok_or(Error::SemanticError("Validator not yet in db".to_string()))?;
-
-        event.check_receipt_bindings(&validator.last, &event_from_db)?;
-        event.verify_event_using(&event_from_db, &validator.current)
     }
 }
