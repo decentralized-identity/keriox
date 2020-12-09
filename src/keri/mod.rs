@@ -68,7 +68,10 @@ impl Keri {
         )]);
         let mut log = EventLog::new();
 
-        let s0 = IdentifierState::default().verify_and_apply(&sigged)?;
+        let s0 = IdentifierState::default().apply(&sigged)?;
+        s0.current
+            .verify(&sigged.event_message.serialize()?, &sigged.signatures)?;
+
         log.commit(sigged)?;
 
         Ok(Keri {
@@ -113,7 +116,10 @@ impl Keri {
             0,
         )]);
 
-        self.state = self.state.clone().verify_and_apply(&rot)?;
+        self.state = self.state.clone().apply(&rot)?;
+        self.state
+            .current
+            .verify(&rot.event_message.serialize()?, &rot.signatures)?;
 
         self.kel.commit(rot.clone())?;
 
@@ -142,7 +148,11 @@ impl Keri {
             0,
         )]);
 
-        self.state = self.state.clone().verify_and_apply(&ixn)?;
+        self.state = self.state.clone().apply(&ixn)?;
+        self.state
+            .current
+            .verify(&ixn.event_message.serialize()?, &ixn.signatures)?;
+
         self.kel.commit(ixn.clone())?;
         Ok(ixn)
     }
@@ -154,37 +164,35 @@ impl Keri {
         let mut response: Vec<SignedEventMessage> = vec![];
         for dev in events {
             match dev {
-                Deserialized::Event(e) => {
-                    let ev: SignedEventMessage = e.into();
-                    match ev.event_message.event.event_data {
-                        EventData::Icp(_) => {
-                            let ev_prefix = ev.event_message.event.prefix.to_str();
-                            let state = IdentifierState::default().verify_and_apply(&ev)?;
+                Deserialized::Event(ev) => match ev.event.event.event.event_data {
+                    EventData::Icp(_) => {
+                        let ev_prefix = ev.event.event.event.prefix.to_str();
+                        let state = IdentifierState::default().apply(&ev.event.event)?;
+                        state.current.verify(ev.event.raw, &ev.signatures)?;
 
-                            if !self.other_instances.contains_key(&ev_prefix) {
-                                if let Some(icp) = self.kel.get_last() {
-                                    response.push(icp);
-                                }
+                        if !self.other_instances.contains_key(&ev_prefix) {
+                            if let Some(icp) = self.kel.get_last() {
+                                response.push(icp);
                             }
-                            self.other_instances.insert(ev_prefix.clone(), state);
-                            let rct = self.make_rct(ev.event_message)?;
-                            response.push(rct);
                         }
-                        _ => {
-                            let prefix_str = ev.event_message.event.prefix.to_str();
-
-                            let state = self
-                                .other_instances
-                                .remove(&prefix_str)
-                                .unwrap_or(IdentifierState::default());
-                            self.other_instances
-                                .insert(prefix_str.clone(), state.verify_and_apply(&ev)?);
-
-                            let rct = self.make_rct(ev.event_message)?;
-                            response.push(rct);
-                        }
+                        self.other_instances.insert(ev_prefix.clone(), state);
+                        let rct = self.make_rct(ev.event.event)?;
+                        response.push(rct);
                     }
-                }
+                    _ => {
+                        let prefix_str = ev.event.event.event.prefix.to_str();
+
+                        let state = self
+                            .other_instances
+                            .remove(&prefix_str)
+                            .unwrap_or(IdentifierState::default());
+                        self.other_instances
+                            .insert(prefix_str.clone(), state.apply(&ev.event.event)?);
+
+                        let rct = self.make_rct(ev.event.event)?;
+                        response.push(rct);
+                    }
+                },
                 Deserialized::Vrc(r) => match r.event_message.event.event_data {
                     EventData::Vrc(ref rct) => {
                         let prefix_str = rct.validator_location_seal.prefix.to_str();
@@ -236,7 +244,9 @@ impl Keri {
                             .derive(&validator.last)
                     {
                         // seal dig is the digest of the last establishment event for the validator, verify the rct
-                        validator.verify(&event.event_message.sign(sigs.signatures.clone()))?;
+                        validator
+                            .current
+                            .verify(&event.event_message.serialize()?, &sigs.signatures)?;
                         self.receipts
                             .entry(sigs.event_message.event.sn)
                             .or_insert_with(|| vec![])
