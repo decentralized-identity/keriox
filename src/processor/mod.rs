@@ -130,14 +130,14 @@ impl<D: EventDatabase> EventProcessor<D> {
     ) -> Result<Option<IdentifierState>, Error> {
         // extract some useful info from the event for readability
         let dig = SelfAddressing::Blake3_256.derive(event.event.raw);
-        let pref = &event.event.event.event.prefix;
+        let pref = &event.event.event.event.prefix.clone();
         let sn = event.event.event.event.sn;
         let raw = &event.event.raw;
-        let event_message = event.event.event;
+        let sigs = event.signatures;
 
         // Log event.
         self.db
-            .log_event(pref, &dig, raw, &event.signatures)
+            .log_event(&pref, &dig, raw, &sigs)
             .map_err(|_| Error::StorageError)?;
 
         self.apply_to_state(event.event.event.event)
@@ -145,8 +145,8 @@ impl<D: EventDatabase> EventProcessor<D> {
                 // match on verification result
                 new_state
                     .current
-                    .verify(raw, &event.signatures)
-                    .and_then(|result| {
+                    .verify(raw, &sigs)
+                    .and_then(|_result| {
                         // TODO should check if there are enough receipts and probably escrow
                         self.db
                             .finalise_event(pref, sn, &dig)
@@ -185,14 +185,15 @@ impl<D: EventDatabase> EventProcessor<D> {
         &self,
         vrc: SignedEventMessage,
     ) -> Result<Option<IdentifierState>, Error> {
-        match vrc.event_message.event.event_data {
-            EventData::Vrc(r) => self
-                .db
-                .last_event_at_sn(&vrc.event_message.event.prefix, vrc.event_message.event.sn)
-                .map_err(|_| Error::StorageError)?
-                .map_or_else(
+        match &vrc.event_message.event.event_data {
+            EventData::Vrc(r) => {
+                match self
+                    .db
+                    .last_event_at_sn(&vrc.event_message.event.prefix, vrc.event_message.event.sn)
+                    .map_err(|_| Error::StorageError)?
+                {
                     // No event found, escrow the receipt
-                    || {
+                    None => {
                         for sig in vrc.signatures {
                             self.db
                                 .escrow_t_receipt(
@@ -203,10 +204,9 @@ impl<D: EventDatabase> EventProcessor<D> {
                                 )
                                 .map_err(|_| Error::StorageError)?
                         }
-                        Ok(())
-                    },
+                    }
                     // Event found, verify receipt and store
-                    |event| {
+                    Some(event) => {
                         let keys = self
                             .get_keys_at_event(
                                 &r.validator_location_seal.prefix,
@@ -224,13 +224,13 @@ impl<D: EventDatabase> EventProcessor<D> {
                                     )
                                     .map_err(|_| Error::StorageError);
                             }
-                            Ok(())
                         } else {
-                            Err(Error::SemanticError("Incorrect receipt signatures".into()))
+                            Err(Error::SemanticError("Incorrect receipt signatures".into()))?;
                         }
-                    },
-                )
-                .map(|_| self.compute_state(&vrc.event_message.event.prefix))?,
+                    }
+                };
+                self.compute_state(&vrc.event_message.event.prefix)
+            }
             _ => Err(Error::SemanticError("incorrect receipt structure".into())),
         }
     }
@@ -244,50 +244,47 @@ impl<D: EventDatabase> EventProcessor<D> {
         &self,
         rct: SignedNontransferableReceipt,
     ) -> Result<Option<IdentifierState>, Error> {
-        match rct.body.event.event_data {
+        // check structure is correct
+        match &rct.body.event.event_data {
+            // get event which is being receipted
             EventData::Rct(r) => {
-                // get event which is being receipted
-                self.db
+                match self
+                    .db
                     .last_event_at_sn(&rct.body.event.prefix, rct.body.event.sn)
                     // return if lookup fails
                     .map_err(|_| Error::StorageError)?
-                    .map_or_else::<Result<(), Error>, _, _>(
-                        // event not found, escrow sig
-                        || {
-                            for (witness, receipt) in rct.couplets {
+                {
+                    Some(event) => {
+                        // verify receipts and store or discard
+                        let cas_dig = SelfAddressing::Blake3_256.derive(&event);
+                        for (witness, receipt) in &rct.couplets {
+                            if witness.verify(&event, &receipt)? {
                                 self.db
-                                    .escrow_nt_receipt(
+                                    .add_nt_receipt_for_event(
                                         &rct.body.event.prefix,
-                                        &r.receipted_event_digest,
+                                        &cas_dig,
                                         &witness,
                                         &receipt,
                                     )
-                                    .map_err(|_| Error::StorageError)?
-                            }
-                            Ok(())
-                        },
-                        // event found, verify and store
-                        |event| {
-                            // verify receipts and store or discard
-                            let cas_dig = SelfAddressing::Blake3_256.derive(&event);
-                            for (witness, receipt) in rct.couplets {
-                                witness.verify(&event, &receipt).map(|result| {
-                                    if result {
-                                        self.db
-                                            .add_nt_receipt_for_event(
-                                                &rct.body.event.prefix,
-                                                &cas_dig,
-                                                &witness,
-                                                &receipt,
-                                            )
-                                            .map_err(|_| Error::StorageError);
-                                    }
-                                });
-                            }
-                            Ok(())
-                        },
-                    )
-                    .map(|_| self.compute_state(&rct.body.event.prefix))?
+                                    .map_err(|_| Error::StorageError);
+                            };
+                        }
+                    }
+                    None => {
+                        for (witness, receipt) in rct.couplets {
+                            self.db
+                                .escrow_nt_receipt(
+                                    &rct.body.event.prefix,
+                                    // TODO THIS MAY NOT ALWAYS MATCH, see issue #74 in dif/keri
+                                    &r.receipted_event_digest,
+                                    &witness,
+                                    &receipt,
+                                )
+                                .map_err(|_| Error::StorageError);
+                        }
+                    }
+                };
+                self.compute_state(&rct.body.event.prefix)
             }
             _ => Err(Error::SemanticError("incorrect receipt structure".into())),
         }
