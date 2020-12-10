@@ -75,7 +75,9 @@ fn test_process() -> Result<(), Error> {
     // Out of order event.
     let out_of_order_ixn_raw = r#"{"vs":"KERI10JSON0000a3_","pre":"ECui-E44CqN2U7uffCikRCp_YKLkPrA4jsTZ_A0XRLzc","sn":"5","ilk":"ixn","dig":"EwiIGwOHz-mXTM9q7UHjILuj2rs3GESAbrLJiZP1u-ug","data":[]}-AADAA5WWCK-bVduSseQBSRsDoy0LeXk8VcZXZGawUTYYkcTrkdYIxSXHecUvAHoOdGN1H0QJXuQJEAkLlEN1Y7g_1CwAB1e-eIsZTdyKGLMBI_Aig3-pf3l5BmUyi12coRusyExZoMcO5SSokaeZgRMZRb6ncDk7iSRylaKeq5iBhmDmGBwACOdWDJWMh1EHvco3ndqwBhJBkoT6PcYJenls6xcNuB9yHbkGuZPuhHMAYHRD60sBxTbrEf28AvAW60sZPYl_JAA"#;
 
-    let out_of_order_ixn = parse::signed_message(ixn_raw.as_bytes()).unwrap().1;
+    let out_of_order_ixn = parse::signed_message(out_of_order_ixn_raw.as_bytes())
+        .unwrap()
+        .1;
 
     let id_state = event_processor.process(out_of_order_ixn);
     assert!(id_state.is_err());

@@ -2,10 +2,10 @@ use crate::{
     database::EventDatabase,
     derivation::self_addressing::SelfAddressing,
     error::Error,
-    event::{event_data::EventData, sections::KeyConfig, Event},
+    event::{event_data::EventData, sections::KeyConfig},
     event_message::{
         parse::{message, Deserialized, DeserializedSignedEvent},
-        SignedEventMessage, SignedNontransferableReceipt,
+        EventMessage, SignedEventMessage, SignedNontransferableReceipt,
     },
     prefix::{IdentifierPrefix, SelfAddressingPrefix},
     state::{EventSemantics, IdentifierState},
@@ -141,7 +141,7 @@ impl<D: EventDatabase> EventProcessor<D> {
             .log_event(&pref, &dig, raw, &sigs)
             .map_err(|_| Error::StorageError)?;
 
-        self.apply_to_state(event.event.event.event)
+        self.apply_to_state(event.event.event)
             .and_then(|new_state| {
                 // match on verification result
                 new_state
@@ -293,9 +293,9 @@ impl<D: EventDatabase> EventProcessor<D> {
         }
     }
 
-    fn apply_to_state(&self, event: Event) -> Result<IdentifierState, Error> {
+    fn apply_to_state(&self, event: EventMessage) -> Result<IdentifierState, Error> {
         // get state for id (TODO cache?)
-        self.compute_state(&event.prefix)
+        self.compute_state(&event.event.prefix)
             // get empty state if there is no state yet
             .and_then(|opt| Ok(opt.map_or_else(|| IdentifierState::default(), |s| s)))
             // process the event update
