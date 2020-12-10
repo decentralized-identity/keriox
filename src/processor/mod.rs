@@ -124,6 +124,7 @@ impl<D: EventDatabase> EventProcessor<D> {
     /// Validates a Key Event against the latest state
     /// of the Identifier and applies it to update the state
     /// returns the updated state
+    /// TODO improve checking and handling of errors!
     pub fn process_event<'a>(
         &self,
         event: DeserializedSignedEvent<'a>,
@@ -181,6 +182,7 @@ impl<D: EventDatabase> EventProcessor<D> {
     /// Checks the receipt against the receipted event
     /// and the state of the validator, returns the state
     /// of the identifier being receipted
+    /// TODO improve checking and handling of errors!
     pub fn process_validator_receipt(
         &self,
         vrc: SignedEventMessage,
@@ -240,6 +242,7 @@ impl<D: EventDatabase> EventProcessor<D> {
     /// Checks the receipt against the receipted event
     /// returns the state of the Identifier being receipted,
     /// which may have been updated by un-escrowing events
+    /// TODO improve checking and handling of errors!
     pub fn process_witness_receipt(
         &self,
         rct: SignedNontransferableReceipt,

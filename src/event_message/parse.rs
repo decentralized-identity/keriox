@@ -15,11 +15,13 @@ use crate::{
 use nom::{branch::*, combinator::*, error::ErrorKind, multi::*, sequence::*};
 use serde_transcode::transcode;
 
+#[derive(Clone)]
 pub struct DeserializedEvent<'a> {
     pub event: EventMessage,
     pub raw: &'a [u8],
 }
 
+#[derive(Clone)]
 pub struct DeserializedSignedEvent<'a> {
     pub event: DeserializedEvent<'a>,
     pub signatures: Vec<AttachedSignaturePrefix>,
@@ -31,6 +33,7 @@ impl From<DeserializedSignedEvent<'_>> for SignedEventMessage {
     }
 }
 
+#[derive(Clone)]
 pub enum Deserialized<'a> {
     // Event verification requires raw bytes, so use DesrializedSignedEvent
     Event(DeserializedSignedEvent<'a>),

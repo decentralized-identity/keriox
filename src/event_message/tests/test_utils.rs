@@ -168,7 +168,9 @@ fn test_update_identifier_state(
     let signed_event = event_msg.sign(vec![attached_sig.clone()]);
 
     // Apply event to current IdentifierState.
-    let new_state = state_data.state.verify_and_apply(&signed_event)?;
+    let new_state = state_data.state.apply(&signed_event)?;
+
+    assert!(new_state.current.verify(&sed, &signed_event.signatures)?);
 
     // Check if current prefix can verify message and signature.
     assert!(current_pref.verify(&sed, &attached_sig.signature)?);
