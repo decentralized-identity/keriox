@@ -8,6 +8,7 @@ use ursa::CryptoError;
 
 #[derive(Error, Debug)]
 pub enum Error {
+    
     #[error("Error during Serialization: {0}")]
     SerializationError(String),
 
@@ -52,4 +53,5 @@ pub enum Error {
 
     #[error("Improper Prefix Type")]
     ImproperPrefixType,
+
 }
