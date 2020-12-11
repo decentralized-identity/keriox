@@ -3,11 +3,12 @@ use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(untagged)]
 pub enum Seal {
+    Location(LocationSeal),
+    Event(EventSeal),
     Digest(DigestSeal),
     Root(RootSeal),
-    Event(EventSeal),
-    Location(LocationSeal),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -52,4 +53,25 @@ pub struct DelegatingEventSeal {
 
     #[serde(rename = "dig")]
     pub commitment: SelfAddressingPrefix,
+}
+
+#[test]
+fn test_seal_deserialization() {
+  // Event seal
+  let seal_str = r#"{"pre":"Ek7M173EvQZ6kLjyorCwZK4XWwyNcSi6u7lz5-M6MyFE","dig":"EeBPcw30IVCylYANEGOg3V8f4nBYMspEpqNaq2Y8_knw"}"#;
+  let seal: Seal = serde_json::from_str(seal_str).unwrap();
+  assert!(matches!(seal, Seal::Event(_)));
+  assert_eq!(serde_json::to_string(&seal).unwrap(), seal_str);
+
+  // Location seal
+  let seal_str = r#"{"pre":"EXmV-FiCyD7U76DoXSQoHlG30hFLD2cuYWEQPp0mEu1U","sn":"1","ilk":"ixn","dig":"Ey-05xXgtfYvKyMGa-dladxUQyXv4JaPg-gaKuXLfceQ"}"#;
+  let seal: Seal = serde_json::from_str(seal_str).unwrap();
+  assert!(matches!(seal, Seal::Location(_)));
+  assert_eq!(serde_json::to_string(&seal).unwrap(), seal_str);
+
+  // Digest seal
+  let seal_str = r#"{"dig":"Ey-05xXgtfYvKyMGa-dladxUQyXv4JaPg-gaKuXLfceQ"}"#;
+  let seal: Seal = serde_json::from_str(seal_str).unwrap();
+  assert!(matches!(seal, Seal::Digest(_)));
+  assert_eq!(serde_json::to_string(&seal).unwrap(), seal_str);
 }
