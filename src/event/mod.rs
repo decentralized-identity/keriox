@@ -39,10 +39,8 @@ impl EventSemantics for Event {
                     return Err(Error::SemanticError("SN is not correct".to_string()));
                 }
             }
-            EventData::Vrc(ref vrc) => {
-                if self.prefix == state.prefix {
-                    return vrc.apply_to(state);
-                } else {
+            EventData::Vrc(_) | EventData::Rct(_) => {
+                if self.prefix != state.prefix {
                     return Err(Error::SemanticError(
                         "Invalid Identifier Prefix Binding".into(),
                     ));
@@ -53,6 +51,7 @@ impl EventSemantics for Event {
                 if self.prefix != state.prefix {
                     return Err(Error::SemanticError("Prefix does not match".to_string()));
                 // sn must be incremented
+                // TODO recovery will break this rule when we implement it
                 } else if self.sn < state.sn + 1 {
                     return Err(Error::EventDuplicateError);
                 } else if self.sn > state.sn + 1 {

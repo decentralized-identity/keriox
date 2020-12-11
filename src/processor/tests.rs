@@ -14,7 +14,7 @@ fn test_process() -> Result<(), Error> {
     let db = LmdbEventDatabase::new(root.path()).unwrap();
     let event_processor = EventProcessor::new(db);
 
-    let icp_raw = r#"{"vs":"KERI10JSON000159_","pre":"ECui-E44CqN2U7uffCikRCp_YKLkPrA4jsTZ_A0XRLzc","sn":"0","ilk":"icp","sith":"2","keys":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"nxt":"Evhf3437ZRRnVhT0zOxo_rBX_GxpGoAnLuzrVlDK8ZdM","toad":"0","wits":[],"cnfg":[]}-AADAAJ66nrRaNjltE31FZ4mELVGUMc_XOqOAOXZQjZCEAvbeJQ8r3AnccIe1aepMwgoQUeFdIIQLeEDcH8veLdud_DQABTQYtYWKh3ScYij7MOZz3oA6ZXdIDLRrv0ObeSb4oc6LYrR1LfkICfXiYDnp90tAdvaJX5siCLjSD3vfEM9ADDAACQTgUl4zF6U8hfDy8wwUva-HCAiS8LQuP7elKAHqgS8qtqv5hEj3aTjwE91UtgAX2oCgaw98BCYSeT5AuY1SpDA"#;
+    let icp_raw = r#"{"vs":"KERI10JSON000159_","pre":"EUEtw_3JqBhrLtwwlP9QLnDXZGjJ3CIxq7QGP_dEQiwc","sn":"0","ilk":"icp","sith":"2","keys":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"nxt":"E9izzBkXX76sqt0N-tfLzJeRqj0W56p4pDQ_ZqNCDpyw","toad":"0","wits":[],"cnfg":[]}-AADAAh_trqX993WCZfZ2Mm8Rj2AnlpJzStsv2x4M3gKOIpA740SCYGTDIU4L2Zokd8Krfakt98vy2vAYTjrJ7_UMnBQABNgYwwmeinupnrK8nIbVkz4iL7OgjAalNSNimZciYLCBRoKD5jbyXbHDxgycjl2vaw3roAzuaSi4686OY4P0kDgACbz0tl-U_EBbSfdKmtJHkSNfbDjB7pw_k9C9MuTv1eP3XM4OFApLJyhshWDtWmUzb4uorpXWvqRKfkMIRCKyBDQ"#;
     // Create deserialized inception event from string.
     // Events and sigs are from keripy `test_multisig_digprefix` test.
     let deserialized_icp = parse::signed_message(icp_raw.as_bytes()).unwrap().1;
@@ -32,7 +32,7 @@ fn test_process() -> Result<(), Error> {
     let icp_from_db = event_processor.db.last_event_at_sn(&id, 0).unwrap();
     assert_eq!(icp_from_db, Some(raw_parsed));
 
-    let rot_raw = r#"{"vs":"KERI10JSON000198_","pre":"ECui-E44CqN2U7uffCikRCp_YKLkPrA4jsTZ_A0XRLzc","sn":"1","ilk":"rot","dig":"EF9THPxXUribmjC641JsDJynFJwieRTpDn-xvhxvXaPI","sith":"2","keys":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ","D1kcBE7h0ImWW6_Sp7MQxGYSshZZz6XM7OiUE5DXm0dU","D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM"],"nxt":"EwkvQoCtKlgZeQK1eUb8BfmaCLCVVC13jI-j-g7Qt5KY","toad":"0","cuts":[],"adds":[],"data":[]}-AADAAuEZp7-BaPscSZkKR-xFGbRj-vq5DQJBp5Fm9RKc1glep_2md7gMrGbEdJC3b2hGa_j-fyEFA_gze-ugRwYLCCwABDoHupcc04lamZcZb3gm-3vpwA7VyIWolKOSmGfm9PRt1uh8mu--Cj4RQzo2mlY3s-GLlYKY_DK1SbZ5lOCUbDwACCSgi9afM9B01aoMbYfSBNXnFsT5FiIM_g3mRvr8yOa6sItd4Issj8fZgZtkprGGxreXsbqKiEHim4pAWTdNWCg"#;
+    let rot_raw = r#"{"vs":"KERI10JSON000198_","pre":"EUEtw_3JqBhrLtwwlP9QLnDXZGjJ3CIxq7QGP_dEQiwc","sn":"1","ilk":"rot","dig":"EYmBZ0_Nn4sjid4UcQckAq_IXE6yzyh0Yy-lwKeRUVxg","sith":"2","keys":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ","D1kcBE7h0ImWW6_Sp7MQxGYSshZZz6XM7OiUE5DXm0dU","D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM"],"nxt":"EQpRYqbID2rW8X5lB6mOzDckJEIFae6NbJISXgJSN9qg","toad":"0","cuts":[],"adds":[],"data":[]}-AADAAtjBE4-kz5byJJDJuqKKKyjujw0CBMJfdx4XPmky_7cl8jNyeoTpcSbcifr7LUbuM_iQIBXFNIBqL9KMw8RQgAQABB8zTUrCwrBzO4M58oJ_CRu6fdVXK-jy5tYSwoqWcxjtRYnF-OIZ03zVjdhiky24-P_dRCGBQE-VmOQcSRW6NAgACrt7M9UM2Thvib1OhFcQtGjNnDNkG502_YWUnhOYOiS-_poEQRHi2PrF5FSNSv8cnAKgTH9UNt8h98kqOqXYJCQ"#;
     let deserialized_rot = parse::signed_message(rot_raw.as_bytes()).unwrap().1;
 
     // Create deserialized rotation event.
@@ -54,7 +54,7 @@ fn test_process() -> Result<(), Error> {
     assert!(id_state.is_err());
     assert!(matches!(id_state, Err(Error::EventDuplicateError)));
 
-    let ixn_raw = r#"{"vs":"KERI10JSON0000a3_","pre":"ECui-E44CqN2U7uffCikRCp_YKLkPrA4jsTZ_A0XRLzc","sn":"2","ilk":"ixn","dig":"E0d-mZATnsQJcsbMftEZTxckCOBpSO8HVZHBBNTg2P9Q","data":[]}-AADAAriQOdH87Tv5Axbhk1fgDXgXWv1oAGyxaW-0de6Z3CtRGDpfJgquxFhYROi7Fa-AHf8OXfaeLObcUS03xNSlOCQABb8fE50SRZkSfqlFZoGOkusCl_ed3JLt1kr22KnYnUC63ykNjpyAVJpmFISo7McV8QAr10xrYzSY5C6xbgJGnAwACAmnpfoxmrR9xhX61nn-oYtuJ_iNiotDKKdAHRK8Qm87GcGF6M9RcFD7XFci7czpsXLMHXnH5mM8WXpW4FDuYCw"#;
+    let ixn_raw = r#"{"vs":"KERI10JSON000198_","pre":"EUEtw_3JqBhrLtwwlP9QLnDXZGjJ3CIxq7QGP_dEQiwc","sn":"1","ilk":"rot","dig":"EYmBZ0_Nn4sjid4UcQckAq_IXE6yzyh0Yy-lwKeRUVxg","sith":"2","keys":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ","D1kcBE7h0ImWW6_Sp7MQxGYSshZZz6XM7OiUE5DXm0dU","D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM"],"nxt":"EQpRYqbID2rW8X5lB6mOzDckJEIFae6NbJISXgJSN9qg","toad":"0","cuts":[],"adds":[],"data":[]}-AADAAtjBE4-kz5byJJDJuqKKKyjujw0CBMJfdx4XPmky_7cl8jNyeoTpcSbcifr7LUbuM_iQIBXFNIBqL9KMw8RQgAQABB8zTUrCwrBzO4M58oJ_CRu6fdVXK-jy5tYSwoqWcxjtRYnF-OIZ03zVjdhiky24-P_dRCGBQE-VmOQcSRW6NAgACrt7M9UM2Thvib1OhFcQtGjNnDNkG502_YWUnhOYOiS-_poEQRHi2PrF5FSNSv8cnAKgTH9UNt8h98kqOqXYJCQ"#;
 
     // Construct partially signed interaction event.
     let deserialized_ixn = parse::signed_message(ixn_raw.as_bytes()).unwrap().1;
@@ -63,6 +63,10 @@ fn test_process() -> Result<(), Error> {
         Deserialized::Event(e) => e.event.raw.to_vec(),
         _ => Err(Error::SemanticError("bad deser".into()))?,
     };
+
+    // Check if processed event is in db.
+    let ixn_from_db = event_processor.db.last_event_at_sn(&id, 2).unwrap();
+    assert_eq!(ixn_from_db, Some(raw_parsed));
 
     // Process interaction event.
     let id_state = event_processor.process(deserialized_ixn);
@@ -73,7 +77,7 @@ fn test_process() -> Result<(), Error> {
     assert!(matches!(ixn_from_db, Ok(None)));
 
     // Out of order event.
-    let out_of_order_ixn_raw = r#"{"vs":"KERI10JSON0000a3_","pre":"ECui-E44CqN2U7uffCikRCp_YKLkPrA4jsTZ_A0XRLzc","sn":"5","ilk":"ixn","dig":"EwiIGwOHz-mXTM9q7UHjILuj2rs3GESAbrLJiZP1u-ug","data":[]}-AADAA5WWCK-bVduSseQBSRsDoy0LeXk8VcZXZGawUTYYkcTrkdYIxSXHecUvAHoOdGN1H0QJXuQJEAkLlEN1Y7g_1CwAB1e-eIsZTdyKGLMBI_Aig3-pf3l5BmUyi12coRusyExZoMcO5SSokaeZgRMZRb6ncDk7iSRylaKeq5iBhmDmGBwACOdWDJWMh1EHvco3ndqwBhJBkoT6PcYJenls6xcNuB9yHbkGuZPuhHMAYHRD60sBxTbrEf28AvAW60sZPYl_JAA"#;
+    let out_of_order_ixn_raw = r#"{"vs":"KERI10JSON0000a3_","pre":"EUEtw_3JqBhrLtwwlP9QLnDXZGjJ3CIxq7QGP_dEQiwc","sn":"3","ilk":"ixn","dig":"EI8Y-mZzPFiY-RF7Pzvk11TP70op_xmX_8_X4ja01yPM","data":[]}-AADAAzyIUY_RJ_eXuPBor1a7bbiInTBntqMJLbzDzsTAfIHc3HB7SJThLKh2Oozkm38LIBrJF2xMXx5jjM70EQNZ4CgABNy-Ct5NW7W6W0347Uw8PMrQYpNVTT3DfgsfXMva2iVnYLzw9mQedhGILf1dsW2LIk5bvoQYBCCsVf6N16j-xAgACDaYuZa_09xZFgotKblT2BPuMETl9b73y6R7-LEe9jAE47RUAWeOFp6654Du1zB78UnM2jjKMrqMhG_q0BaD4Ag"#;
 
     let out_of_order_ixn = parse::signed_message(out_of_order_ixn_raw.as_bytes())
         .unwrap()
@@ -84,7 +88,7 @@ fn test_process() -> Result<(), Error> {
     assert!(matches!(id_state, Err(Error::EventOutOfOrderError)));
 
     // Check if processed event is in kel. It shouldn't.
-    let ixn_from_db = event_processor.db.last_event_at_sn(&id, 5);
+    let ixn_from_db = event_processor.db.last_event_at_sn(&id, 3);
 
     assert!(matches!(ixn_from_db, Ok(None)));
 
