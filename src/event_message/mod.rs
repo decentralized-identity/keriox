@@ -178,6 +178,13 @@ impl EventSemantics for EventMessage {
                     }
                 })
             }
+            EventData::Dip(_) => {
+                // TODO verify binding?
+                self.event.apply_to(IdentifierState {
+                    last: self.serialize()?,
+                    ..state
+                })
+            }
             _ => self.event.apply_to(state),
         }
     }

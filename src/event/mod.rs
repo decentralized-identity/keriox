@@ -30,7 +30,7 @@ impl Event {
 impl EventSemantics for Event {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         match self.event_data {
-            EventData::Icp(_) => {
+            EventData::Icp(_) | EventData::Dip(_) => {
                 // ICP events require the state to be uninitialized
                 if state.prefix != IdentifierPrefix::default() {
                     return Err(Error::EventDuplicateError);

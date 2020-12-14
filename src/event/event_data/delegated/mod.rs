@@ -1,14 +1,15 @@
 use super::super::sections::seal::LocationSeal;
 use super::{InceptionEvent, RotationEvent};
-use crate::state::EventSemantics;
+use crate::{
+    error::Error,
+    state::{EventSemantics, IdentifierState},
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DelegatedInceptionEvent {
     #[serde(flatten)]
     pub inception_data: InceptionEvent,
-
-    pub perm: Vec<String>,
 
     pub seal: LocationSeal,
 }
@@ -23,5 +24,9 @@ pub struct DelegatedRotationEvent {
     pub seal: LocationSeal,
 }
 
-impl EventSemantics for DelegatedInceptionEvent {}
+impl EventSemantics for DelegatedInceptionEvent {
+    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
+        self.inception_data.apply_to(state)
+    }
+}
 impl EventSemantics for DelegatedRotationEvent {}

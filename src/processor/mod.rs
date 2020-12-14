@@ -2,7 +2,13 @@ use crate::{
     database::EventDatabase,
     derivation::self_addressing::SelfAddressing,
     error::Error,
-    event::{event_data::EventData, sections::KeyConfig},
+    event::{
+        event_data::EventData,
+        sections::{
+            seal::{LocationSeal, Seal},
+            KeyConfig,
+        },
+    },
     event_message::{
         parse::{message, Deserialized, DeserializedSignedEvent},
         EventMessage, SignedEventMessage, SignedNontransferableReceipt,
@@ -108,6 +114,52 @@ impl<D: EventDatabase> EventProcessor<D> {
         Ok(None)
     }
 
+    fn validate_seal(
+        &self,
+        seal: LocationSeal,
+        pref: &IdentifierPrefix,
+        dig: &SelfAddressingPrefix,
+    ) -> Result<bool, Error> {
+        let delegator_dig = seal.prior_digest.clone();
+
+        // Check if event of seal's prefix and sn is in db.
+        match self
+            .db
+            .last_event_at_sn(&seal.prefix, seal.sn)
+            .map_err(|_| Error::StorageError)?
+        {
+            None => {
+                // No event found, escrow dip.
+                Ok(false)
+            }
+            Some(del_event) => {
+                // Deserialize event.
+                let deserialized_event = message(&del_event)
+                    .map_err(|_err| Error::SemanticError("Can't parse event".to_string()))?
+                    .1;
+
+                // Extract prior_digest and data field from event.
+                let (prior_dig, data) = match deserialized_event.event.event.event_data {
+                    EventData::Rot(rot) => (rot.previous_event_hash, rot.data),
+                    EventData::Ixn(ixn) => (ixn.previous_event_hash, ixn.data),
+                    EventData::Drt(drt) => (
+                        drt.rotation_data.previous_event_hash,
+                        drt.rotation_data.data,
+                    ),
+                    _ => return Err(Error::SemanticError("Improper event type".to_string())),
+                };
+                // Check if previous events match.
+                let check_prev_digs = prior_dig == delegator_dig;
+                // Check if event seal list contains delegating event seal.
+                let check_data = data.iter().any(|s| match s {
+                    Seal::Event(es) => &es.prefix == pref && &es.event_digest == dig,
+                    _ => false,
+                });
+                Ok(check_data && check_prev_digs)
+            }
+        }
+    }
+
     /// Process
     ///
     /// Process a deserialized KERI message
@@ -133,6 +185,7 @@ impl<D: EventDatabase> EventProcessor<D> {
         let dig = SelfAddressing::Blake3_256.derive(event.event.raw);
         let pref = &event.event.event.event.prefix.clone();
         let sn = event.event.event.event.sn;
+        let ilk = event.event.event.event.event_data.clone();
         let raw = &event.event.raw;
         let sigs = event.signatures;
 
@@ -140,6 +193,17 @@ impl<D: EventDatabase> EventProcessor<D> {
         self.db
             .log_event(&pref, &dig, raw, &sigs)
             .map_err(|_| Error::StorageError)?;
+
+        // If delegated event, check its delegator seal.
+        match ilk {
+            EventData::Dip(dip) => {
+                self.validate_seal(dip.seal, pref, &dig)?;
+            }
+            EventData::Drt(drt) => {
+                self.validate_seal(drt.seal, pref, &dig)?;
+            }
+            _ => {}
+        }
 
         self.apply_to_state(event.event.event)
             .and_then(|new_state| {
