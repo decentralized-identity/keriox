@@ -1,6 +1,12 @@
 use super::EventProcessor;
-use crate::event_message::{parse, parse::Deserialized};
 use crate::{database::lmdb::LmdbEventDatabase, database::EventDatabase, error::Error};
+use crate::{
+    event_message::{
+        parse,
+        parse::{signed_message, Deserialized},
+    },
+    prefix::IdentifierPrefix,
+};
 use std::fs;
 
 #[test]
@@ -147,6 +153,50 @@ fn test_process_receipt() -> Result<(), Error> {
     assert!(id_state.is_ok());
     // Controller's state shouldn't change after processing receipt.
     assert_eq!(controller_id_state, id_state?);
+
+    Ok(())
+}
+
+#[test]
+fn test_delegation() -> Result<(), Error> {
+    use tempfile::Builder;
+
+    // Create test db and event processor.
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    fs::create_dir_all(root.path()).unwrap();
+
+    let db = LmdbEventDatabase::new(root.path()).unwrap();
+    let event_processor = EventProcessor::new(db);
+
+    // Prepare bob's key event log. Process inception event.
+    let bobs_icp = r#"{"vs":"KERI10JSON0000fb_","pre":"EXmV-FiCyD7U76DoXSQoHlG30hFLD2cuYWEQPp0mEu1U","sn":"0","ilk":"icp","sith":"1","keys":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"nxt":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","toad":"0","wits":[],"cnfg":[]}-AABAA_-vC5z6_KnT2iWrA8-twdgh-BfjrWTlq8VN0sj6uQEyoE4zgoCive3x6GGvr1HjKHwpFRoXnsDsXanQV3QB0BQ"#;
+    let msg = signed_message(bobs_icp.as_bytes()).unwrap().1;
+    event_processor.process(msg)?;
+
+    // Bobs interaction event with delegated event seal.
+    let bobs_ixn = r#"{"vs":"KERI10JSON00010e_","pre":"EXmV-FiCyD7U76DoXSQoHlG30hFLD2cuYWEQPp0mEu1U","sn":"1","ilk":"ixn","dig":"Ey-05xXgtfYvKyMGa-dladxUQyXv4JaPg-gaKuXLfceQ","data":[{"pre":"Ek7M173EvQZ6kLjyorCwZK4XWwyNcSi6u7lz5-M6MyFE","dig":"EeBPcw30IVCylYANEGOg3V8f4nBYMspEpqNaq2Y8_knw"}]}-AABAA8_fyED6L-y6d8GUg1nKCMtfhyChd_6_bpfAXv1nMC76lzpyaPBTm0O6geoO9kBuaaBCz3ojPUDAtktikVRFlCA"#;
+    let msg = signed_message(bobs_ixn.as_bytes()).unwrap().1;
+    event_processor.process(msg)?;
+
+    let bobs_pref: IdentifierPrefix = "EXmV-FiCyD7U76DoXSQoHlG30hFLD2cuYWEQPp0mEu1U".parse()?;
+
+    // Delegated inception event.
+    let dip_raw = r#"{"vs":"KERI10JSON000183_","pre":"Ek7M173EvQZ6kLjyorCwZK4XWwyNcSi6u7lz5-M6MyFE","sn":"0","ilk":"dip","sith":"1","keys":["DuK1x8ydpucu3480Jpd1XBfjnCwb3dZ3x5b1CJmuUphA"],"nxt":"EWWkjZkZDXF74O2bOQ4H5hu4nXDlKg2m4CBEBkUxibiU","toad":"0","wits":[],"cnfg":[],"seal":{"pre":"EXmV-FiCyD7U76DoXSQoHlG30hFLD2cuYWEQPp0mEu1U","sn":"1","ilk":"ixn","dig":"Ey-05xXgtfYvKyMGa-dladxUQyXv4JaPg-gaKuXLfceQ"}}-AABAAMSF33ZiOLYH7Pg74MnMQjbfT_oq9wDeFy4ztfEWP0VagIKPqgYW_zrAkyJrZnQ-7-bfpekNtyRh3sN4doFseAg"#;
+
+    let msg = signed_message(dip_raw.as_bytes()).unwrap().1;
+
+    let child_state = event_processor.process(msg.clone())?.unwrap();
+
+    let child_prefix: IdentifierPrefix = "Ek7M173EvQZ6kLjyorCwZK4XWwyNcSi6u7lz5-M6MyFE".parse()?;
+    assert_eq!(child_state.sn, 0);
+    assert_eq!(child_state.prefix, child_prefix);
+    assert_eq!(
+        child_state.last,
+        match msg {
+            Deserialized::Event(e) => e.event.event.serialize()?,
+            _ => vec![],
+        }
+    );
 
     Ok(())
 }

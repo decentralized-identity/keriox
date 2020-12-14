@@ -277,6 +277,12 @@ fn test_event() {
     let event = message(stream);
     assert!(event.is_ok());
     assert_eq!(event.unwrap().1.raw, stream);
+
+    // Delegated inception event.
+    let stream = r#"{"vs":"KERI10JSON000183_","pre":"Ek7M173EvQZ6kLjyorCwZK4XWwyNcSi6u7lz5-M6MyFE","sn":"0","ilk":"dip","sith":"1","keys":["DuK1x8ydpucu3480Jpd1XBfjnCwb3dZ3x5b1CJmuUphA"],"nxt":"EWWkjZkZDXF74O2bOQ4H5hu4nXDlKg2m4CBEBkUxibiU","toad":"0","wits":[],"cnfg":[],"seal":{"pre":"EXmV-FiCyD7U76DoXSQoHlG30hFLD2cuYWEQPp0mEu1U","sn":"1","ilk":"ixn","dig":"Ey-05xXgtfYvKyMGa-dladxUQyXv4JaPg-gaKuXLfceQ"}}"#.as_bytes();
+    let event = message(stream);
+    assert!(event.is_ok());
+    assert_eq!(event.unwrap().1.raw, stream);
 }
 
 #[test]
