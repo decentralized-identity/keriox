@@ -18,6 +18,7 @@ pub struct IdentifierState {
     pub delegated_keys: Vec<IdentifierPrefix>,
     pub tally: u64,
     pub witnesses: Vec<BasicPrefix>,
+    pub delegator: Option<IdentifierPrefix>,
 }
 
 impl IdentifierState {

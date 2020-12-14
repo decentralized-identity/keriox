@@ -197,6 +197,7 @@ fn test_delegation() -> Result<(), Error> {
             _ => vec![],
         }
     );
+    assert_eq!(child_state.delegator, Some(bobs_pref));
 
     Ok(())
 }

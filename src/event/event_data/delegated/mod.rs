@@ -26,7 +26,10 @@ pub struct DelegatedRotationEvent {
 
 impl EventSemantics for DelegatedInceptionEvent {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
-        self.inception_data.apply_to(state)
+        Ok(IdentifierState {
+            delegator: Some(self.seal.prefix.clone()),
+            ..self.inception_data.apply_to(state)?
+        })
     }
 }
 impl EventSemantics for DelegatedRotationEvent {}

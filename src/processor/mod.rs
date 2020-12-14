@@ -119,9 +119,8 @@ impl<D: EventDatabase> EventProcessor<D> {
         seal: LocationSeal,
         pref: &IdentifierPrefix,
         dig: &SelfAddressingPrefix,
-    ) -> Result<bool, Error> {
-        let delegator_dig = seal.prior_digest.clone();
-
+        sn: u64,
+    ) -> Result<(), Error> {
         // Check if event of seal's prefix and sn is in db.
         match self
             .db
@@ -129,8 +128,10 @@ impl<D: EventDatabase> EventProcessor<D> {
             .map_err(|_| Error::StorageError)?
         {
             None => {
-                // No event found, escrow dip.
-                Ok(false)
+                // No event found, escrow delegated event.
+                self.db
+                    .escrow_out_of_order_event(pref, sn, dig)
+                    .map_err(|_| Error::StorageError)?;
             }
             Some(del_event) => {
                 // Deserialize event.
@@ -138,7 +139,7 @@ impl<D: EventDatabase> EventProcessor<D> {
                     .map_err(|_err| Error::SemanticError("Can't parse event".to_string()))?
                     .1;
 
-                // Extract prior_digest and data field from event.
+                // Extract prior_digest and data field from delegating event.
                 let (prior_dig, data) = match deserialized_event.event.event.event_data {
                     EventData::Rot(rot) => (rot.previous_event_hash, rot.data),
                     EventData::Ixn(ixn) => (ixn.previous_event_hash, ixn.data),
@@ -149,15 +150,23 @@ impl<D: EventDatabase> EventProcessor<D> {
                     _ => return Err(Error::SemanticError("Improper event type".to_string())),
                 };
                 // Check if previous events match.
-                let check_prev_digs = prior_dig == delegator_dig;
+                if prior_dig != seal.prior_digest {
+                    return Err(Error::SemanticError(
+                        "Prior events digests do not match.".to_string(),
+                    ));
+                };
                 // Check if event seal list contains delegating event seal.
-                let check_data = data.iter().any(|s| match s {
+                if !data.iter().any(|s| match s {
                     Seal::Event(es) => &es.prefix == pref && &es.event_digest == dig,
                     _ => false,
-                });
-                Ok(check_data && check_prev_digs)
+                }) {
+                    return Err(Error::SemanticError(
+                        "Data field doesn't contain delegating event seal.".to_string(),
+                    ));
+                };
             }
         }
+        Ok(())
     }
 
     /// Process
@@ -197,10 +206,10 @@ impl<D: EventDatabase> EventProcessor<D> {
         // If delegated event, check its delegator seal.
         match ilk {
             EventData::Dip(dip) => {
-                self.validate_seal(dip.seal, pref, &dig)?;
+                self.validate_seal(dip.seal, pref, &dig, sn)?;
             }
             EventData::Drt(drt) => {
-                self.validate_seal(drt.seal, pref, &dig)?;
+                self.validate_seal(drt.seal, pref, &dig, sn)?;
             }
             _ => {}
         }
