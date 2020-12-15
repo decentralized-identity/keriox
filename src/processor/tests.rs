@@ -199,5 +199,26 @@ fn test_delegation() -> Result<(), Error> {
     );
     assert_eq!(child_state.delegator, Some(bobs_pref));
 
+    // Bobs interaction event with delegated event seal.
+    let bob_ixn = r#"{"vs":"KERI10JSON00010e_","pre":"EXmV-FiCyD7U76DoXSQoHlG30hFLD2cuYWEQPp0mEu1U","sn":"2","ilk":"ixn","dig":"Eews7edyNg7fa-bze0UcCSCG4vitUo6dB5DetsoZA2NU","data":[{"pre":"Ek7M173EvQZ6kLjyorCwZK4XWwyNcSi6u7lz5-M6MyFE","dig":"EeiCC5kb8Ms2-T3lnx83kwEPq_iJBBL0QC03ab559Dts"}]}-AABAA3V9qL1YINRBkSvkj-Q-NyMQoWpprrK05mrUYQNuc1EoPAt9pBa8quPorxhB-Q0_DVAd5PI6zH9Wn5j0R_eZQDw"#;
+    let msg = signed_message(bob_ixn.as_bytes()).unwrap().1;
+    event_processor.process(msg)?;
+
+    // Delegated rotation event.
+    let drt_raw = r#"{"vs":"KERI10JSON0001c2_","pre":"Ek7M173EvQZ6kLjyorCwZK4XWwyNcSi6u7lz5-M6MyFE","sn":"1","ilk":"drt","dig":"EeBPcw30IVCylYANEGOg3V8f4nBYMspEpqNaq2Y8_knw","sith":"1","keys":["DTf6QZWoet154o9wvzeMuNhLQRr8JaAUeiC6wjB_4_08"],"nxt":"E8kyiXDfkE7idwWnAZQjHbUZMz-kd_yIMH0miptIFFPo","toad":"0","cuts":[],"adds":[],"data":[],"seal":{"pre":"EXmV-FiCyD7U76DoXSQoHlG30hFLD2cuYWEQPp0mEu1U","sn":"2","ilk":"ixn","dig":"Eews7edyNg7fa-bze0UcCSCG4vitUo6dB5DetsoZA2NU"}}-AABAAXRILNpCj1-oLVbl4ZLSkNZTDDDudEVqk2nHxA--lNhacAI1P_5-uAjlr93cmy2WDXZA61ddtF7mI5SjRMnSqDA"#;
+
+    let msg = signed_message(drt_raw.as_bytes()).unwrap().1;
+
+    let child_state = event_processor.process(msg.clone())?.unwrap();
+    assert_eq!(child_state.sn, 1);
+    assert_eq!(child_state.prefix, child_prefix);
+    assert_eq!(
+        child_state.last,
+        match msg {
+            Deserialized::Event(e) => e.event.event.serialize()?,
+            _ => vec![],
+        }
+    );
+
     Ok(())
 }

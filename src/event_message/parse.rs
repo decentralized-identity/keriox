@@ -283,6 +283,12 @@ fn test_event() {
     let event = message(stream);
     assert!(event.is_ok());
     assert_eq!(event.unwrap().1.raw, stream);
+
+    // Delegated rotation event.
+    let stream = r#"{"vs":"KERI10JSON0001c2_","pre":"Ek7M173EvQZ6kLjyorCwZK4XWwyNcSi6u7lz5-M6MyFE","sn":"1","ilk":"drt","dig":"EeBPcw30IVCylYANEGOg3V8f4nBYMspEpqNaq2Y8_knw","sith":"1","keys":["DTf6QZWoet154o9wvzeMuNhLQRr8JaAUeiC6wjB_4_08"],"nxt":"E8kyiXDfkE7idwWnAZQjHbUZMz-kd_yIMH0miptIFFPo","toad":"0","cuts":[],"adds":[],"data":[],"seal":{"pre":"EXmV-FiCyD7U76DoXSQoHlG30hFLD2cuYWEQPp0mEu1U","sn":"2","ilk":"ixn","dig":"Eews7edyNg7fa-bze0UcCSCG4vitUo6dB5DetsoZA2NU"}}"#.as_bytes();
+    let event = message(stream);
+    assert!(event.is_ok());
+    assert_eq!(event.unwrap().1.raw, stream);
 }
 
 #[test]

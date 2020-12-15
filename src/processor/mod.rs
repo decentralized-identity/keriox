@@ -132,6 +132,7 @@ impl<D: EventDatabase> EventProcessor<D> {
                 self.db
                     .escrow_out_of_order_event(pref, sn, dig)
                     .map_err(|_| Error::StorageError)?;
+                return Err(Error::EventOutOfOrderError);
             }
             Some(del_event) => {
                 // Deserialize event.

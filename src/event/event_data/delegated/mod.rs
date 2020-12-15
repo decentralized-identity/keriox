@@ -19,8 +19,6 @@ pub struct DelegatedRotationEvent {
     #[serde(flatten)]
     pub rotation_data: RotationEvent,
 
-    pub perm: Vec<String>,
-
     pub seal: LocationSeal,
 }
 
