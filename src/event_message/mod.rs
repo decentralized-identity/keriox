@@ -185,6 +185,22 @@ impl EventSemantics for EventMessage {
                     ..state
                 })
             }
+            EventData::Drt(ref drt) => self.event.apply_to(state.clone()).and_then(|next_state| {
+                if drt
+                    .rotation_data
+                    .previous_event_hash
+                    .verify_binding(&state.last)
+                {
+                    Ok(IdentifierState {
+                        last: self.serialize()?,
+                        ..next_state
+                    })
+                } else {
+                    Err(Error::SemanticError(
+                        "Last event does not match previous event".to_string(),
+                    ))
+                }
+            }),
             _ => self.event.apply_to(state),
         }
     }

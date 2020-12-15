@@ -30,4 +30,12 @@ impl EventSemantics for DelegatedInceptionEvent {
         })
     }
 }
-impl EventSemantics for DelegatedRotationEvent {}
+impl EventSemantics for DelegatedRotationEvent {
+    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
+        if state.delegator == Some(self.seal.prefix.clone()) {
+            self.rotation_data.apply_to(state)
+        } else {
+            Err(Error::SemanticError("Wrong delegator".into()))
+        }
+    }
+}
