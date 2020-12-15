@@ -33,9 +33,9 @@ fn test_process() -> Result<(), Error> {
     assert_eq!(icp_from_db, Some(raw_parsed));
 
     let rot_raw = r#"{"vs":"KERI10JSON000198_","pre":"EUEtw_3JqBhrLtwwlP9QLnDXZGjJ3CIxq7QGP_dEQiwc","sn":"1","ilk":"rot","dig":"EYmBZ0_Nn4sjid4UcQckAq_IXE6yzyh0Yy-lwKeRUVxg","sith":"2","keys":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ","D1kcBE7h0ImWW6_Sp7MQxGYSshZZz6XM7OiUE5DXm0dU","D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM"],"nxt":"EQpRYqbID2rW8X5lB6mOzDckJEIFae6NbJISXgJSN9qg","toad":"0","cuts":[],"adds":[],"data":[]}-AADAAtjBE4-kz5byJJDJuqKKKyjujw0CBMJfdx4XPmky_7cl8jNyeoTpcSbcifr7LUbuM_iQIBXFNIBqL9KMw8RQgAQABB8zTUrCwrBzO4M58oJ_CRu6fdVXK-jy5tYSwoqWcxjtRYnF-OIZ03zVjdhiky24-P_dRCGBQE-VmOQcSRW6NAgACrt7M9UM2Thvib1OhFcQtGjNnDNkG502_YWUnhOYOiS-_poEQRHi2PrF5FSNSv8cnAKgTH9UNt8h98kqOqXYJCQ"#;
+    // Create deserialized rotation event.
     let deserialized_rot = parse::signed_message(rot_raw.as_bytes()).unwrap().1;
 
-    // Create deserialized rotation event.
     let raw_parsed = match &deserialized_rot {
         Deserialized::Event(e) => e.event.raw.to_vec(),
         _ => Err(Error::SemanticError("bad deser".into()))?,
@@ -54,9 +54,8 @@ fn test_process() -> Result<(), Error> {
     assert!(id_state.is_err());
     assert!(matches!(id_state, Err(Error::EventDuplicateError)));
 
-    let ixn_raw = r#"{"vs":"KERI10JSON000198_","pre":"EUEtw_3JqBhrLtwwlP9QLnDXZGjJ3CIxq7QGP_dEQiwc","sn":"1","ilk":"rot","dig":"EYmBZ0_Nn4sjid4UcQckAq_IXE6yzyh0Yy-lwKeRUVxg","sith":"2","keys":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ","D1kcBE7h0ImWW6_Sp7MQxGYSshZZz6XM7OiUE5DXm0dU","D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM"],"nxt":"EQpRYqbID2rW8X5lB6mOzDckJEIFae6NbJISXgJSN9qg","toad":"0","cuts":[],"adds":[],"data":[]}-AADAAtjBE4-kz5byJJDJuqKKKyjujw0CBMJfdx4XPmky_7cl8jNyeoTpcSbcifr7LUbuM_iQIBXFNIBqL9KMw8RQgAQABB8zTUrCwrBzO4M58oJ_CRu6fdVXK-jy5tYSwoqWcxjtRYnF-OIZ03zVjdhiky24-P_dRCGBQE-VmOQcSRW6NAgACrt7M9UM2Thvib1OhFcQtGjNnDNkG502_YWUnhOYOiS-_poEQRHi2PrF5FSNSv8cnAKgTH9UNt8h98kqOqXYJCQ"#;
-
-    // Construct partially signed interaction event.
+    let ixn_raw = r#"{"vs":"KERI10JSON0000a3_","pre":"EUEtw_3JqBhrLtwwlP9QLnDXZGjJ3CIxq7QGP_dEQiwc","sn":"2","ilk":"ixn","dig":"EkH8Pm-Fv6QDawC4rDulf6X9anQ_AETbNdUh4HCjB0Co","data":[]}-AADAAYbN7F_JmSY9dZ5QzaccH8uaO6iCARwgebv4aw-MmM69Cn6iDWncWoK_Deu-Ik3hMTPpyhkUPsh444-psVFrhCAAB_YnGFnNbwJPiO1__3ecxOxFLBgvoAmSJ3j6ojA_a6tTbp19x0hg38OFvDlytbkbAXBCQPGrLDKoTclhFZ5guAQACpVhXP2WGe_Gd2aVpStB1NdRo9ipFFto4jyMeMWorUdCMMMwwTuIBa_gw62f4OyDTfWv4kSZo47l2li2RT6ydAw"#;
+    // Create deserialized interaction event.
     let deserialized_ixn = parse::signed_message(ixn_raw.as_bytes()).unwrap().1;
 
     let raw_parsed = match &deserialized_ixn {
@@ -64,20 +63,37 @@ fn test_process() -> Result<(), Error> {
         _ => Err(Error::SemanticError("bad deser".into()))?,
     };
 
+    // Process interaction event.
+    let id_state = event_processor.process(deserialized_ixn)?.unwrap();
+    assert_eq!(id_state.sn, 2);
+
     // Check if processed event is in db.
     let ixn_from_db = event_processor.db.last_event_at_sn(&id, 2).unwrap();
     assert_eq!(ixn_from_db, Some(raw_parsed));
 
-    // Process interaction event.
-    let id_state = event_processor.process(deserialized_ixn);
+    // Construct partially signed interaction event.
+    let ixn_raw = r#"{"vs":"KERI10JSON0000a3_","pre":"EUEtw_3JqBhrLtwwlP9QLnDXZGjJ3CIxq7QGP_dEQiwc","sn":"3","ilk":"ixn","dig":"EI8Y-mZzPFiY-RF7Pzvk11TP70op_xmX_8_X4ja01yPM","data":[]}-AADAAzyIUY_RJ_eXuPBor1a7bbiInTBntqMJLbzDzsTAfIHc3HB7SJThLKh2Oozkm38LIBrJF2xMXx5jjM70EQNZ4CgABNy-Ct5NW7W6W0347Uw8PMrQYpNVTT3DfgsfXMva2iVnYLzw9mQedhGILf1dsW2LIk5bvoQYBCCsVf6N16j-xAgACDaYuZa_09xZFgotKblT2BPuMETl9b73y6R7-LEe9jAE47RUAWeOFp6654Du1zB78UnM2jjKMrqMhG_q0BaD4Ag"#;
+    let deserialized_ixn = parse::signed_message(ixn_raw.as_bytes()).unwrap().1;
+    // Make event partially signed.
+    let partially_signed_deserialized_ixn = match deserialized_ixn {
+        Deserialized::Event(mut e) => {
+            let sigs = e.signatures[1].clone();
+            e.signatures = vec![sigs];
+            Deserialized::Event(e)
+        }
+        _ => Err(Error::SemanticError("bad deser".into()))?,
+    };
+
+    // Process partially signed interaction event.
+    let id_state = event_processor.process(partially_signed_deserialized_ixn);
     assert!(matches!(id_state, Err(Error::NotEnoughSigsError)));
 
     // Check if processed ixn event is in kel. It shouldn't because of not enough signatures.
-    let ixn_from_db = event_processor.db.last_event_at_sn(&id, 2);
+    let ixn_from_db = event_processor.db.last_event_at_sn(&id, 3);
     assert!(matches!(ixn_from_db, Ok(None)));
 
     // Out of order event.
-    let out_of_order_ixn_raw = r#"{"vs":"KERI10JSON0000a3_","pre":"EUEtw_3JqBhrLtwwlP9QLnDXZGjJ3CIxq7QGP_dEQiwc","sn":"3","ilk":"ixn","dig":"EI8Y-mZzPFiY-RF7Pzvk11TP70op_xmX_8_X4ja01yPM","data":[]}-AADAAzyIUY_RJ_eXuPBor1a7bbiInTBntqMJLbzDzsTAfIHc3HB7SJThLKh2Oozkm38LIBrJF2xMXx5jjM70EQNZ4CgABNy-Ct5NW7W6W0347Uw8PMrQYpNVTT3DfgsfXMva2iVnYLzw9mQedhGILf1dsW2LIk5bvoQYBCCsVf6N16j-xAgACDaYuZa_09xZFgotKblT2BPuMETl9b73y6R7-LEe9jAE47RUAWeOFp6654Du1zB78UnM2jjKMrqMhG_q0BaD4Ag"#;
+    let out_of_order_ixn_raw = r#"{"vs":"KERI10JSON0000a3_","pre":"EUEtw_3JqBhrLtwwlP9QLnDXZGjJ3CIxq7QGP_dEQiwc","sn":"4","ilk":"ixn","dig":"EI8Y-mZzPFiY-RF7Pzvk11TP70op_xmX_8_X4ja01yPM","data":[]}-AADAAzyIUY_RJ_eXuPBor1a7bbiInTBntqMJLbzDzsTAfIHc3HB7SJThLKh2Oozkm38LIBrJF2xMXx5jjM70EQNZ4CgABNy-Ct5NW7W6W0347Uw8PMrQYpNVTT3DfgsfXMva2iVnYLzw9mQedhGILf1dsW2LIk5bvoQYBCCsVf6N16j-xAgACDaYuZa_09xZFgotKblT2BPuMETl9b73y6R7-LEe9jAE47RUAWeOFp6654Du1zB78UnM2jjKMrqMhG_q0BaD4Ag"#;
 
     let out_of_order_ixn = parse::signed_message(out_of_order_ixn_raw.as_bytes())
         .unwrap()
@@ -88,8 +104,7 @@ fn test_process() -> Result<(), Error> {
     assert!(matches!(id_state, Err(Error::EventOutOfOrderError)));
 
     // Check if processed event is in kel. It shouldn't.
-    let ixn_from_db = event_processor.db.last_event_at_sn(&id, 3);
-
+    let ixn_from_db = event_processor.db.last_event_at_sn(&id, 4);
     assert!(matches!(ixn_from_db, Ok(None)));
 
     Ok(())
