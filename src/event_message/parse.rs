@@ -1,5 +1,5 @@
 use super::{
-    AttachedSignaturePrefix, EventMessage, SignedEventMessage, SignedNontransferableReciept,
+    AttachedSignaturePrefix, EventMessage, SignedEventMessage, SignedNontransferableReceipt,
 };
 use crate::{
     derivation::attached_signature_code::b64_to_num,
@@ -15,11 +15,13 @@ use crate::{
 use nom::{branch::*, combinator::*, error::ErrorKind, multi::*, sequence::*};
 use serde_transcode::transcode;
 
+#[derive(Clone, Debug)]
 pub struct DeserializedEvent<'a> {
     pub event: EventMessage,
     pub raw: &'a [u8],
 }
 
+#[derive(Clone, Debug)]
 pub struct DeserializedSignedEvent<'a> {
     pub event: DeserializedEvent<'a>,
     pub signatures: Vec<AttachedSignaturePrefix>,
@@ -31,10 +33,14 @@ impl From<DeserializedSignedEvent<'_>> for SignedEventMessage {
     }
 }
 
+#[derive(Clone, Debug)]
 pub enum Deserialized<'a> {
+    // Event verification requires raw bytes, so use DesrializedSignedEvent
     Event(DeserializedSignedEvent<'a>),
+    // Vrc's dont need raw bytes and have a normal structure, use SignedEventMessage
     Vrc(SignedEventMessage),
-    Rct(SignedNontransferableReciept),
+    // Rct's have an alternative appended signature structure, use SignedNontransferableReceipt
+    Rct(SignedNontransferableReceipt),
 }
 
 fn json_message(s: &[u8]) -> nom::IResult<&[u8], DeserializedEvent> {
@@ -154,7 +160,7 @@ pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], Deserialized> {
             let (extra, couplets) = couplets(rest)?;
             Ok((
                 extra,
-                Deserialized::Rct(SignedNontransferableReciept {
+                Deserialized::Rct(SignedNontransferableReceipt {
                     body: e.event,
                     couplets,
                 }),
@@ -192,9 +198,21 @@ pub fn signed_event_stream_validate(s: &[u8]) -> nom::IResult<&[u8], IdentifierS
         signed_message,
         Ok(IdentifierState::default()),
         |acc, next| match next {
-            Deserialized::Event(e) => Ok(acc?
-                .verify_and_apply(&SignedEventMessage::from(e))
-                .map_err(|_| nom::Err::Error((s, ErrorKind::Verify)))?),
+            Deserialized::Event(e) => {
+                let new_state = acc?
+                    .apply(&e.event.event)
+                    .map_err(|_| nom::Err::Error((s, ErrorKind::Verify)))?;
+                if new_state
+                    .current
+                    .verify(e.event.raw, &e.signatures)
+                    .map_err(|_| nom::Err::Error((s, ErrorKind::Verify)))?
+                {
+                    Ok(new_state)
+                } else {
+                    Err(nom::Err::Error((s, ErrorKind::Verify)))
+                }
+            }
+            // TODO this probably should not just skip non-events
             _ => acc,
         },
     )(s)?;
@@ -236,10 +254,29 @@ fn test_sigs() {
 
 #[test]
 fn test_event() {
+    // Inception event.
     let stream = r#"{"vs":"KERI10JSON000159_","pre":"ECui-E44CqN2U7uffCikRCp_YKLkPrA4jsTZ_A0XRLzc","sn":"0","ilk":"icp","sith":"2","keys":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"nxt":"Evhf3437ZRRnVhT0zOxo_rBX_GxpGoAnLuzrVlDK8ZdM","toad":"0","wits":[],"cnfg":[]}"#.as_bytes();
     let event = message(stream);
     assert!(event.is_ok());
-    assert_eq!(event.unwrap().1.raw, stream)
+    assert_eq!(event.unwrap().1.raw, stream);
+
+    // Rotation event.
+    let stream = r#"{"vs":"KERI10JSON000198_","pre":"ECui-E44CqN2U7uffCikRCp_YKLkPrA4jsTZ_A0XRLzc","sn":"1","ilk":"rot","dig":"EF9THPxXUribmjC641JsDJynFJwieRTpDn-xvhxvXaPI","sith":"2","keys":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ","D1kcBE7h0ImWW6_Sp7MQxGYSshZZz6XM7OiUE5DXm0dU","D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM"],"nxt":"EwkvQoCtKlgZeQK1eUb8BfmaCLCVVC13jI-j-g7Qt5KY","toad":"0","cuts":[],"adds":[],"data":[]}"#.as_bytes();
+    let event = message(stream);
+    assert!(event.is_ok());
+    assert_eq!(event.unwrap().1.raw, stream);
+
+    // Interaction event without seals.
+    let stream = r#"{"vs":"KERI10JSON0000a3_","pre":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","sn":"3","ilk":"ixn","dig":"EHBaMkc2lTj-1qnIgSeD0GmYjw8Zv6EmCgGDVPedn3fI","data":[]}"#.as_bytes();
+    let event = message(stream);
+    assert!(event.is_ok());
+    assert_eq!(event.unwrap().1.raw, stream);
+
+    // Interaction event with seal.
+    let stream = r#"{"vs":"KERI10JSON00010e_","pre":"EXmV-FiCyD7U76DoXSQoHlG30hFLD2cuYWEQPp0mEu1U","sn":"1","ilk":"ixn","dig":"Ey-05xXgtfYvKyMGa-dladxUQyXv4JaPg-gaKuXLfceQ","data":[{"pre":"Ek7M173EvQZ6kLjyorCwZK4XWwyNcSi6u7lz5-M6MyFE","dig":"EeBPcw30IVCylYANEGOg3V8f4nBYMspEpqNaq2Y8_knw"}]}"#.as_bytes();
+    let event = message(stream);
+    assert!(event.is_ok());
+    assert_eq!(event.unwrap().1.raw, stream);
 }
 
 #[test]

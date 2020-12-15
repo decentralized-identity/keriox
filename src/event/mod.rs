@@ -32,16 +32,30 @@ impl EventSemantics for Event {
         match self.event_data {
             EventData::Icp(_) => {
                 // ICP events require the state to be uninitialized
-                if state.prefix != IdentifierPrefix::default() || self.sn != 0 {
+                if state.prefix != IdentifierPrefix::default() {
+                    return Err(Error::EventDuplicateError);
+                }
+                if self.sn != 0 {
                     return Err(Error::SemanticError("SN is not correct".to_string()));
                 }
             }
+            EventData::Vrc(_) | EventData::Rct(_) => {
+                if self.prefix != state.prefix {
+                    return Err(Error::SemanticError(
+                        "Invalid Identifier Prefix Binding".into(),
+                    ));
+                }
+            }
             _ => {
-                // prefix must equal. sn must be incremented
+                // prefix must equal.
                 if self.prefix != state.prefix {
                     return Err(Error::SemanticError("Prefix does not match".to_string()));
-                } else if self.sn != state.sn + 1 {
-                    return Err(Error::SemanticError("SN is not correct".to_string()));
+                // sn must be incremented
+                // TODO recovery will break this rule when we implement it
+                } else if self.sn < state.sn + 1 {
+                    return Err(Error::EventDuplicateError);
+                } else if self.sn > state.sn + 1 {
+                    return Err(Error::EventOutOfOrderError);
                 }
             }
         };

@@ -5,7 +5,6 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
-use std::str::FromStr;
 pub mod seal;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
@@ -39,9 +38,11 @@ impl KeyConfig {
     /// Public Keys, according to the indexes in the sigs.
     pub fn verify(&self, message: &[u8], sigs: &[AttachedSignaturePrefix]) -> Result<bool, Error> {
         // ensure there's enough sigs
-        if sigs.len() as u64 >= self.threshold
-            // and that there are not too many
-            && sigs.len() <= self.public_keys.len()
+        if (sigs.len() as u64) < self.threshold {
+            Err(Error::NotEnoughSigsError)
+        } else if
+        // and that there are not too many
+        sigs.len() <= self.public_keys.len()
             // and that there are no duplicates
             && sigs
                 .iter()

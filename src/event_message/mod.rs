@@ -6,7 +6,7 @@ use crate::{
         Event,
     },
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
-    state::{EventSemantics, IdentifierState, Verifiable},
+    state::{EventSemantics, IdentifierState},
     util::dfs_serializer,
 };
 pub mod serialization_info;
@@ -38,7 +38,7 @@ pub struct SignedEventMessage {
 }
 
 #[derive(Debug, Clone)]
-pub struct SignedNontransferableReciept {
+pub struct SignedNontransferableReceipt {
     pub body: EventMessage,
     pub couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
 }
@@ -147,32 +147,38 @@ impl EventSemantics for EventMessage {
                 }
             }
             EventData::Rot(ref rot) => {
-                // Check if hashes of state.last event and previous_event_hash matches.
-                if rot.previous_event_hash.verify_binding(&state.last) {
-                    self.event.apply_to(IdentifierState {
-                        last: self.serialize()?,
-                        ..state
-                    })
-                } else {
-                    return Err(Error::SemanticError(
-                        "Last event does not match previous event".to_string(),
-                    ));
-                }
+                // Event may be out of order or duplicated, so before checking
+                // previous event hash binding and update state last, apply it
+                // to the state. It will return EventOutOfOrderError or
+                // EventDuplicateError in that cases.
+                self.event.apply_to(state.clone()).and_then(|next_state| {
+                    if rot.previous_event_hash.verify_binding(&state.last) {
+                        Ok(IdentifierState {
+                            last: self.serialize()?,
+                            ..next_state
+                        })
+                    } else {
+                        Err(Error::SemanticError(
+                            "Last event does not match previous event".to_string(),
+                        ))
+                    }
+                })
             }
             EventData::Ixn(ref inter) => {
-                // Check if hashes of state.last event and previous_event_hash matches.
-                if inter.previous_event_hash.verify_binding(&state.last) {
-                    self.event.apply_to(IdentifierState {
-                        last: self.serialize()?,
-                        ..state
-                    })
-                } else {
-                    return Err(Error::SemanticError(
-                        "Last event does not match previous event".to_string(),
-                    ));
-                }
+                self.event.apply_to(state.clone()).and_then(|next_state| {
+                    if inter.previous_event_hash.verify_binding(&state.last) {
+                        Ok(IdentifierState {
+                            last: self.serialize()?,
+                            ..next_state
+                        })
+                    } else {
+                        Err(Error::SemanticError(
+                            "Last event does not match previous event".to_string(),
+                        ))
+                    }
+                })
             }
-            _ => todo!(),
+            _ => self.event.apply_to(state),
         }
     }
 }
@@ -180,14 +186,6 @@ impl EventSemantics for EventMessage {
 impl EventSemantics for SignedEventMessage {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         self.event_message.apply_to(state)
-    }
-}
-
-impl Verifiable for SignedEventMessage {
-    fn verify_against(&self, state: &IdentifierState) -> Result<bool, Error> {
-        let serialized = self.event_message.serialize()?;
-
-        state.current.verify(&serialized, &self.signatures)
     }
 }
 
@@ -209,7 +207,6 @@ pub fn verify_identifier_binding(icp_event: &EventMessage) -> Result<bool, Error
 mod tests {
     mod test_utils;
     use self::test_utils::{test_mock_event_sequence, EventType};
-    use super::super::util::dfs_serializer;
     use super::*;
     use crate::{
         derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
@@ -259,26 +256,28 @@ mod tests {
 
         let icp_m = icp.to_message(SerializationFormats::JSON)?;
 
-        // serialised extracted dataset
-        let sed = icp_m.serialize()?;
+        // serialised message
+        let ser = icp_m.serialize()?;
 
         // sign
         let sig = ed
-            .sign(&sed, &priv_key0)
+            .sign(&ser, &priv_key0)
             .map_err(|e| Error::CryptoError(e))?;
         let attached_sig = AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig, 0);
 
-        assert!(pref0.verify(&sed, &attached_sig.signature)?);
+        assert!(pref0.verify(&ser, &attached_sig.signature)?);
 
         let signed_event = icp_m.sign(vec![attached_sig]);
 
         let s_ = IdentifierState::default();
 
-        let s0 = s_.verify_and_apply(&signed_event)?;
+        let s0 = s_.apply(&signed_event)?;
+
+        assert!(s0.current.verify(&ser, &signed_event.signatures)?);
 
         assert_eq!(s0.prefix, IdentifierPrefix::Basic(pref0.clone()));
         assert_eq!(s0.sn, 0);
-        assert_eq!(s0.last, sed);
+        assert_eq!(s0.last, ser);
         assert_eq!(s0.current.public_keys.len(), 1);
         assert_eq!(s0.current.public_keys[0], pref0);
         assert_eq!(s0.current.threshold, 1);
@@ -350,7 +349,9 @@ mod tests {
 
         let s_ = IdentifierState::default();
 
-        let s0 = s_.verify_and_apply(&signed_event)?;
+        let s0 = s_.apply(&signed_event)?;
+
+        assert!(s0.current.verify(&serialized, &signed_event.signatures)?);
 
         assert_eq!(s0.prefix, icp.event.prefix);
         assert_eq!(s0.sn, 0);

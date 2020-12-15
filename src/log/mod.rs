@@ -1,7 +1,7 @@
 use crate::{
     error::Error,
     event_message::SignedEventMessage,
-    state::{EventSemantics, IdentifierState, Verifiable},
+    state::{EventSemantics, IdentifierState},
 };
 
 pub struct EventLog(Vec<SignedEventMessage>);
@@ -44,9 +44,9 @@ impl EventLog {
 }
 
 // apply every event in a KEL starting with inception
-pub fn replay<T: EventSemantics + Verifiable>(kel: &[T]) -> Result<IdentifierState, Error> {
+pub fn replay<T: EventSemantics>(kel: &[T]) -> Result<IdentifierState, Error> {
     kel.iter()
         .fold(Ok(IdentifierState::default()), |state, event| {
-            state?.verify_and_apply(event)
+            state?.apply(event)
         })
 }

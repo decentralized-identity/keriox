@@ -6,21 +6,21 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DelegatedInceptionEvent {
     #[serde(flatten)]
-    inception_data: InceptionEvent,
+    pub inception_data: InceptionEvent,
 
-    perm: Vec<String>,
+    pub perm: Vec<String>,
 
-    seal: LocationSeal,
+    pub seal: LocationSeal,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DelegatedRotationEvent {
     #[serde(flatten)]
-    rotation_data: RotationEvent,
+    pub rotation_data: RotationEvent,
 
-    perm: Vec<String>,
+    pub perm: Vec<String>,
 
-    seal: LocationSeal,
+    pub seal: LocationSeal,
 }
 
 impl EventSemantics for DelegatedInceptionEvent {}

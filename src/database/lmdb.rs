@@ -1,6 +1,10 @@
 use super::EventDatabase;
-use crate::prefix::{
-    AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
+use crate::{
+    error::Error,
+    prefix::{
+        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
+        SelfSigningPrefix,
+    },
 };
 use bincode;
 use chrono::prelude::*;
@@ -238,8 +242,8 @@ impl EventDatabase for LmdbEventDatabase {
         &self,
         pref: &IdentifierPrefix,
         dig: &SelfAddressingPrefix,
-        signer: &IdentifierPrefix,
-        sig: &AttachedSignaturePrefix,
+        signer: &BasicPrefix,
+        sig: &SelfSigningPrefix,
     ) -> Result<(), Self::Error> {
         self.write_ref_multi(
             &self.receipts_nt,
@@ -257,6 +261,34 @@ impl EventDatabase for LmdbEventDatabase {
     ) -> Result<(), Self::Error> {
         self.write_ref_multi(
             &self.receipts_t,
+            &Vec::from(ContentIndex(pref, dig)),
+            &(signer, sig),
+        )
+    }
+
+    fn escrow_nt_receipt(
+        &self,
+        pref: &IdentifierPrefix,
+        dig: &SelfAddressingPrefix,
+        signer: &BasicPrefix,
+        sig: &SelfSigningPrefix,
+    ) -> Result<(), Self::Error> {
+        self.write_ref_multi(
+            &self.escrowed_receipts_nt,
+            &Vec::from(ContentIndex(pref, dig)),
+            &(signer, sig),
+        )
+    }
+
+    fn escrow_t_receipt(
+        &self,
+        pref: &IdentifierPrefix,
+        dig: &SelfAddressingPrefix,
+        signer: &IdentifierPrefix,
+        sig: &AttachedSignaturePrefix,
+    ) -> Result<(), Self::Error> {
+        self.write_ref_multi(
+            &self.escrowed_receipts_nt,
             &Vec::from(ContentIndex(pref, dig)),
             &(signer, sig),
         )

@@ -1,6 +1,9 @@
 use crate::{
     event_message::parse::message,
-    prefix::{AttachedSignaturePrefix, IdentifierPrefix, SelfAddressingPrefix},
+    prefix::{
+        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
+        SelfSigningPrefix,
+    },
     state::IdentifierState,
 };
 #[cfg(feature = "lmdb")]
@@ -12,6 +15,7 @@ pub mod lmdb;
 /// Signatures and Receipts.
 pub trait EventDatabase {
     type Error;
+
     /// Last Event At SN
     ///
     /// Returns the raw bytes of the last event inserted
@@ -157,8 +161,8 @@ pub trait EventDatabase {
         &self,
         pref: &IdentifierPrefix,
         dig: &SelfAddressingPrefix,
-        signer: &IdentifierPrefix,
-        sig: &AttachedSignaturePrefix,
+        signer: &BasicPrefix,
+        sig: &SelfSigningPrefix,
     ) -> Result<(), Self::Error>;
 
     /// Add Transferrable Receipt
@@ -171,10 +175,31 @@ pub trait EventDatabase {
         signer: &IdentifierPrefix,
         sig: &AttachedSignaturePrefix,
     ) -> Result<(), Self::Error>;
+
+    /// Escrow Non-Transferrable Receipt
+    fn escrow_nt_receipt(
+        &self,
+        pref: &IdentifierPrefix,
+        dig: &SelfAddressingPrefix,
+        signer: &BasicPrefix,
+        sig: &SelfSigningPrefix,
+    ) -> Result<(), Self::Error>;
+
+    /// Escrow Transferrable Receipt
+    fn escrow_t_receipt(
+        &self,
+        pref: &IdentifierPrefix,
+        dig: &SelfAddressingPrefix,
+        signer: &IdentifierPrefix,
+        sig: &AttachedSignaturePrefix,
+    ) -> Result<(), Self::Error>;
 }
 
 pub(crate) fn test_db<D: EventDatabase>(db: D) -> Result<(), D::Error> {
-    use crate::{derivation::self_addressing::SelfAddressing, event::event_data::EventData};
+    use crate::{
+        derivation::self_addressing::SelfAddressing, event::event_data::EventData,
+        event_message::parse::message,
+    };
 
     let raw = r#"{"vs":"KERI10JSON000159_","pre":"ECui-E44CqN2U7uffCikRCp_YKLkPrA4jsTZ_A0XRLzc","sn":"0","ilk":"icp","sith":"2","keys":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"nxt":"Evhf3437ZRRnVhT0zOxo_rBX_GxpGoAnLuzrVlDK8ZdM","toad":"0","wits":[],"cnfg":[]}extra data"#;
     let sigs: Vec<AttachedSignaturePrefix> = [
@@ -195,14 +220,5 @@ pub(crate) fn test_db<D: EventDatabase>(db: D) -> Result<(), D::Error> {
     let written = db.last_event_at_sn(&message.event.prefix, 0)?;
 
     assert_eq!(written, Some(raw.as_bytes().to_vec()));
-
-    let state = db.get_state_for_prefix(&message.event.prefix)?.unwrap();
-
-    assert_eq!(&state.prefix, &message.event.prefix);
-    assert!(match message.event.event_data {
-        EventData::Icp(icp) => icp.key_config == state.current,
-        _ => false,
-    });
-
     Ok(())
 }
