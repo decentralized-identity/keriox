@@ -144,23 +144,49 @@ impl EventSemantics for EventMessage {
                 }
             }
             EventData::Rot(ref rot) => {
-                // Event may be out of order or duplicated, so before checking
-                // previous event hash binding and update state last, apply it
-                // to the state. It will return EventOutOfOrderError or
-                // EventDuplicateError in that cases.
-                self.event.apply_to(state.clone()).and_then(|next_state| {
-                    if rot.previous_event_hash.verify_binding(&state.last) {
-                        Ok(IdentifierState {
-                            last: self.serialize()?,
-                            ..next_state
-                        })
-                    } else {
-                        Err(Error::SemanticError(
-                            "Last event does not match previous event".to_string(),
-                        ))
-                    }
-                })
+                if let Some(_) = state.delegator {
+                    Err(Error::SemanticError(
+                        "Applying non-delegated rotation to delegated state.".into(),
+                    ))
+                } else {
+                    // Event may be out of order or duplicated, so before checking
+                    // previous event hash binding and update state last, apply it
+                    // to the state. It will return EventOutOfOrderError or
+                    // EventDuplicateError in that cases.
+                    self.event.apply_to(state.clone()).and_then(|next_state| {
+                        if rot.previous_event_hash.verify_binding(&state.last) {
+                            Ok(IdentifierState {
+                                last: self.serialize()?,
+                                ..next_state
+                            })
+                        } else {
+                            Err(Error::SemanticError(
+                                "Last event does not match previous event".into(),
+                            ))
+                        }
+                    })
+                }
             }
+            EventData::Drt(ref drt) => self.event.apply_to(state.clone()).and_then(|next_state| {
+                if let None = state.delegator {
+                    Err(Error::SemanticError(
+                        "Applying delegated rotation to non-delegated state.".into(),
+                    ))
+                } else if drt
+                    .rotation_data
+                    .previous_event_hash
+                    .verify_binding(&state.last)
+                {
+                    Ok(IdentifierState {
+                        last: self.serialize()?,
+                        ..next_state
+                    })
+                } else {
+                    Err(Error::SemanticError(
+                        "Last event does not match previous event".into(),
+                    ))
+                }
+            }),
             EventData::Ixn(ref inter) => {
                 self.event.apply_to(state.clone()).and_then(|next_state| {
                     if inter.previous_event_hash.verify_binding(&state.last) {
@@ -175,22 +201,7 @@ impl EventSemantics for EventMessage {
                     }
                 })
             }
-            EventData::Drt(ref drt) => self.event.apply_to(state.clone()).and_then(|next_state| {
-                if drt
-                    .rotation_data
-                    .previous_event_hash
-                    .verify_binding(&state.last)
-                {
-                    Ok(IdentifierState {
-                        last: self.serialize()?,
-                        ..next_state
-                    })
-                } else {
-                    Err(Error::SemanticError(
-                        "Last event does not match previous event".to_string(),
-                    ))
-                }
-            }),
+
             _ => self.event.apply_to(state),
         }
     }
