@@ -1,10 +1,7 @@
 use crate::{
     derivation::{attached_signature_code::get_sig_count, self_addressing::SelfAddressing},
     error::Error,
-    event::{
-        event_data::{inception::InceptionEvent, EventData},
-        Event,
-    },
+    event::{event_data::EventData, Event},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
     state::{EventSemantics, IdentifierState},
     util::dfs_serializer,
@@ -69,7 +66,7 @@ impl EventMessage {
     /// Strips prefix and version string length info from an event
     /// used for verifying identifier binding for self-addressing and self-certifying
     pub fn get_inception_data(
-        icp: &InceptionEvent,
+        inceptive_event_data: &EventData,
         code: SelfAddressing,
         format: SerializationFormats,
     ) -> Result<Vec<u8>, Error> {
@@ -78,7 +75,7 @@ impl EventMessage {
         let icp_event_data = Event {
             prefix: IdentifierPrefix::SelfAddressing(code.derive(&[0u8; 32])),
             sn: 0,
-            event_data: EventData::Icp(icp.clone()),
+            event_data: inceptive_event_data.clone(),
         };
         Ok(dfs_serializer::to_vec(&Self {
             serialization_info: icp_event_data
@@ -134,7 +131,7 @@ impl EventSemantics for EventMessage {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         // Update state.last with serialized current event message.
         match self.event.event_data {
-            EventData::Icp(_) => {
+            EventData::Icp(_) | EventData::Dip(_) => {
                 if verify_identifier_binding(self)? {
                     self.event.apply_to(IdentifierState {
                         last: self.serialize()?,
@@ -178,13 +175,6 @@ impl EventSemantics for EventMessage {
                     }
                 })
             }
-            EventData::Dip(_) => {
-                // TODO verify binding?
-                self.event.apply_to(IdentifierState {
-                    last: self.serialize()?,
-                    ..state
-                })
-            }
             EventData::Drt(ref drt) => self.event.apply_to(state.clone()).and_then(|next_state| {
                 if drt
                     .rotation_data
@@ -213,16 +203,31 @@ impl EventSemantics for SignedEventMessage {
 }
 
 pub fn verify_identifier_binding(icp_event: &EventMessage) -> Result<bool, Error> {
-    match &icp_event.event.event_data {
+    let event_data = &icp_event.event.event_data;
+    match event_data {
         EventData::Icp(icp) => match &icp_event.event.prefix {
             IdentifierPrefix::Basic(bp) => Ok(icp.key_config.public_keys.len() == 1
                 && bp == icp.key_config.public_keys.first().unwrap()),
-            IdentifierPrefix::SelfAddressing(sap) => Ok(sap.verify_binding(
-                &EventMessage::get_inception_data(&icp, sap.derivation, icp_event.serialization())?,
-            )),
+            IdentifierPrefix::SelfAddressing(sap) => {
+                Ok(sap.verify_binding(&EventMessage::get_inception_data(
+                    event_data,
+                    sap.derivation,
+                    icp_event.serialization(),
+                )?))
+            }
             IdentifierPrefix::SelfSigning(_ssp) => todo!(),
         },
-        _ => Err(Error::SemanticError("Not an ICP event".into())),
+        EventData::Dip(_) => match &icp_event.event.prefix {
+            IdentifierPrefix::SelfAddressing(sap) => {
+                Ok(sap.verify_binding(&EventMessage::get_inception_data(
+                    event_data,
+                    sap.derivation,
+                    icp_event.serialization(),
+                )?))
+            }
+            _ => todo!(),
+        },
+        _ => Err(Error::SemanticError("Not an ICP od DIP event".into())),
     }
 }
 
