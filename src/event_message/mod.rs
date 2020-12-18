@@ -20,7 +20,7 @@ pub struct EventMessage {
     /// Serialization Information
     ///
     /// Encodes the version, size and serialization format of the event
-    #[serde(rename = "vs")]
+    #[serde(rename = "v")]
     pub serialization_info: SerializationInfo,
 
     #[serde(flatten)]

@@ -14,7 +14,7 @@ pub struct ReceiptNonTransferable {
     /// Receipted Event Digest
     ///
     /// A Qualified Digest of the event which this receipt is made for.
-    #[serde(rename = "dig")]
+    #[serde(rename = "d")]
     pub receipted_event_digest: SelfAddressingPrefix,
 }
 
@@ -31,14 +31,14 @@ pub struct ReceiptTransferable {
     /// Receipted Event Digest
     ///
     /// A Qualified Digest of the event which this receipt is made for.
-    #[serde(rename = "dig")]
+    #[serde(rename = "d")]
     pub receipted_event_digest: SelfAddressingPrefix,
 
     /// Validator Location Seal
     ///
     /// An Event Seal which indicates the latest establishment event of
     /// the Validator when the Receipt was made
-    #[serde(rename = "seal")]
+    #[serde(rename = "a")]
     pub validator_location_seal: EventSeal,
 }
 

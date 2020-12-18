@@ -11,10 +11,10 @@ use serde_hex::{Compact, SerHex};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Event {
-    #[serde(rename = "pre")]
+    #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
 
-    #[serde(with = "SerHex::<Compact>")]
+    #[serde(rename= "s", with = "SerHex::<Compact>")]
     pub sn: u64,
 
     #[serde(flatten)]

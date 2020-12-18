@@ -13,45 +13,46 @@ pub enum Seal {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DigestSeal {
-    #[serde(rename = "dig")]
+    #[serde(rename = "d")]
     pub dig: SelfAddressingPrefix,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RootSeal {
-    #[serde(rename = "root")]
+    #[serde(rename = "rd")]
     pub tree_root: SelfAddressingPrefix,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EventSeal {
-    #[serde(rename = "pre")]
+    #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
 
-    #[serde(rename = "dig")]
+    #[serde(rename = "d")]
     pub event_digest: SelfAddressingPrefix,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LocationSeal {
-    #[serde(rename = "pre")]
+    #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
 
-    #[serde(with = "SerHex::<Compact>")]
+    #[serde(rename = "s", with = "SerHex::<Compact>")]
     pub sn: u64,
 
+    #[serde(rename = "t")]
     pub ilk: String,
 
-    #[serde(rename = "dig")]
+    #[serde(rename = "p")]
     pub prior_digest: SelfAddressingPrefix,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DelegatingEventSeal {
-    #[serde(rename = "pre")]
+    #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
 
-    #[serde(rename = "dig")]
+    #[serde(rename = "d")]
     pub commitment: SelfAddressingPrefix,
 }
 
