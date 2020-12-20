@@ -14,7 +14,7 @@ pub struct DelegatedInceptionEvent {
     #[serde(flatten)]
     pub inception_data: InceptionEvent,
 
-     #[serde(rename="da")]
+    #[serde(rename = "da")]
     pub seal: LocationSeal,
 }
 
@@ -23,7 +23,7 @@ pub struct DelegatedRotationEvent {
     #[serde(flatten)]
     pub rotation_data: RotationEvent,
 
-    #[serde(rename="da")]
+    #[serde(rename = "da")]
     pub seal: LocationSeal,
 }
 

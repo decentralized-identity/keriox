@@ -14,7 +14,7 @@ pub struct Event {
     #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
 
-    #[serde(rename= "s", with = "SerHex::<Compact>")]
+    #[serde(rename = "s", with = "SerHex::<Compact>")]
     pub sn: u64,
 
     #[serde(flatten)]

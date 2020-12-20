@@ -23,7 +23,7 @@ pub struct RootSeal {
     pub tree_root: SelfAddressingPrefix,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct EventSeal {
     #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
@@ -32,7 +32,7 @@ pub struct EventSeal {
     pub event_digest: SelfAddressingPrefix,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct LocationSeal {
     #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
