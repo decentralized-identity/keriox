@@ -274,8 +274,9 @@ pub fn verify_identifier_binding(icp_event: &EventMessage) -> Result<bool, Error
 
 #[cfg(test)]
 mod tests {
+    mod event_msg_builder;
     mod test_utils;
-    use self::test_utils::{test_mock_event_sequence, EventType};
+    use self::{event_msg_builder::EventType, test_utils::test_mock_event_sequence};
     use super::*;
     use crate::{
         derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
@@ -462,6 +463,22 @@ mod tests {
             EventType::Rotation,
         ];
         assert!(test_mock_event_sequence(ok_seq).is_ok());
+
+        // Wrong delegated events sequence.
+        let wrong_delegated_sequence = vec![
+            EventType::DelegatedInception,
+            EventType::DelegatedRotation,
+            EventType::Rotation,
+        ];
+        assert!(test_mock_event_sequence(wrong_delegated_sequence).is_err());
+
+        // Delegated events sequence.
+        let delegated_sequence = vec![
+            EventType::DelegatedInception,
+            EventType::DelegatedRotation,
+            EventType::Interaction,
+        ];
+        assert!(test_mock_event_sequence(delegated_sequence).is_ok());
 
         Ok(())
     }
