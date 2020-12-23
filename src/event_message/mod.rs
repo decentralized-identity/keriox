@@ -495,6 +495,14 @@ mod tests {
         ];
         assert!(test_mock_event_sequence(ok_seq).is_ok());
 
+        let delegated_sequence = vec![
+            EventType::DelegatedInception,
+            EventType::DelegatedRotation,
+            EventType::Interaction,
+            EventType::DelegatedRotation,
+        ];
+        assert!(test_mock_event_sequence(delegated_sequence).is_ok());
+
         Ok(())
     }
 }

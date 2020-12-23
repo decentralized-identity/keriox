@@ -1,7 +1,6 @@
 use std::str::FromStr;
 
 use crate::{
-    derivation::self_signing::SelfSigning,
     derivation::{basic::Basic, self_addressing::SelfAddressing},
     error::Error,
     event::sections::nxt_commitment,
@@ -21,9 +20,6 @@ use crate::{
         sections::KeyConfig,
         Event, EventMessage,
     },
-    event_message::{parse::message, SignedEventMessage},
-    prefix::AttachedSignaturePrefix,
-    prefix::Prefix,
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
     signer::CryptoBox,
 };
@@ -77,7 +73,7 @@ impl EventMsgBuilder {
         };
         Ok(EventMsgBuilder {
             event_type,
-            prefix: IdentifierPrefix::Basic(basic_pref.clone()),
+            prefix: IdentifierPrefix::default(),
             keys: vec![basic_pref],
             next_keys: vec![Basic::Ed25519.derive(key_manager.next_pub_key.clone())],
             key_threshold: 1,
@@ -124,6 +120,12 @@ impl EventMsgBuilder {
     pub fn build(self) -> Result<EventMessage, Error> {
         let next_key_hash = nxt_commitment(1, &self.next_keys, SelfAddressing::Blake3_256);
         let key_config = KeyConfig::new(self.keys, next_key_hash, Some(self.key_threshold));
+        let prefix =
+            if self.prefix == IdentifierPrefix::default() && key_config.public_keys.len() == 1 {
+                IdentifierPrefix::Basic(key_config.clone().public_keys[0].clone())
+            } else {
+                self.prefix
+            };
 
         Ok(match self.event_type {
             EventType::Inception => {
@@ -132,10 +134,10 @@ impl EventMsgBuilder {
                     witness_config: InceptionWitnessConfig::default(),
                     inception_configuration: vec![],
                 };
-                match self.prefix {
+                match prefix {
                     IdentifierPrefix::Basic(_) => Event {
-                        prefix: self.prefix,
-                        sn: self.sn,
+                        prefix: prefix,
+                        sn: 0,
                         event_data: EventData::Icp(icp_event),
                     }
                     .to_message(SerializationFormats::JSON)?,
@@ -147,7 +149,7 @@ impl EventMsgBuilder {
             }
 
             EventType::Rotation => Event {
-                prefix: self.prefix,
+                prefix: prefix,
                 sn: self.sn,
                 event_data: EventData::Rot(RotationEvent {
                     previous_event_hash: self.prev_event,
@@ -158,7 +160,7 @@ impl EventMsgBuilder {
             }
             .to_message(self.format)?,
             EventType::Interaction => Event {
-                prefix: self.prefix,
+                prefix: prefix,
                 sn: self.sn,
                 event_data: EventData::Ixn(InteractionEvent {
                     previous_event_hash: self.prev_event,
@@ -186,7 +188,7 @@ impl EventMsgBuilder {
                     data: self.data,
                 };
                 Event {
-                    prefix: self.prefix,
+                    prefix: prefix,
                     sn: self.sn,
                     event_data: EventData::Drt(DelegatedRotationEvent {
                         rotation_data,
@@ -197,95 +199,4 @@ impl EventMsgBuilder {
             }
         })
     }
-}
-pub struct SignedMsgBuilder {
-    msg: EventMessage,
-    signers: Vec<CryptoBox>,
-}
-
-impl SignedMsgBuilder {
-    pub fn new(event_type: EventType, n: u64) -> Result<Self, Error> {
-        // Generate n signers.
-        let managers = (0..n)
-            .map(|_| CryptoBox::new().unwrap())
-            .collect::<Vec<_>>();
-        let cur_keys = managers
-            .iter()
-            .map(|m| Basic::Ed25519.derive(m.public_key()))
-            .collect();
-        let nxt_keys = managers
-            .iter()
-            .map(|m| Basic::Ed25519.derive(m.next_pub_key.clone()))
-            .collect();
-        Ok(Self {
-            msg: EventMsgBuilder::new(event_type)?
-                .with_keys(cur_keys)
-                .with_next_keys(nxt_keys)
-                .build()?,
-            signers: managers,
-        })
-    }
-
-    pub fn build(&self) -> Result<SignedEventMessage, Error> {
-        let ser_msg = self.msg.serialize()?;
-        let signatures: Vec<AttachedSignaturePrefix> = self
-            .signers
-            .iter()
-            .map(|s| s.sign(&ser_msg))
-            .map(|sig| AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig.unwrap(), 0))
-            .collect();
-
-        Ok(self.msg.sign(signatures))
-    }
-}
-
-#[test]
-fn test_generation() -> Result<(), Error> {
-    let ev = EventMsgBuilder::new(EventType::Inception)?.build()?;
-    let icp = ev.serialize()?;
-    let d = message(&icp);
-    assert!(d.is_ok());
-    assert_eq!(d.unwrap().1.event.serialize()?, icp);
-    println!("{}\n", String::from_utf8(icp).unwrap());
-
-    // Inception with three keys and signatures.
-    let signed_icp = SignedMsgBuilder::new(EventType::Inception, 3)?.build()?;
-    println!("{}\n", String::from_utf8(signed_icp.serialize()?).unwrap());
-    println!(
-        "event: {}\n",
-        String::from_utf8(signed_icp.event_message.serialize()?).unwrap()
-    );
-    println!("sigs: {}\n", signed_icp.signatures[0].to_str());
-    println!("sigs: {}\n", signed_icp.signatures[1].to_str());
-    println!("sigs: {}\n", signed_icp.signatures[2].to_str());
-
-    let ev = EventMsgBuilder::new(EventType::Rotation)?.build()?;
-    let rot = ev.serialize()?;
-    let d = message(&rot);
-    assert!(d.is_ok());
-    assert_eq!(d.unwrap().1.event.serialize()?, rot);
-    println!("{}\n", String::from_utf8(rot).unwrap());
-
-    let ev = EventMsgBuilder::new(EventType::Interaction)?.build()?;
-    let ixn = ev.serialize()?;
-    let d = message(&ixn);
-    assert!(d.is_ok());
-    assert_eq!(d.unwrap().1.event.serialize()?, ixn);
-    println!("{}\n", String::from_utf8(ixn).unwrap());
-
-    let ev = EventMsgBuilder::new(EventType::DelegatedInception)?.build()?;
-    let dip = ev.serialize()?;
-    let d = message(&dip);
-    assert!(d.is_ok());
-    assert_eq!(d.unwrap().1.event.serialize()?, dip);
-    println!("{}\n", String::from_utf8(dip).unwrap());
-
-    let ev = EventMsgBuilder::new(EventType::DelegatedRotation)?.build()?;
-    let drt = ev.serialize()?;
-    let d = message(&drt);
-    assert!(d.is_ok());
-    assert_eq!(d.unwrap().1.event.serialize()?, drt);
-    println!("{}\n", String::from_utf8(drt).unwrap());
-
-    Ok(())
 }
