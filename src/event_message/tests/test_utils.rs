@@ -75,7 +75,6 @@ fn test_update_identifier_state(
     let next_key_prefix = Basic::Ed25519.derive(next_pk.clone());
     let next_dig = nxt_commitment(1, &[next_key_prefix.clone()], SelfAddressing::Blake3_256);
 
-
     // Build event msg of given type.
     let event_msg = EventMsgBuilder::new(event_type.clone())?
         .with_sn(state_data.sn)

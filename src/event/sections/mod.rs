@@ -114,11 +114,11 @@ pub struct WitnessConfig {
     #[serde(rename = "wt", with = "SerHex::<Compact>")]
     pub tally: u64,
 
-    #[serde(rename = "wa")]
-    pub graft: Vec<BasicPrefix>,
-
     #[serde(rename = "wr")]
     pub prune: Vec<BasicPrefix>,
+
+    #[serde(rename = "wa")]
+    pub graft: Vec<BasicPrefix>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
