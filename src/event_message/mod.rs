@@ -323,7 +323,7 @@ mod tests {
         assert_eq!(s0.current.threshold_key_digest, nxt);
         assert_eq!(s0.witnesses, vec![]);
         assert_eq!(s0.tally, 0);
-        assert_eq!(s0.delegated_keys, vec![]);
+        assert_eq!(s0.delegates, vec![]);
 
         Ok(())
     }
@@ -402,7 +402,7 @@ mod tests {
         assert_eq!(s0.current.threshold_key_digest, nexter_pref);
         assert_eq!(s0.witnesses, vec![]);
         assert_eq!(s0.tally, 0);
-        assert_eq!(s0.delegated_keys, vec![]);
+        assert_eq!(s0.delegates, vec![]);
 
         Ok(())
     }

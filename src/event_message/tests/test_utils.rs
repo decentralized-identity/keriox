@@ -193,7 +193,7 @@ fn test_update_identifier_state(
     assert_eq!(new_state.current.threshold_key_digest, next_dig);
     assert_eq!(new_state.witnesses, vec![]);
     assert_eq!(new_state.tally, 0);
-    assert_eq!(new_state.delegated_keys, vec![]);
+    assert_eq!(new_state.delegates, vec![]);
 
     let mut new_history = state_data.history_prefs.clone();
     // If event_type is establishment event, append current prefix to prefixes

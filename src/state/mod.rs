@@ -15,7 +15,7 @@ pub struct IdentifierState {
     #[serde(skip)]
     pub last: Vec<u8>,
     pub current: KeyConfig,
-    pub delegated_keys: Vec<IdentifierPrefix>,
+    pub delegates: Vec<IdentifierPrefix>,
     pub tally: u64,
     pub witnesses: Vec<BasicPrefix>,
     pub delegator: Option<IdentifierPrefix>,
