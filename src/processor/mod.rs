@@ -206,14 +206,18 @@ impl<D: EventDatabase> EventProcessor<D> {
 
         // If delegated event, check its delegator seal.
         match ilk {
-            EventData::Dip(dip) => {
-                self.validate_seal(dip.seal, pref, &dig, sn)?;
-            }
-            EventData::Drt(drt) => {
-                self.validate_seal(drt.seal, pref, &dig, sn)?;
-            }
-            _ => {}
+            EventData::Dip(dip) => self.validate_seal(dip.seal, pref, &dig, sn),
+            EventData::Drt(drt) => self.validate_seal(drt.seal, pref, &dig, sn),
+            _ => Ok(()),
         }
+        .or_else(|e| {
+            if let Error::EventOutOfOrderError = e {
+                self.db
+                    .escrow_out_of_order_event(pref, sn, &dig)
+                    .map_err(|_| Error::StorageError)?;
+            };
+            Err(e)
+        })?;
 
         self.apply_to_state(event.event.event)
             .and_then(|new_state| {
