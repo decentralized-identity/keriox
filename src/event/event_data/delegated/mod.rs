@@ -37,7 +37,7 @@ impl DelegatedInceptionEvent {
         format: SerializationFormats,
     ) -> Result<EventMessage, Error> {
         let prefix = IdentifierPrefix::SelfAddressing(derivation.derive(
-            &EventMessage::get_inception_data(&EventData::Dip(self.clone()), derivation, format)?,
+            &EventMessage::get_delegated_inception_data(&self, derivation, format)?,
         ));
         EventMessage::new(
             Event {
