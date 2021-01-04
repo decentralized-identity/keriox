@@ -15,7 +15,7 @@ use super::event_msg_builder::{EventMsgBuilder, EventType};
 
 /// Collects data for testing `IdentifierState` update. `prev_event_hash`, `sn`,
 /// `current_keypair` and `new_keypair` are used to generate mock event message
-/// of given type, `history_prefs` is used to check if any keypair used earlier
+/// of given type, `keys_history` is used to check if any keypair used earlier
 /// in event message sequence can verify current message.
 #[derive(Debug)]
 pub struct TestStateData {
@@ -97,8 +97,6 @@ fn test_update_identifier_state(
     // Attach sign to event message.
     let signed_event = event_msg.sign(vec![attached_sig.clone()]);
 
-    println!("{}", String::from_utf8(signed_event.serialize()?).unwrap());
-
     // Apply event to current IdentifierState.
     let new_state = state_data.state.apply(&signed_event)?;
 
@@ -128,7 +126,7 @@ fn test_update_identifier_state(
     assert_eq!(new_state.delegates, vec![]);
 
     let mut new_history = state_data.keys_history.clone();
-    // If event_type is establishment event, append current prefix to prefixes
+    // If event_type is establishment event, append current key to keys
     // history. It will be obsolete in the future establishement events.
     if event_type.is_establishment_event() {
         new_history.push(current_key_pref);

@@ -174,9 +174,9 @@ fn test_process_delegated() -> Result<(), Error> {
     // Delegated inception event.
     let dip_raw = r#"{"v":"KERI10JSON000165_","i":"Eillkf6Neo-Zmyn6Gg_8FS84RKWYgXblfoSXaOpttP7U","s":"0","t":"dip","kt":"1","k":["DSYuIQQrIi0N_a5gdzeXoqsNvo7PWHkn5ZrYO_ZmZdOA"],"n":"ESmikz_J7quPeKcfD_7d7jPDOfBsomZcg5I35vjMb69o","wt":"0","w":[],"c":[],"da":{"i":"DacyrOTuGEE1O5T0-JfoZxm_9tYRqKn5iKKzcXGe629M","s":"1","t":"ixn","p":"EnpsziyP_HrXY0GTDKn6jBCTq37akJ5W4nu3zGE9Nh5I"}}-AABAAtxbG6zfWOp73s5zxsKxXkrOi7h0CAbdYy5vBNmrG_oivi1uREgH7dUR-bpDO1lnMkcwg2ooDIIou_Ejs4bYpBA"#;
     let deserialized_dip = signed_message(dip_raw.as_bytes()).unwrap().1;
-
+    
+    // Process dip event before delegating ixn event.
     let state = event_processor.process(deserialized_dip.clone());
-    // It won't work until bob's delegating event is in processor's db.
     assert!(matches!(state, Err(Error::EventOutOfOrderError)));
 
     let child_prefix: IdentifierPrefix = "Eillkf6Neo-Zmyn6Gg_8FS84RKWYgXblfoSXaOpttP7U".parse()?;
