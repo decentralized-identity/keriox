@@ -11,10 +11,10 @@ use serde_hex::{Compact, SerHex};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Event {
-    #[serde(rename = "pre")]
+    #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
 
-    #[serde(with = "SerHex::<Compact>")]
+    #[serde(rename = "s", with = "SerHex::<Compact>")]
     pub sn: u64,
 
     #[serde(flatten)]
@@ -75,25 +75,25 @@ mod tests {
     #[test]
     fn ser_der() -> Result<(), serde_json::Error> {
         let event_str = "{
-  \"pre\": \"DXq5YqaL6L48pf0fu7IUhL0JRaU2_RxFP0AL43wYn148\",
-  \"sn\": \"0\",
-  \"ilk\": \"icp\",
-  \"sith\": \"2\",
-  \"keys\":
+  \"i\": \"DXq5YqaL6L48pf0fu7IUhL0JRaU2_RxFP0AL43wYn148\",
+  \"s\": \"0\",
+  \"t\": \"icp\",
+  \"kt\": \"2\",
+  \"k\":
   [
     \"BWoNZsa88VrTkep6HQt27fTh-4HA8tr54sHON1vWl6FE\",
     \"B8tr54sHON1vWVrTkep6H-4HAl6FEQt27fThWoNZsa88\",
     \"BVrTkep6HHA8tr54sHON1Qt27fThWoNZsa88-4vWl6FE\"
   ],
-  \"nxt\": \"FWoNZsa88VrTkep6HQt27fTh-4HA8tr54sHON1vWl6FE\",
-  \"toad\": \"2\",
-  \"wits\":
+  \"n\": \"FWoNZsa88VrTkep6HQt27fTh-4HA8tr54sHON1vWl6FE\",
+  \"wt\": \"2\",
+  \"w\":
   [
     \"DVrTkep6H-Qt27fThWoNZsa884HA8tr54sHON1vWl6FE\",
     \"DHON1vWl6FEQt27fThWoNZsa88VrTkep6H-4HA8tr54s\",
     \"DThWoNZsa88VrTkeQt27fp6H-4HA8tr54sHON1vWl6FE\"
   ],
-  \"cnfg\": []
+  \"c\": []
 }";
 
         let event: Event = serde_json::from_str(event_str)?;

@@ -13,64 +13,65 @@ pub enum Seal {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DigestSeal {
-    #[serde(rename = "dig")]
+    #[serde(rename = "d")]
     pub dig: SelfAddressingPrefix,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RootSeal {
-    #[serde(rename = "root")]
+    #[serde(rename = "rd")]
     pub tree_root: SelfAddressingPrefix,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct EventSeal {
-    #[serde(rename = "pre")]
+    #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
 
-    #[serde(rename = "dig")]
+    #[serde(rename = "d")]
     pub event_digest: SelfAddressingPrefix,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct LocationSeal {
-    #[serde(rename = "pre")]
+    #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
 
-    #[serde(with = "SerHex::<Compact>")]
+    #[serde(rename = "s", with = "SerHex::<Compact>")]
     pub sn: u64,
 
+    #[serde(rename = "t")]
     pub ilk: String,
 
-    #[serde(rename = "dig")]
+    #[serde(rename = "p")]
     pub prior_digest: SelfAddressingPrefix,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DelegatingEventSeal {
-    #[serde(rename = "pre")]
+    #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
 
-    #[serde(rename = "dig")]
+    #[serde(rename = "d")]
     pub commitment: SelfAddressingPrefix,
 }
 
 #[test]
 fn test_seal_deserialization() {
     // Event seal
-    let seal_str = r#"{"pre":"Ek7M173EvQZ6kLjyorCwZK4XWwyNcSi6u7lz5-M6MyFE","dig":"EeBPcw30IVCylYANEGOg3V8f4nBYMspEpqNaq2Y8_knw"}"#;
+    let seal_str = r#"{"i":"Ek7M173EvQZ6kLjyorCwZK4XWwyNcSi6u7lz5-M6MyFE","d":"EeBPcw30IVCylYANEGOg3V8f4nBYMspEpqNaq2Y8_knw"}"#;
     let seal: Seal = serde_json::from_str(seal_str).unwrap();
     assert!(matches!(seal, Seal::Event(_)));
     assert_eq!(serde_json::to_string(&seal).unwrap(), seal_str);
 
     // Location seal
-    let seal_str = r#"{"pre":"EXmV-FiCyD7U76DoXSQoHlG30hFLD2cuYWEQPp0mEu1U","sn":"1","ilk":"ixn","dig":"Ey-05xXgtfYvKyMGa-dladxUQyXv4JaPg-gaKuXLfceQ"}"#;
+    let seal_str = r#"{"i":"EXmV-FiCyD7U76DoXSQoHlG30hFLD2cuYWEQPp0mEu1U","s":"1","t":"ixn","p":"Ey-05xXgtfYvKyMGa-dladxUQyXv4JaPg-gaKuXLfceQ"}"#;
     let seal: Seal = serde_json::from_str(seal_str).unwrap();
     assert!(matches!(seal, Seal::Location(_)));
     assert_eq!(serde_json::to_string(&seal).unwrap(), seal_str);
 
     // Digest seal
-    let seal_str = r#"{"dig":"Ey-05xXgtfYvKyMGa-dladxUQyXv4JaPg-gaKuXLfceQ"}"#;
+    let seal_str = r#"{"d":"Ey-05xXgtfYvKyMGa-dladxUQyXv4JaPg-gaKuXLfceQ"}"#;
     let seal: Seal = serde_json::from_str(seal_str).unwrap();
     assert!(matches!(seal, Seal::Digest(_)));
     assert_eq!(serde_json::to_string(&seal).unwrap(), seal_str);

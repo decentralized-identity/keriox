@@ -9,13 +9,13 @@ pub mod seal;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct KeyConfig {
-    #[serde(rename = "sith", with = "SerHex::<Compact>")]
+    #[serde(rename = "kt", with = "SerHex::<Compact>")]
     pub threshold: u64,
 
-    #[serde(rename = "keys")]
+    #[serde(rename = "k")]
     pub public_keys: Vec<BasicPrefix>,
 
-    #[serde(rename = "nxt")]
+    #[serde(rename = "n")]
     pub threshold_key_digest: SelfAddressingPrefix,
 }
 
@@ -111,22 +111,22 @@ pub fn nxt_commitment(
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct WitnessConfig {
-    #[serde(rename = "toad", with = "SerHex::<Compact>")]
+    #[serde(rename = "wt", with = "SerHex::<Compact>")]
     pub tally: u64,
 
-    #[serde(rename = "cuts")]
+    #[serde(rename = "wr")]
     pub prune: Vec<BasicPrefix>,
 
-    #[serde(rename = "adds")]
+    #[serde(rename = "wa")]
     pub graft: Vec<BasicPrefix>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct InceptionWitnessConfig {
-    #[serde(rename = "toad", with = "SerHex::<Compact>")]
+    #[serde(rename = "wt", with = "SerHex::<Compact>")]
     pub tally: u64,
 
-    #[serde(rename = "wits")]
+    #[serde(rename = "w")]
     pub initial_witnesses: Vec<BasicPrefix>,
 }
 

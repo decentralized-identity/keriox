@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 /// Describes the rotation (rot) event data
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RotationEvent {
-    #[serde(rename = "dig")]
+    #[serde(rename = "p")]
     pub previous_event_hash: SelfAddressingPrefix,
 
     #[serde(flatten)]
@@ -20,6 +20,7 @@ pub struct RotationEvent {
     #[serde(flatten)]
     pub witness_config: WitnessConfig,
 
+    #[serde(rename = "a")]
     pub data: Vec<Seal>,
 }
 

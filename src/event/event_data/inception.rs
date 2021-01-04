@@ -23,7 +23,7 @@ pub struct InceptionEvent {
     #[serde(flatten)]
     pub witness_config: InceptionWitnessConfig,
 
-    #[serde(rename = "cnfg")]
+    #[serde(rename = "c")]
     pub inception_configuration: Vec<String>,
 }
 

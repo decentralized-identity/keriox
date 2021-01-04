@@ -6,9 +6,10 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct InteractionEvent {
-    #[serde(rename = "dig")]
+    #[serde(rename = "p")]
     pub previous_event_hash: SelfAddressingPrefix,
 
+    #[serde(rename = "a")]
     pub data: Vec<Seal>,
 }
 
