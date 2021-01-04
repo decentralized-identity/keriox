@@ -1,6 +1,12 @@
 use super::EventProcessor;
-use crate::event_message::{parse, parse::Deserialized};
 use crate::{database::lmdb::LmdbEventDatabase, database::EventDatabase, error::Error};
+use crate::{
+    event_message::{
+        parse,
+        parse::{signed_message, Deserialized},
+    },
+    prefix::IdentifierPrefix,
+};
 use std::fs;
 
 #[test]
@@ -147,6 +153,89 @@ fn test_process_receipt() -> Result<(), Error> {
     assert!(id_state.is_ok());
     // Controller's state shouldn't change after processing receipt.
     assert_eq!(controller_id_state, id_state?);
+
+    Ok(())
+}
+
+#[test]
+fn test_delegation() -> Result<(), Error> {
+    use tempfile::Builder;
+
+    // Create test db and event processor.
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    fs::create_dir_all(root.path()).unwrap();
+
+    let db = LmdbEventDatabase::new(root.path()).unwrap();
+    let event_processor = EventProcessor::new(db);
+
+    // Prepare bob's key event log. Process inception event.
+    let bobs_icp = r#"{"vs":"KERI10JSON0000fb_","pre":"EXmV-FiCyD7U76DoXSQoHlG30hFLD2cuYWEQPp0mEu1U","sn":"0","ilk":"icp","sith":"1","keys":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"nxt":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","toad":"0","wits":[],"cnfg":[]}-AABAA_-vC5z6_KnT2iWrA8-twdgh-BfjrWTlq8VN0sj6uQEyoE4zgoCive3x6GGvr1HjKHwpFRoXnsDsXanQV3QB0BQ"#;
+    let msg = signed_message(bobs_icp.as_bytes()).unwrap().1;
+    event_processor.process(msg)?;
+
+    // Bobs interaction event with delegated event seal.
+    let bobs_ixn = r#"{"vs":"KERI10JSON00010e_","pre":"EXmV-FiCyD7U76DoXSQoHlG30hFLD2cuYWEQPp0mEu1U","sn":"1","ilk":"ixn","dig":"Ey-05xXgtfYvKyMGa-dladxUQyXv4JaPg-gaKuXLfceQ","data":[{"pre":"Ek7M173EvQZ6kLjyorCwZK4XWwyNcSi6u7lz5-M6MyFE","dig":"EeBPcw30IVCylYANEGOg3V8f4nBYMspEpqNaq2Y8_knw"}]}-AABAA8_fyED6L-y6d8GUg1nKCMtfhyChd_6_bpfAXv1nMC76lzpyaPBTm0O6geoO9kBuaaBCz3ojPUDAtktikVRFlCA"#;
+    let delegating_msg = signed_message(bobs_ixn.as_bytes()).unwrap().1;
+
+    let bobs_pref: IdentifierPrefix = "EXmV-FiCyD7U76DoXSQoHlG30hFLD2cuYWEQPp0mEu1U".parse()?;
+
+    // Delegated inception event.
+    let dip_raw = r#"{"vs":"KERI10JSON000183_","pre":"Ek7M173EvQZ6kLjyorCwZK4XWwyNcSi6u7lz5-M6MyFE","sn":"0","ilk":"dip","sith":"1","keys":["DuK1x8ydpucu3480Jpd1XBfjnCwb3dZ3x5b1CJmuUphA"],"nxt":"EWWkjZkZDXF74O2bOQ4H5hu4nXDlKg2m4CBEBkUxibiU","toad":"0","wits":[],"cnfg":[],"seal":{"pre":"EXmV-FiCyD7U76DoXSQoHlG30hFLD2cuYWEQPp0mEu1U","sn":"1","ilk":"ixn","dig":"Ey-05xXgtfYvKyMGa-dladxUQyXv4JaPg-gaKuXLfceQ"}}-AABAAMSF33ZiOLYH7Pg74MnMQjbfT_oq9wDeFy4ztfEWP0VagIKPqgYW_zrAkyJrZnQ-7-bfpekNtyRh3sN4doFseAg"#;
+    let delegated_msg = signed_message(dip_raw.as_bytes()).unwrap().1;
+
+    let child_prefix: IdentifierPrefix = "Ek7M173EvQZ6kLjyorCwZK4XWwyNcSi6u7lz5-M6MyFE".parse()?;
+
+    // Process dip event before delegating ixn event.
+    let child_state = event_processor.process(delegated_msg.clone());
+    assert!(matches!(child_state, Err(Error::EventOutOfOrderError)));
+
+    // Check if processed dip is in kel.
+    let dip_from_db = event_processor.db.last_event_at_sn(&child_prefix, 0);
+    assert!(matches!(dip_from_db, Ok(None)));
+
+    event_processor.process(delegating_msg)?;
+
+    let child_state = event_processor.process(delegated_msg.clone())?.unwrap();
+
+    assert_eq!(child_state.sn, 0);
+    assert_eq!(child_state.prefix, child_prefix);
+    assert_eq!(
+        child_state.last,
+        match delegated_msg {
+            Deserialized::Event(e) => e.event.event.serialize()?,
+            _ => vec![],
+        }
+    );
+    assert_eq!(child_state.delegator, Some(bobs_pref));
+
+    // Bobs interaction event with delegated event seal.
+    let bob_ixn = r#"{"vs":"KERI10JSON00010e_","pre":"EXmV-FiCyD7U76DoXSQoHlG30hFLD2cuYWEQPp0mEu1U","sn":"2","ilk":"ixn","dig":"Eews7edyNg7fa-bze0UcCSCG4vitUo6dB5DetsoZA2NU","data":[{"pre":"Ek7M173EvQZ6kLjyorCwZK4XWwyNcSi6u7lz5-M6MyFE","dig":"EeiCC5kb8Ms2-T3lnx83kwEPq_iJBBL0QC03ab559Dts"}]}-AABAA3V9qL1YINRBkSvkj-Q-NyMQoWpprrK05mrUYQNuc1EoPAt9pBa8quPorxhB-Q0_DVAd5PI6zH9Wn5j0R_eZQDw"#;
+    let delegating_msg = signed_message(bob_ixn.as_bytes()).unwrap().1;
+
+    // Delegated rotation event.
+    let drt_raw = r#"{"vs":"KERI10JSON0001c2_","pre":"Ek7M173EvQZ6kLjyorCwZK4XWwyNcSi6u7lz5-M6MyFE","sn":"1","ilk":"drt","dig":"EeBPcw30IVCylYANEGOg3V8f4nBYMspEpqNaq2Y8_knw","sith":"1","keys":["DTf6QZWoet154o9wvzeMuNhLQRr8JaAUeiC6wjB_4_08"],"nxt":"E8kyiXDfkE7idwWnAZQjHbUZMz-kd_yIMH0miptIFFPo","toad":"0","cuts":[],"adds":[],"data":[],"seal":{"pre":"EXmV-FiCyD7U76DoXSQoHlG30hFLD2cuYWEQPp0mEu1U","sn":"2","ilk":"ixn","dig":"Eews7edyNg7fa-bze0UcCSCG4vitUo6dB5DetsoZA2NU"}}-AABAAXRILNpCj1-oLVbl4ZLSkNZTDDDudEVqk2nHxA--lNhacAI1P_5-uAjlr93cmy2WDXZA61ddtF7mI5SjRMnSqDA"#;
+    let delegated_msg = signed_message(drt_raw.as_bytes()).unwrap().1;
+
+    // Process drt event before delegating ixn event.
+    let child_state = event_processor.process(delegated_msg.clone());
+    assert!(matches!(child_state, Err(Error::EventOutOfOrderError)));
+
+    // Check if processed drt is in kel.
+    let drt_from_db = event_processor.db.last_event_at_sn(&child_prefix, 1);
+    assert!(matches!(drt_from_db, Ok(None)));
+
+    event_processor.process(delegating_msg)?;
+
+    let child_state = event_processor.process(delegated_msg.clone())?.unwrap();
+    assert_eq!(child_state.sn, 1);
+    assert_eq!(child_state.prefix, child_prefix);
+    assert_eq!(
+        child_state.last,
+        match delegated_msg {
+            Deserialized::Event(e) => e.event.event.serialize()?,
+            _ => vec![],
+        }
+    );
 
     Ok(())
 }

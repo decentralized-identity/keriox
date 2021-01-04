@@ -1,6 +1,7 @@
 use crate::{
     derivation::{attached_signature_code::get_sig_count, self_addressing::SelfAddressing},
     error::Error,
+    event::event_data::delegated::DelegatedInceptionEvent,
     event::{
         event_data::{inception::InceptionEvent, EventData},
         Event,
@@ -94,6 +95,36 @@ impl EventMessage {
         })?)
     }
 
+    /// Get Delegated Inception Data
+    ///
+    /// Strips prefix and version string length info from an event
+    /// used for verifying identifier binding for self-addressing and self-certifying
+    pub fn get_delegated_inception_data(
+        dip: &DelegatedInceptionEvent,
+        code: SelfAddressing,
+        format: SerializationFormats,
+    ) -> Result<Vec<u8>, Error> {
+        // use dummy prefix to get correct size info
+        // TODO: dynamically size dummy derivative, non-32 byte prefixes will fail
+        let dip_event_data = Event {
+            prefix: IdentifierPrefix::SelfAddressing(code.derive(&[0u8; 32])),
+            sn: 0,
+            event_data: EventData::Dip(dip.clone()),
+        };
+        Ok(dfs_serializer::to_vec(&Self {
+            serialization_info: dip_event_data
+                .clone()
+                .to_message(format)
+                .unwrap()
+                .serialization_info,
+            event: Event {
+                // default prefix serializes to empty string
+                prefix: IdentifierPrefix::default(),
+                ..dip_event_data
+            },
+        })?)
+    }
+
     /// Serialize
     ///
     /// returns the serialized event message
@@ -134,7 +165,7 @@ impl EventSemantics for EventMessage {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         // Update state.last with serialized current event message.
         match self.event.event_data {
-            EventData::Icp(_) => {
+            EventData::Icp(_) | EventData::Dip(_) => {
                 if verify_identifier_binding(self)? {
                     self.event.apply_to(IdentifierState {
                         last: self.serialize()?,
@@ -147,23 +178,49 @@ impl EventSemantics for EventMessage {
                 }
             }
             EventData::Rot(ref rot) => {
-                // Event may be out of order or duplicated, so before checking
-                // previous event hash binding and update state last, apply it
-                // to the state. It will return EventOutOfOrderError or
-                // EventDuplicateError in that cases.
-                self.event.apply_to(state.clone()).and_then(|next_state| {
-                    if rot.previous_event_hash.verify_binding(&state.last) {
-                        Ok(IdentifierState {
-                            last: self.serialize()?,
-                            ..next_state
-                        })
-                    } else {
-                        Err(Error::SemanticError(
-                            "Last event does not match previous event".to_string(),
-                        ))
-                    }
-                })
+                if let Some(_) = state.delegator {
+                    Err(Error::SemanticError(
+                        "Applying non-delegated rotation to delegated state.".into(),
+                    ))
+                } else {
+                    // Event may be out of order or duplicated, so before checking
+                    // previous event hash binding and update state last, apply it
+                    // to the state. It will return EventOutOfOrderError or
+                    // EventDuplicateError in that cases.
+                    self.event.apply_to(state.clone()).and_then(|next_state| {
+                        if rot.previous_event_hash.verify_binding(&state.last) {
+                            Ok(IdentifierState {
+                                last: self.serialize()?,
+                                ..next_state
+                            })
+                        } else {
+                            Err(Error::SemanticError(
+                                "Last event does not match previous event".into(),
+                            ))
+                        }
+                    })
+                }
             }
+            EventData::Drt(ref drt) => self.event.apply_to(state.clone()).and_then(|next_state| {
+                if let None = state.delegator {
+                    Err(Error::SemanticError(
+                        "Applying delegated rotation to non-delegated state.".into(),
+                    ))
+                } else if drt
+                    .rotation_data
+                    .previous_event_hash
+                    .verify_binding(&state.last)
+                {
+                    Ok(IdentifierState {
+                        last: self.serialize()?,
+                        ..next_state
+                    })
+                } else {
+                    Err(Error::SemanticError(
+                        "Last event does not match previous event".into(),
+                    ))
+                }
+            }),
             EventData::Ixn(ref inter) => {
                 self.event.apply_to(state.clone()).and_then(|next_state| {
                     if inter.previous_event_hash.verify_binding(&state.last) {
@@ -178,6 +235,7 @@ impl EventSemantics for EventMessage {
                     }
                 })
             }
+
             _ => self.event.apply_to(state),
         }
     }
@@ -190,16 +248,27 @@ impl EventSemantics for SignedEventMessage {
 }
 
 pub fn verify_identifier_binding(icp_event: &EventMessage) -> Result<bool, Error> {
-    match &icp_event.event.event_data {
+    let event_data = &icp_event.event.event_data;
+    match event_data {
         EventData::Icp(icp) => match &icp_event.event.prefix {
             IdentifierPrefix::Basic(bp) => Ok(icp.key_config.public_keys.len() == 1
                 && bp == icp.key_config.public_keys.first().unwrap()),
             IdentifierPrefix::SelfAddressing(sap) => Ok(sap.verify_binding(
-                &EventMessage::get_inception_data(&icp, sap.derivation, icp_event.serialization())?,
+                &EventMessage::get_inception_data(icp, sap.derivation, icp_event.serialization())?,
             )),
             IdentifierPrefix::SelfSigning(_ssp) => todo!(),
         },
-        _ => Err(Error::SemanticError("Not an ICP event".into())),
+        EventData::Dip(dip) => match &icp_event.event.prefix {
+            IdentifierPrefix::SelfAddressing(sap) => Ok(sap.verify_binding(
+                &EventMessage::get_delegated_inception_data(
+                    dip,
+                    sap.derivation,
+                    icp_event.serialization(),
+                )?,
+            )),
+            _ => todo!(),
+        },
+        _ => Err(Error::SemanticError("Not an ICP or DIP event".into())),
     }
 }
 
@@ -284,7 +353,7 @@ mod tests {
         assert_eq!(s0.current.threshold_key_digest, nxt);
         assert_eq!(s0.witnesses, vec![]);
         assert_eq!(s0.tally, 0);
-        assert_eq!(s0.delegated_keys, vec![]);
+        assert_eq!(s0.delegates, vec![]);
 
         Ok(())
     }
@@ -363,7 +432,7 @@ mod tests {
         assert_eq!(s0.current.threshold_key_digest, nexter_pref);
         assert_eq!(s0.witnesses, vec![]);
         assert_eq!(s0.tally, 0);
-        assert_eq!(s0.delegated_keys, vec![]);
+        assert_eq!(s0.delegates, vec![]);
 
         Ok(())
     }

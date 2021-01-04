@@ -8,7 +8,6 @@ use ursa::CryptoError;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    
     #[error("Error during Serialization: {0}")]
     SerializationError(String),
 
