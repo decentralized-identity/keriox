@@ -3,14 +3,18 @@ use super::{
     EventData,
 };
 use crate::{
-    derivation::self_addressing::SelfAddressing,
+    derivation::{self_addressing::SelfAddressing, DerivationCode},
     error::Error,
     event::Event,
-    event_message::{serialization_info::SerializationFormats, EventMessage},
+    event_message::{
+        serialization_info::{SerializationFormats, SerializationInfo},
+        EventMessage,
+    },
     prefix::IdentifierPrefix,
     state::{EventSemantics, IdentifierState},
 };
 use serde::{Deserialize, Serialize};
+use serde_hex::{Compact, SerHex};
 
 /// Inception Event
 ///
@@ -50,18 +54,66 @@ impl InceptionEvent {
         derivation: SelfAddressing,
         format: SerializationFormats,
     ) -> Result<EventMessage, Error> {
-        let prefix = IdentifierPrefix::SelfAddressing(derivation.derive(
-            &EventMessage::get_inception_data(&self, derivation, format)?,
-        ));
-
         EventMessage::new(
             Event {
-                prefix,
+                prefix: DummyInceptionEvent::derive(self.clone(), derivation, format)?,
                 sn: 0,
                 event_data: EventData::Icp(self),
             },
             format,
         )
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct DummyInceptionEvent {
+    #[serde(rename = "v")]
+    serialization_info: SerializationInfo,
+    #[serde(rename = "i")]
+    prefix: String,
+    #[serde(rename = "s", with = "SerHex::<Compact>")]
+    sn: u8,
+    #[serde(flatten)]
+    icp_data: InceptionEvent,
+}
+
+impl DummyInceptionEvent {
+    pub fn derive(
+        icp: InceptionEvent,
+        derivation: SelfAddressing,
+        format: SerializationFormats,
+    ) -> Result<IdentifierPrefix, Error> {
+        Ok(IdentifierPrefix::SelfAddressing(
+            derivation.derive(
+                &Self {
+                    serialization_info: SerializationInfo::new(
+                        format,
+                        Self {
+                            serialization_info: SerializationInfo::new(format, 0),
+                            prefix: Self::dummy_prefix(derivation),
+                            sn: 0,
+                            icp_data: icp.clone(),
+                        }
+                        .serialize()?
+                        .len(),
+                    ),
+                    prefix: Self::dummy_prefix(derivation),
+                    sn: 0,
+                    icp_data: icp,
+                }
+                .serialize()?,
+            ),
+        ))
+    }
+
+    fn serialize(&self) -> Result<Vec<u8>, Error> {
+        self.serialization_info.kind.encode(&self)
+    }
+
+    fn dummy_prefix(derivation: SelfAddressing) -> String {
+        std::iter::repeat("#")
+            .take(derivation.code_len() + derivation.derivative_b64_len())
+            .collect::<String>()
     }
 }
 
