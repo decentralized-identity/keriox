@@ -1,10 +1,9 @@
-use super::{super::sections::seal::LocationSeal, EventData};
+use super::{super::sections::seal::LocationSeal, DummyEvent, EventData};
 use super::{InceptionEvent, RotationEvent};
 use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
     event::{Event, EventMessage, SerializationFormats},
-    prefix::IdentifierPrefix,
     state::{EventSemantics, IdentifierState},
 };
 use serde::{Deserialize, Serialize};
@@ -38,12 +37,9 @@ impl DelegatedInceptionEvent {
         derivation: SelfAddressing,
         format: SerializationFormats,
     ) -> Result<EventMessage, Error> {
-        let prefix = IdentifierPrefix::SelfAddressing(derivation.derive(
-            &EventMessage::get_delegated_inception_data(&self, derivation, format)?,
-        ));
         EventMessage::new(
             Event {
-                prefix,
+                prefix: DummyEvent::derive_delegated_inception(self.clone(), derivation, format)?,
                 sn: 0,
                 event_data: EventData::Dip(self),
             },

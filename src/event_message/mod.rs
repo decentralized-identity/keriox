@@ -253,6 +253,7 @@ pub fn verify_identifier_binding(icp_event: &EventMessage) -> Result<bool, Error
         EventData::Icp(icp) => match &icp_event.event.prefix {
             IdentifierPrefix::Basic(bp) => Ok(icp.key_config.public_keys.len() == 1
                 && bp == icp.key_config.public_keys.first().unwrap()),
+            // TODO update with new inception process
             IdentifierPrefix::SelfAddressing(sap) => Ok(sap.verify_binding(
                 &EventMessage::get_inception_data(icp, sap.derivation, icp_event.serialization())?,
             )),
