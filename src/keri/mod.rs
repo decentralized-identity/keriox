@@ -274,6 +274,7 @@ impl Keri {
                 receipted_event_digest: SelfAddressing::Blake3_256.derive(&ser),
                 validator_location_seal: EventSeal {
                     prefix: self.state.prefix.clone(),
+                    sn: self.state.sn,
                     event_digest: SelfAddressing::Blake3_256.derive(&self.state.last),
                 },
             }),
