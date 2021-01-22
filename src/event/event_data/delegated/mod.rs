@@ -4,6 +4,7 @@ use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
     event::{Event, EventMessage, SerializationFormats},
+    prefix::IdentifierPrefix,
     state::{EventSemantics, IdentifierState},
 };
 use serde::{Deserialize, Serialize};
@@ -39,7 +40,9 @@ impl DelegatedInceptionEvent {
     ) -> Result<EventMessage, Error> {
         EventMessage::new(
             Event {
-                prefix: DummyEvent::derive_delegated_inception(self.clone(), derivation, format)?,
+                prefix: IdentifierPrefix::SelfAddressing(derivation.derive(
+                    &DummyEvent::derive_delegated_inception_data(self.clone(), derivation, format)?,
+                )),
                 sn: 0,
                 event_data: EventData::Dip(self),
             },

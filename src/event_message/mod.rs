@@ -1,9 +1,8 @@
 use crate::{
     derivation::{attached_signature_code::get_sig_count, self_addressing::SelfAddressing},
     error::Error,
-    event::event_data::delegated::DelegatedInceptionEvent,
     event::{
-        event_data::{inception::InceptionEvent, EventData},
+        event_data::{inception::InceptionEvent, DelegatedInceptionEvent, DummyEvent, EventData},
         Event,
     },
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
@@ -63,66 +62,6 @@ impl EventMessage {
 
     pub fn serialization(&self) -> SerializationFormats {
         self.serialization_info.kind
-    }
-
-    /// Get Inception Data
-    ///
-    /// Strips prefix and version string length info from an event
-    /// used for verifying identifier binding for self-addressing and self-certifying
-    pub fn get_inception_data(
-        icp: &InceptionEvent,
-        code: SelfAddressing,
-        format: SerializationFormats,
-    ) -> Result<Vec<u8>, Error> {
-        // use dummy prefix to get correct size info
-        // TODO: dynamically size dummy derivative, non-32 byte prefixes will fail
-        let icp_event_data = Event {
-            prefix: IdentifierPrefix::SelfAddressing(code.derive(&[0u8; 32])),
-            sn: 0,
-            event_data: EventData::Icp(icp.clone()),
-        };
-        Ok(dfs_serializer::to_vec(&Self {
-            serialization_info: icp_event_data
-                .clone()
-                .to_message(format)
-                .unwrap()
-                .serialization_info,
-            event: Event {
-                // default prefix serializes to empty string
-                prefix: IdentifierPrefix::default(),
-                ..icp_event_data
-            },
-        })?)
-    }
-
-    /// Get Delegated Inception Data
-    ///
-    /// Strips prefix and version string length info from an event
-    /// used for verifying identifier binding for self-addressing and self-certifying
-    pub fn get_delegated_inception_data(
-        dip: &DelegatedInceptionEvent,
-        code: SelfAddressing,
-        format: SerializationFormats,
-    ) -> Result<Vec<u8>, Error> {
-        // use dummy prefix to get correct size info
-        // TODO: dynamically size dummy derivative, non-32 byte prefixes will fail
-        let dip_event_data = Event {
-            prefix: IdentifierPrefix::SelfAddressing(code.derive(&[0u8; 32])),
-            sn: 0,
-            event_data: EventData::Dip(dip.clone()),
-        };
-        Ok(dfs_serializer::to_vec(&Self {
-            serialization_info: dip_event_data
-                .clone()
-                .to_message(format)
-                .unwrap()
-                .serialization_info,
-            event: Event {
-                // default prefix serializes to empty string
-                prefix: IdentifierPrefix::default(),
-                ..dip_event_data
-            },
-        })?)
     }
 
     /// Serialize
@@ -254,15 +193,19 @@ pub fn verify_identifier_binding(icp_event: &EventMessage) -> Result<bool, Error
             IdentifierPrefix::Basic(bp) => Ok(icp.key_config.public_keys.len() == 1
                 && bp == icp.key_config.public_keys.first().unwrap()),
             // TODO update with new inception process
-            IdentifierPrefix::SelfAddressing(sap) => Ok(sap.verify_binding(
-                &EventMessage::get_inception_data(icp, sap.derivation, icp_event.serialization())?,
-            )),
+            IdentifierPrefix::SelfAddressing(sap) => {
+                Ok(sap.verify_binding(&DummyEvent::derive_inception_data(
+                    icp.clone(),
+                    sap.derivation,
+                    icp_event.serialization(),
+                )?))
+            }
             IdentifierPrefix::SelfSigning(_ssp) => todo!(),
         },
         EventData::Dip(dip) => match &icp_event.event.prefix {
             IdentifierPrefix::SelfAddressing(sap) => Ok(sap.verify_binding(
-                &EventMessage::get_delegated_inception_data(
-                    dip,
+                &DummyEvent::derive_delegated_inception_data(
+                    dip.clone(),
                     sap.derivation,
                     icp_event.serialization(),
                 )?,

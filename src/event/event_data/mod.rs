@@ -14,7 +14,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
 
-use self::{
+pub use self::{
     delegated::{DelegatedInceptionEvent, DelegatedRotationEvent},
     inception::InceptionEvent,
     interaction::InteractionEvent,
@@ -55,7 +55,7 @@ impl EventSemantics for EventData {
 ///
 /// Used only to encapsulate the prefix derivation process for inception and delegated inception
 #[derive(Serialize, Debug, Clone)]
-pub(super) struct DummyEvent {
+pub(crate) struct DummyEvent {
     #[serde(rename = "v")]
     serialization_info: SerializationInfo,
     #[serde(rename = "i")]
@@ -67,48 +67,44 @@ pub(super) struct DummyEvent {
 }
 
 impl DummyEvent {
-    pub fn derive_inception(
+    pub fn derive_inception_data(
         icp: InceptionEvent,
         derivation: SelfAddressing,
         format: SerializationFormats,
-    ) -> Result<IdentifierPrefix, Error> {
-        Self::derive(EventData::Icp(icp), derivation, format)
+    ) -> Result<Vec<u8>, Error> {
+        Self::derive_data(EventData::Icp(icp), derivation, format)
     }
 
-    pub fn derive_delegated_inception(
+    pub fn derive_delegated_inception_data(
         dip: DelegatedInceptionEvent,
         derivation: SelfAddressing,
         format: SerializationFormats,
-    ) -> Result<IdentifierPrefix, Error> {
-        Self::derive(EventData::Dip(dip), derivation, format)
+    ) -> Result<Vec<u8>, Error> {
+        Self::derive_data(EventData::Dip(dip), derivation, format)
     }
 
-    fn derive(
+    fn derive_data(
         data: EventData,
         derivation: SelfAddressing,
         format: SerializationFormats,
-    ) -> Result<IdentifierPrefix, Error> {
-        Ok(IdentifierPrefix::SelfAddressing(
-            derivation.derive(
-                &Self {
-                    serialization_info: SerializationInfo::new(
-                        format,
-                        Self {
-                            serialization_info: SerializationInfo::new(format, 0),
-                            prefix: Self::dummy_prefix(derivation),
-                            sn: 0,
-                            data: data.clone(),
-                        }
-                        .serialize()?
-                        .len(),
-                    ),
+    ) -> Result<Vec<u8>, Error> {
+        Ok(Self {
+            serialization_info: SerializationInfo::new(
+                format,
+                Self {
+                    serialization_info: SerializationInfo::new(format, 0),
                     prefix: Self::dummy_prefix(derivation),
                     sn: 0,
-                    data: data,
+                    data: data.clone(),
                 }
-                .serialize()?,
+                .serialize()?
+                .len(),
             ),
-        ))
+            prefix: Self::dummy_prefix(derivation),
+            sn: 0,
+            data: data,
+        }
+        .serialize()?)
     }
 
     fn serialize(&self) -> Result<Vec<u8>, Error> {

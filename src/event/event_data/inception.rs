@@ -7,6 +7,7 @@ use crate::{
     error::Error,
     event::Event,
     event_message::{serialization_info::SerializationFormats, EventMessage},
+    prefix::IdentifierPrefix,
     state::{EventSemantics, IdentifierState},
 };
 use serde::{Deserialize, Serialize};
@@ -51,7 +52,9 @@ impl InceptionEvent {
     ) -> Result<EventMessage, Error> {
         EventMessage::new(
             Event {
-                prefix: DummyEvent::derive_inception(self.clone(), derivation, format)?,
+                prefix: IdentifierPrefix::SelfAddressing(derivation.derive(
+                    &DummyEvent::derive_inception_data(self.clone(), derivation, format)?,
+                )),
                 sn: 0,
                 event_data: EventData::Icp(self),
             },
