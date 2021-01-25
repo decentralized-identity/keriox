@@ -165,28 +165,28 @@ fn test_process_delegated() -> Result<(), Error> {
         }
     };
 
-    let bobs_pref: IdentifierPrefix = "DacyrOTuGEE1O5T0-JfoZxm_9tYRqKn5iKKzcXGe629M".parse()?;
+    let bobs_pref: IdentifierPrefix = "DcIFrd3nstoRRo2LIDTgj5Pt4aZcYR20Mmp2m2eSd8KI".parse()?;
 
-    let bobs_icp = r#"{"v":"KERI10JSON0000e6_","i":"DacyrOTuGEE1O5T0-JfoZxm_9tYRqKn5iKKzcXGe629M","s":"0","t":"icp","kt":"1","k":["DacyrOTuGEE1O5T0-JfoZxm_9tYRqKn5iKKzcXGe629M"],"n":"ESyIFWDsYD1eCki8Xh8m3VTNvd_GcLa6weSjMkr1vGDM","wt":"0","w":[],"c":[]}-AABAAGMO_be5iMRqzULrWB9TP2BRuoxEMn4sxAxzrmcdMgYoRTHBxJpVeJ0R9NQQ_q_Kk_6CEpwt0fzHe4KFy1h1bBA"#;
+    let bobs_icp = r#"{"v":"KERI10JSON0000e6_","i":"DcIFrd3nstoRRo2LIDTgj5Pt4aZcYR20Mmp2m2eSd8KI","s":"0","t":"icp","kt":"1","k":["DcIFrd3nstoRRo2LIDTgj5Pt4aZcYR20Mmp2m2eSd8KI"],"n":"EIz9z6JYfIhnFKt5V8vZR_6aEG2R-LElRUlYR7tjcnhM","wt":"0","w":[],"c":[]}-AABAATYqdgjSbMFBX7T4KwSXHT_Um3DMfrnloNd59sDqYd7uB0Acvtazn0vjxhjHGP-Jg8gyMFn7284S0C4UMW3ZABw"#;
     let msg = signed_message(bobs_icp.as_bytes()).unwrap().1;
     event_processor.process(msg)?;
 
     // Delegated inception event.
-    let dip_raw = r#"{"v":"KERI10JSON000165_","i":"Eillkf6Neo-Zmyn6Gg_8FS84RKWYgXblfoSXaOpttP7U","s":"0","t":"dip","kt":"1","k":["DSYuIQQrIi0N_a5gdzeXoqsNvo7PWHkn5ZrYO_ZmZdOA"],"n":"ESmikz_J7quPeKcfD_7d7jPDOfBsomZcg5I35vjMb69o","wt":"0","w":[],"c":[],"da":{"i":"DacyrOTuGEE1O5T0-JfoZxm_9tYRqKn5iKKzcXGe629M","s":"1","t":"ixn","p":"EnpsziyP_HrXY0GTDKn6jBCTq37akJ5W4nu3zGE9Nh5I"}}-AABAAtxbG6zfWOp73s5zxsKxXkrOi7h0CAbdYy5vBNmrG_oivi1uREgH7dUR-bpDO1lnMkcwg2ooDIIou_Ejs4bYpBA"#;
+    let dip_raw = r#"{"v":"KERI10JSON000165_","i":"EUWbCTh_Q-GCNA5S93qjGFDehaxFROR6YyhQ7L7qJ6SI","s":"0","t":"dip","kt":"1","k":["DSW9x_sF6IVsUGhgtq5THbQ9OpJuUXQCQkuBWoYlSLFQ"],"n":"EUpF_MIgcEiT9RnGvwbz_TqHHctKRZEUiWWQTO1gIZlw","wt":"0","w":[],"c":[],"da":{"i":"DcIFrd3nstoRRo2LIDTgj5Pt4aZcYR20Mmp2m2eSd8KI","s":"1","t":"ixn","p":"ECK2OTG_AcrLf74_fknLxzt5lziU-crgYVgLbGp4jg2o"}}-AABAAHCLBmbnei-5gxBTGyXFJrF3DjTDQL15sjN5XbtJ07bQPoDCJw46XXx4TURCfhiAAhKTsskkqxCBOpYsMPpdTCw"#;
     let deserialized_dip = signed_message(dip_raw.as_bytes()).unwrap().1;
 
     // Process dip event before delegating ixn event.
     let state = event_processor.process(deserialized_dip.clone());
     assert!(matches!(state, Err(Error::EventOutOfOrderError)));
 
-    let child_prefix: IdentifierPrefix = "Eillkf6Neo-Zmyn6Gg_8FS84RKWYgXblfoSXaOpttP7U".parse()?;
+    let child_prefix: IdentifierPrefix = "EUWbCTh_Q-GCNA5S93qjGFDehaxFROR6YyhQ7L7qJ6SI".parse()?;
 
     // Check if processed dip is in kel.
     let dip_from_db = event_processor.db.last_event_at_sn(&child_prefix, 0);
     assert!(matches!(dip_from_db, Ok(None)));
 
     // Bob's ixn event with delegating event seal.
-    let bobs_ixn = r#"{"v":"KERI10JSON0000ff_","i":"DacyrOTuGEE1O5T0-JfoZxm_9tYRqKn5iKKzcXGe629M","s":"1","t":"ixn","p":"EnpsziyP_HrXY0GTDKn6jBCTq37akJ5W4nu3zGE9Nh5I","a":[{"i":"Eillkf6Neo-Zmyn6Gg_8FS84RKWYgXblfoSXaOpttP7U","d":"E-wVeNYeC-ft2R-eq1khZzBpJV4owTKLEMn5Qgb7ClzE"}]}-AABAAgaeWumWSWP9tfUpZYGP0W3DU2Wd20NheRMjSS7QcW8AeKMfgklLfqOLE_B5cF6G_GhcMtthDyK4oEffZ_Tm8Bg"#;
+    let bobs_ixn = r#"{"v":"KERI10JSON000107_","i":"DcIFrd3nstoRRo2LIDTgj5Pt4aZcYR20Mmp2m2eSd8KI","s":"1","t":"ixn","p":"ECK2OTG_AcrLf74_fknLxzt5lziU-crgYVgLbGp4jg2o","a":[{"i":"EUWbCTh_Q-GCNA5S93qjGFDehaxFROR6YyhQ7L7qJ6SI","s":"0","d":"EeOS5Xa51C-H9HCzuumjj4Rso8t0T8p1WaHg72tTrqhc"}]}-AABAArBypvPpBoKTTE_4zaOI4H9xxFxlsZ6Z8VLDGjxAZa_4ucRKAjNRTSe7nX5IgeiwIW6mek5J3_mUP27dRGMsNCw"#;
     let deserialized_ixn = signed_message(bobs_ixn.as_bytes()).unwrap().1;
     event_processor.process(deserialized_ixn.clone())?;
 
@@ -205,11 +205,11 @@ fn test_process_delegated() -> Result<(), Error> {
     assert_eq!(dip_from_db, Some(raw_parsed(deserialized_dip)?));
 
     // Bobs interaction event with delegated event seal.
-    let bob_ixn = r#"{"v":"KERI10JSON0000ff_","i":"DacyrOTuGEE1O5T0-JfoZxm_9tYRqKn5iKKzcXGe629M","s":"2","t":"ixn","p":"EDtl3GufXTAMhokeiHr0CM-N1X2clxGXhB9b9ci10Uug","a":[{"i":"Eillkf6Neo-Zmyn6Gg_8FS84RKWYgXblfoSXaOpttP7U","d":"E2hTgse4VcbsV_gJUEcTRx5DiZR-lgPrpYhtSGBBFt0E"}]}-AABAADpc3e49teDDinBTETcGpQWtP0QChXEmO_5x5T8KYcTu-hRBl-TvKIY0TK04D6kRBlQnteRu-RcX1uGNiQ1j6Dw"#;
+    let bob_ixn = r#"{"v":"KERI10JSON000107_","i":"DcIFrd3nstoRRo2LIDTgj5Pt4aZcYR20Mmp2m2eSd8KI","s":"2","t":"ixn","p":"EbEidxcOohgeM966TOonWlaOSRdK2Bsuxb0s0S04CX1g","a":[{"i":"EUWbCTh_Q-GCNA5S93qjGFDehaxFROR6YyhQ7L7qJ6SI","s":"1","d":"Edf4rT9DnCl58X1DEoWBsouXqPqO2ahI_oHjS1fltodQ"}]}-AABAAei17qaEa7VF6utjHay8L0TNWSPhw0Oj9Ho9zS0Mda2Oo5TkELA6Dd1jkTYwiTSecaX85-L56PC1-apEz2Bb3DA"#;
     let deserialized_ixn_drt = signed_message(bob_ixn.as_bytes()).unwrap().1;
 
     // Delegated rotation event.
-    let drt_raw = r#"{"v":"KERI10JSON0001a1_","i":"Eillkf6Neo-Zmyn6Gg_8FS84RKWYgXblfoSXaOpttP7U","s":"1","t":"drt","p":"E-wVeNYeC-ft2R-eq1khZzBpJV4owTKLEMn5Qgb7ClzE","kt":"1","k":["DWd0PYkfyJ3zZqh7nSi5ofwynBpGZocUpG6PA2bn21B0"],"n":"ETeDZvAk4Yj5n_rjSxRN7KYchOFTqqN-HcvMf86hU9gM","wt":"0","wr":[],"wa":[],"a":[],"da":{"i":"DacyrOTuGEE1O5T0-JfoZxm_9tYRqKn5iKKzcXGe629M","s":"2","t":"ixn","p":"EDtl3GufXTAMhokeiHr0CM-N1X2clxGXhB9b9ci10Uug"}}-AABAA4hOqk3e9YQd_caNU7fuVK2N5xpYeGv6hykwYfO51AaSoyNPpKjfx2nO_Y2Mt6i4llYUBkKLwaV1b4m7CrlCcAQ"#;
+    let drt_raw = r#"{"v":"KERI10JSON0001a1_","i":"EUWbCTh_Q-GCNA5S93qjGFDehaxFROR6YyhQ7L7qJ6SI","s":"1","t":"drt","p":"EeOS5Xa51C-H9HCzuumjj4Rso8t0T8p1WaHg72tTrqhc","kt":"1","k":["Dk0Wp-dkcPdbEkBGLvJGlrL5SAG0kBELx61B8e1bGi2o"],"n":"E_zHkOoJvV46tJI54ssGszaA351wem7_I_I3ZurpFbUA","wt":"0","wr":[],"wa":[],"a":[],"da":{"i":"DcIFrd3nstoRRo2LIDTgj5Pt4aZcYR20Mmp2m2eSd8KI","s":"2","t":"ixn","p":"EbEidxcOohgeM966TOonWlaOSRdK2Bsuxb0s0S04CX1g"}}-AABAAiqETyyvcU31_N7vgLzhe-tP4kMe0NneQaxFjYahq_IPK79k3nuLmeIAoA-FJTjGepHQ56CgUQUsTh0PLVD0mDA"#;
     let deserialized_drt = signed_message(drt_raw.as_bytes()).unwrap().1;
 
     // Process drt event before delegating ixn event.
