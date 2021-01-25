@@ -290,7 +290,7 @@ impl<D: EventDatabase> EventProcessor<D> {
                                 .escrow_t_receipt(
                                     &vrc.event_message.event.prefix,
                                     &r.receipted_event_digest,
-                                    &r.validator_location_seal.prefix,
+                                    &r.validator_seal.prefix,
                                     &sig,
                                 )
                                 .map_err(|_| Error::StorageError)?
@@ -300,8 +300,8 @@ impl<D: EventDatabase> EventProcessor<D> {
                     Some(event) => {
                         let keys = self
                             .get_keys_at_event(
-                                &r.validator_location_seal.prefix,
-                                &r.validator_location_seal.event_digest,
+                                &r.validator_seal.prefix,
+                                &r.validator_seal.event_digest,
                             )?
                             .ok_or(Error::SemanticError("No establishment Event found".into()))?;
                         if keys.verify(&event, &vrc.signatures)? {
@@ -310,7 +310,7 @@ impl<D: EventDatabase> EventProcessor<D> {
                                     .add_t_receipt_for_event(
                                         &vrc.event_message.event.prefix,
                                         &SelfAddressing::Blake3_256.derive(&event),
-                                        &r.validator_location_seal.prefix,
+                                        &r.validator_seal.prefix,
                                         &sig,
                                     )
                                     .map_err(|_| Error::StorageError);
