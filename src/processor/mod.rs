@@ -75,51 +75,46 @@ impl<D: EventDatabase> EventProcessor<D> {
     ///
     /// Returns the current Key Config associated with
     /// the given Prefix at the establishment event
-    /// represented by Event Digest
+    /// represented by sn and Event Digest
     fn get_keys_at_event(
         &self,
         id: &IdentifierPrefix,
+        sn: u64,
         event_digest: &SelfAddressingPrefix,
     ) -> Result<Option<KeyConfig>, Error> {
-        // starting from inception
-        for sn in 0.. {
-            // read the latest raw event
-            let raw = match self
-                .db
-                .last_event_at_sn(id, sn)
-                .map_err(|_| Error::StorageError)?
-            {
-                Some(r) => r,
-                // end of KEL and no matching event found
-                None => return Ok(None),
-            };
+        let raw = match self
+            .db
+            .last_event_at_sn(id, sn)
+            .map_err(|_| Error::StorageError)?
+        {
+            Some(r) => r,
+            None => return Ok(None),
+        };
 
-            // if it's the event we're looking for
-            if event_digest.verify_binding(&raw) {
-                // parse event
-                let parsed = message(&raw).map_err(|_| Error::DeserializationError)?.1;
+        // if it's the event we're looking for
+        if event_digest.verify_binding(&raw) {
+            // parse event
+            let parsed = message(&raw).map_err(|_| Error::DeserializationError)?.1;
 
-                // return the config or error if it's not an establishment event
-                return Ok(Some(match parsed.event.event.event_data {
-                    EventData::Icp(icp) => icp.key_config,
-                    EventData::Rot(rot) => rot.key_config,
-                    EventData::Dip(dip) => dip.inception_data.key_config,
-                    EventData::Drt(drt) => drt.rotation_data.key_config,
-                    // the receipt has a binding but it's NOT an establishment event
-                    _ => Err(Error::SemanticError("Receipt binding incorrect".into()))?,
-                }));
-            }
+            // return the config or error if it's not an establishment event
+            return Ok(Some(match parsed.event.event.event_data {
+                EventData::Icp(icp) => icp.key_config,
+                EventData::Rot(rot) => rot.key_config,
+                EventData::Dip(dip) => dip.inception_data.key_config,
+                EventData::Drt(drt) => drt.rotation_data.key_config,
+                // the receipt has a binding but it's NOT an establishment event
+                _ => Err(Error::SemanticError("Receipt binding incorrect".into()))?,
+            }));
         }
 
         Ok(None)
     }
 
-    /// Validates binding between delegated and delegating events.
-    fn validate_seal(
-        &self,
-        seal: LocationSeal,
-        raw: &[u8],
-    ) -> Result<(), Error> {
+    /// Validate delegating event seal.
+    ///
+    /// Validates binding between delegated and delegating events. The validation
+    /// is based on delegating location seal and delegated event raw.
+    fn validate_seal(&self, seal: LocationSeal, raw: &[u8]) -> Result<(), Error> {
         // Check if event of seal's prefix and sn is in db.
         match self
             .db
@@ -157,7 +152,7 @@ impl<D: EventDatabase> EventProcessor<D> {
                         Err(Error::StorageError),
                         |event| {
                             event.map_or(
-                                Err(Error::SemanticError("No event id db".into())),
+                                Err(Error::SemanticError("No event in db".into())),
                                 // recompute hash and compare
                                 |ev| Ok(seal.prior_digest.verify_binding(&ev)),
                             )
@@ -166,11 +161,9 @@ impl<D: EventDatabase> EventProcessor<D> {
                 }?;
 
                 // Check if event seal list contains delegating event seal.
-                if !data.iter().any(|s| {
-                    match s {
-                        Seal::Event(es) => es.event_digest.verify_binding(raw),
-                        _ => false,
-                    }
+                if !data.iter().any(|s| match s {
+                    Seal::Event(es) => es.event_digest.verify_binding(raw),
+                    _ => false,
                 }) {
                     return Err(Error::SemanticError(
                         "Data field doesn't contain delegating event seal.".to_string(),
@@ -301,6 +294,7 @@ impl<D: EventDatabase> EventProcessor<D> {
                         let keys = self
                             .get_keys_at_event(
                                 &r.validator_seal.prefix,
+                                r.validator_seal.sn,
                                 &r.validator_seal.event_digest,
                             )?
                             .ok_or(Error::SemanticError("No establishment Event found".into()))?;
