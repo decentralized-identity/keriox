@@ -1,5 +1,12 @@
 use super::EventProcessor;
-use crate::{database::lmdb::LmdbEventDatabase, database::EventDatabase, error::Error};
+use crate::{
+    database::lmdb::LmdbEventDatabase,
+    database::EventDatabase,
+    derivation::self_addressing::SelfAddressing,
+    error::Error,
+    event::{self, sections::seal::LocationSeal},
+    event_message,
+};
 use crate::{
     event_message::{
         parse,
@@ -235,6 +242,46 @@ fn test_process_delegated() -> Result<(), Error> {
         .last_event_at_sn(&child_prefix, 1)
         .unwrap();
     assert_eq!(drt_from_db, Some(raw_parsed(deserialized_drt)?));
+
+    Ok(())
+}
+
+#[test]
+fn test_validate_seal() -> Result<(), Error> {
+    use tempfile::Builder;
+    // Create test db and event processor.
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    fs::create_dir_all(root.path()).unwrap();
+    let db = LmdbEventDatabase::new(root.path()).unwrap();
+    let event_processor = EventProcessor::new(db);
+
+    // Process icp.
+    let delegator_icp_raw = r#"{"v":"KERI10JSON0000e6_","i":"DcVUXDcB307nuuIlMGEUt9WZc4WF9W29IRvxDyVu6hyg","s":"0","t":"icp","kt":"1","k":["DcVUXDcB307nuuIlMGEUt9WZc4WF9W29IRvxDyVu6hyg"],"n":"E1_qFK5o1zYy5Os45Ot6niGC1ZpvQGNk1seLMBm80RZ0","wt":"0","w":[],"c":[]}-AABAANxCwp8L5f_8jLmdWSv8v-qNPv54m7Ij-Zlv5BMQZSs5AWuSaw96QkQt1DTOsDNgomLFuY8TdBeLdXjIIrqJWCw"#;
+    let deserialized_icp = signed_message(delegator_icp_raw.as_bytes()).unwrap().1;
+    event_processor.process(deserialized_icp.clone())?.unwrap();
+
+    let delegator_prefix: IdentifierPrefix =
+        "DcVUXDcB307nuuIlMGEUt9WZc4WF9W29IRvxDyVu6hyg".parse()?;
+    let delegator_last: Result<Vec<u8>, Error> = match deserialized_icp {
+        Deserialized::Event(e) => Ok(e.event.raw.to_vec()),
+        _ => Err(Error::SemanticError("bad deser".into()))?,
+    };
+    // Prepare delegating seal. Use sha3 to hash previous event.
+    let seal = LocationSeal {
+        prefix: delegator_prefix.clone(),
+        sn: 1,
+        ilk: "ixn".into(),
+        prior_digest: SelfAddressing::SHA3_256.derive(&delegator_last?),
+    };
+
+    // Delegating event uses Blake3 to hash previous event.
+    let delegating_event_raw = r#"{"v":"KERI10JSON000107_","i":"DcVUXDcB307nuuIlMGEUt9WZc4WF9W29IRvxDyVu6hyg","s":"1","t":"ixn","p":"E7rJVSh_MLTFcZ4v0urBxSJ103uR454Vo6St-wSCk_sI","a":[{"i":"EbuZO_Yr5Zt2Jvg0Sa96b2lDquGF3hHlhr7U7t3rLHvw","s":"0","d":"Eqid10S0HyiUI56hp2eBaS4pdnqvEnqV3p8f5DMfXX7w"}]}-AABAA1BOb5zF2PZ9x4GFpwVigVDTUAjpF1T3P23Z2uiwGej2J4EyoEvEW_WFxfVbyOLQW4eIWG2zNalOXy32sAL94BA"#;
+    let deserialized_ixn = signed_message(delegating_event_raw.as_bytes()).unwrap().1;
+    event_processor.process(deserialized_ixn.clone())?.unwrap();
+
+    let dip_raw = r#"{"v":"KERI10JSON000165_","i":"EbuZO_Yr5Zt2Jvg0Sa96b2lDquGF3hHlhr7U7t3rLHvw","s":"0","t":"dip","kt":"1","k":["DEQbpbOD29I6igCqlxNYVy-TsFa8kmPKLdYscL0lxsPE"],"n":"Ey6FhAzq0Ivj8E-NYjxkWrlj6mLFL67S6ADcsxMhX46s","wt":"0","w":[],"c":[],"da":{"i":"DcVUXDcB307nuuIlMGEUt9WZc4WF9W29IRvxDyVu6hyg","s":"1","t":"ixn","p":"HiQ3FpdUUTT8DyNJWIcN18OouhiA6SfjcajsBVDHVMeY"}}"#;
+
+    event_processor.validate_seal(seal, dip_raw.as_bytes())?;
 
     Ok(())
 }

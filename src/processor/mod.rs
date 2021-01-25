@@ -114,12 +114,11 @@ impl<D: EventDatabase> EventProcessor<D> {
         Ok(None)
     }
 
+    /// Validates binding between delegated and delegating events.
     fn validate_seal(
         &self,
         seal: LocationSeal,
-        pref: &IdentifierPrefix,
-        dig: &SelfAddressingPrefix,
-        sn: u64,
+        raw: &[u8],
     ) -> Result<(), Error> {
         // Check if event of seal's prefix and sn is in db.
         match self
@@ -128,10 +127,7 @@ impl<D: EventDatabase> EventProcessor<D> {
             .map_err(|_| Error::StorageError)?
         {
             None => {
-                // No event found, escrow delegated event.
-                self.db
-                    .escrow_out_of_order_event(pref, sn, dig)
-                    .map_err(|_| Error::StorageError)?;
+                // No event found.
                 return Err(Error::EventOutOfOrderError);
             }
             Some(del_event) => {
@@ -150,16 +146,31 @@ impl<D: EventDatabase> EventProcessor<D> {
                     ),
                     _ => return Err(Error::SemanticError("Improper event type".to_string())),
                 };
-                // Check if previous events match.
-                if prior_dig != seal.prior_digest {
-                    return Err(Error::SemanticError(
-                        "Prior events digests do not match.".to_string(),
-                    ));
-                };
+
+                // Check if prior event digest matches prior event digest from
+                // the seal.
+                if prior_dig.derivation == seal.prior_digest.derivation {
+                    Ok(prior_dig == seal.prior_digest)
+                } else {
+                    // get previous event from db
+                    self.db.last_event_at_sn(&seal.prefix, seal.sn - 1).map_or(
+                        Err(Error::StorageError),
+                        |event| {
+                            event.map_or(
+                                Err(Error::SemanticError("No event id db".into())),
+                                // recompute hash and compare
+                                |ev| Ok(seal.prior_digest.verify_binding(&ev)),
+                            )
+                        },
+                    )
+                }?;
+
                 // Check if event seal list contains delegating event seal.
-                if !data.iter().any(|s| match s {
-                    Seal::Event(es) => &es.prefix == pref && &es.event_digest == dig,
-                    _ => false,
+                if !data.iter().any(|s| {
+                    match s {
+                        Seal::Event(es) => es.event_digest.verify_binding(raw),
+                        _ => false,
+                    }
                 }) {
                     return Err(Error::SemanticError(
                         "Data field doesn't contain delegating event seal.".to_string(),
@@ -206,8 +217,8 @@ impl<D: EventDatabase> EventProcessor<D> {
 
         // If delegated event, check its delegator seal.
         match ilk {
-            EventData::Dip(dip) => self.validate_seal(dip.seal, pref, &dig, sn),
-            EventData::Drt(drt) => self.validate_seal(drt.seal, pref, &dig, sn),
+            EventData::Dip(dip) => self.validate_seal(dip.seal, &raw),
+            EventData::Drt(drt) => self.validate_seal(drt.seal, &raw),
             _ => Ok(()),
         }
         .or_else(|e| {
