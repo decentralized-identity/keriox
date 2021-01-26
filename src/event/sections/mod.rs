@@ -5,6 +5,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
+
 pub mod seal;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
@@ -15,14 +16,14 @@ pub struct KeyConfig {
     #[serde(rename = "k")]
     pub public_keys: Vec<BasicPrefix>,
 
-    #[serde(rename = "n")]
-    pub threshold_key_digest: SelfAddressingPrefix,
+    #[serde(rename = "n", with = "empty_string_as_none")]
+    pub threshold_key_digest: Option<SelfAddressingPrefix>,
 }
 
 impl KeyConfig {
     pub fn new(
         public_keys: Vec<BasicPrefix>,
-        threshold_key_digest: SelfAddressingPrefix,
+        threshold_key_digest: Option<SelfAddressingPrefix>,
         threshold: Option<u64>,
     ) -> Self {
         Self {
@@ -73,7 +74,10 @@ impl KeyConfig {
     /// Verifies that the given next KeyConfig matches that which is committed
     /// to in the threshold_key_digest of this KeyConfig
     pub fn verify_next(&self, next: &KeyConfig) -> bool {
-        self.threshold_key_digest == next.commit(self.threshold_key_digest.derivation)
+        match &self.threshold_key_digest {
+            Some(n) => n == &next.commit(n.derivation),
+            None => false,
+        }
     }
 
     /// Serialize For Next
@@ -107,6 +111,34 @@ pub fn nxt_commitment(
             )
         },
     )
+}
+
+mod empty_string_as_none {
+    use serde::{de::IntoDeserializer, Deserialize, Deserializer, Serializer};
+
+    pub fn deserialize<'d, D, T>(de: D) -> Result<Option<T>, D::Error>
+    where
+        D: Deserializer<'d>,
+        T: Deserialize<'d>,
+    {
+        let opt = Option::<String>::deserialize(de)?;
+        let opt = opt.as_ref().map(String::as_str);
+        match opt {
+            None | Some("") => Ok(None),
+            Some(s) => T::deserialize(s.into_deserializer()).map(Some),
+        }
+    }
+
+    pub fn serialize<S, T>(t: &Option<T>, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        T: ToString,
+    {
+        s.serialize_str(&match &t {
+            Some(v) => v.to_string(),
+            None => "".into(),
+        })
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]

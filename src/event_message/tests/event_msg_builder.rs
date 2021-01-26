@@ -119,7 +119,7 @@ impl EventMsgBuilder {
 
     pub fn build(self) -> Result<EventMessage, Error> {
         let next_key_hash = nxt_commitment(1, &self.next_keys, SelfAddressing::Blake3_256);
-        let key_config = KeyConfig::new(self.keys, next_key_hash, Some(self.key_threshold));
+        let key_config = KeyConfig::new(self.keys, Some(next_key_hash), Some(self.key_threshold));
         let prefix =
             if self.prefix == IdentifierPrefix::default() && key_config.public_keys.len() == 1 {
                 IdentifierPrefix::Basic(key_config.clone().public_keys[0].clone())

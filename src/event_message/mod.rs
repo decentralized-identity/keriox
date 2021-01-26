@@ -261,7 +261,7 @@ mod tests {
             prefix: IdentifierPrefix::Basic(pref0.clone()),
             sn: 0,
             event_data: EventData::Icp(InceptionEvent {
-                key_config: KeyConfig::new(vec![pref0.clone()], nxt.clone(), Some(1)),
+                key_config: KeyConfig::new(vec![pref0.clone()], Some(nxt.clone()), Some(1)),
                 witness_config: InceptionWitnessConfig::default(),
                 inception_configuration: vec![],
             }),
@@ -294,7 +294,7 @@ mod tests {
         assert_eq!(s0.current.public_keys.len(), 1);
         assert_eq!(s0.current.public_keys[0], pref0);
         assert_eq!(s0.current.threshold, 1);
-        assert_eq!(s0.current.threshold_key_digest, nxt);
+        assert_eq!(s0.current.threshold_key_digest, Some(nxt));
         assert_eq!(s0.witnesses, vec![]);
         assert_eq!(s0.tally, 0);
         assert_eq!(s0.delegates, vec![]);
@@ -339,7 +339,7 @@ mod tests {
         let icp = InceptionEvent::new(
             KeyConfig::new(
                 vec![sig_pref_0.clone(), enc_pref_0.clone()],
-                nexter_pref.clone(),
+                Some(nexter_pref.clone()),
                 Some(1),
             ),
             None,
@@ -373,7 +373,7 @@ mod tests {
         assert_eq!(s0.current.public_keys[0], sig_pref_0);
         assert_eq!(s0.current.public_keys[1], enc_pref_0);
         assert_eq!(s0.current.threshold, 1);
-        assert_eq!(s0.current.threshold_key_digest, nexter_pref);
+        assert_eq!(s0.current.threshold_key_digest, Some(nexter_pref));
         assert_eq!(s0.witnesses, vec![]);
         assert_eq!(s0.tally, 0);
         assert_eq!(s0.delegates, vec![]);
