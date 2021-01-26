@@ -34,12 +34,12 @@ pub struct ReceiptTransferable {
     #[serde(rename = "d")]
     pub receipted_event_digest: SelfAddressingPrefix,
 
-    /// Validator Location Seal
+    /// Validator Seal
     ///
     /// An Event Seal which indicates the latest establishment event of
     /// the Validator when the Receipt was made
     #[serde(rename = "a")]
-    pub validator_location_seal: EventSeal,
+    pub validator_seal: EventSeal,
 }
 
 impl EventSemantics for ReceiptTransferable {}

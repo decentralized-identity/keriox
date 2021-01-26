@@ -28,6 +28,9 @@ pub struct EventSeal {
     #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
 
+    #[serde(rename = "s", with = "SerHex::<Compact>")]
+    pub sn: u64,
+
     #[serde(rename = "d")]
     pub event_digest: SelfAddressingPrefix,
 }
@@ -59,7 +62,7 @@ pub struct DelegatingEventSeal {
 #[test]
 fn test_seal_deserialization() {
     // Event seal
-    let seal_str = r#"{"i":"Ek7M173EvQZ6kLjyorCwZK4XWwyNcSi6u7lz5-M6MyFE","d":"EeBPcw30IVCylYANEGOg3V8f4nBYMspEpqNaq2Y8_knw"}"#;
+    let seal_str = r#"{"i":"Ek7M173EvQZ6kLjyorCwZK4XWwyNcSi6u7lz5-M6MyFE","s":"1","d":"EeBPcw30IVCylYANEGOg3V8f4nBYMspEpqNaq2Y8_knw"}"#;
     let seal: Seal = serde_json::from_str(seal_str).unwrap();
     assert!(matches!(seal, Seal::Event(_)));
     assert_eq!(serde_json::to_string(&seal).unwrap(), seal_str);

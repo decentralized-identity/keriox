@@ -194,7 +194,7 @@ impl Keri {
                 },
                 Deserialized::Vrc(r) => match r.event_message.event.event_data {
                     EventData::Vrc(ref rct) => {
-                        let prefix_str = rct.validator_location_seal.prefix.to_str();
+                        let prefix_str = rct.validator_seal.prefix.to_str();
                         let validator = self.other_instances.get(&prefix_str).unwrap().clone();
 
                         self.process_receipt(validator, r).unwrap();
@@ -233,11 +233,11 @@ impl Keri {
                                     .derivation
                                     .derive(&event.event_message.serialize()?)
                             // seal pref is the pref of the validator
-                            && rct.validator_location_seal.prefix == validator.prefix
+                            && rct.validator_seal.prefix == validator.prefix
                 {
-                    if rct.validator_location_seal.event_digest
+                    if rct.validator_seal.event_digest
                         == rct
-                            .validator_location_seal
+                            .validator_seal
                             .event_digest
                             .derivation
                             .derive(&validator.last)
@@ -271,8 +271,9 @@ impl Keri {
             sn: event.event.sn,
             event_data: EventData::Vrc(ReceiptTransferable {
                 receipted_event_digest: SelfAddressing::Blake3_256.derive(&ser),
-                validator_location_seal: EventSeal {
+                validator_seal: EventSeal {
                     prefix: self.state.prefix.clone(),
+                    sn: self.state.sn,
                     event_digest: SelfAddressing::Blake3_256.derive(&self.state.last),
                 },
             }),

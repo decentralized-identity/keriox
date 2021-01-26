@@ -9,11 +9,10 @@ use crate::{
 use bincode;
 use chrono::prelude::*;
 use rkv::{
-    backend::{
-        BackendDatabase, BackendEnvironment, SafeMode, SafeModeDatabase, SafeModeEnvironment,
-    },
+    backend::{BackendEnvironmentBuilder, SafeMode, SafeModeDatabase, SafeModeEnvironment},
     value::Type,
-    DataError, Manager, MultiStore, Rkv, SingleStore, StoreError, StoreOptions, Value,
+    CloseOptions, DataError, Manager, MultiStore, Rkv, SingleStore, StoreError, StoreOptions,
+    Value,
 };
 use serde::Serialize;
 use std::path::Path;
@@ -55,13 +54,29 @@ impl From<SequenceIndex<'_>> for Vec<u8> {
 }
 
 impl LmdbEventDatabase {
+    /// New
+    ///
+    /// Will create or open an event DB at given path
     pub fn new<'p, P>(path: P) -> Result<Self, StoreError>
     where
         P: Into<&'p Path>,
     {
+        let p: &'p Path = path.into();
+        match Self::open(p) {
+            Ok(db) => Ok(db),
+            Err(_) => Self::create(p),
+        }
+    }
+
+    pub fn create<'p, P>(path: P) -> Result<Self, StoreError>
+    where
+        P: Into<&'p Path>,
+    {
         let mut m = Manager::<SafeModeEnvironment>::singleton().write()?;
+        let mut backend = Rkv::environment_builder::<SafeMode>();
+        &backend.set_max_dbs(12).set_make_dir_if_needed(true);
         let created_arc =
-            m.get_or_create_with_capacity(path, 12, Rkv::with_capacity::<SafeMode>)?;
+            m.get_or_create_from_builder(path, backend, Rkv::from_builder::<SafeMode>)?;
         let env = created_arc.read()?;
 
         Ok(Self {
@@ -77,6 +92,34 @@ impl LmdbEventDatabase {
             out_of_order_events: env.open_multi("ooes", StoreOptions::create())?,
             likely_duplicitous_events: env.open_multi("ldes", StoreOptions::create())?,
             duplicitous_events: env.open_multi("dels", StoreOptions::create())?,
+            env: created_arc.clone(),
+        })
+    }
+
+    pub fn open<'p, P>(path: P) -> Result<Self, StoreError>
+    where
+        P: Into<&'p Path>,
+    {
+        let mut m = Manager::<SafeModeEnvironment>::singleton().write()?;
+        let mut backend = Rkv::environment_builder::<SafeMode>();
+        &backend.set_max_dbs(12).set_make_dir_if_needed(false);
+        let created_arc =
+            m.get_or_create_from_builder(path, backend, Rkv::from_builder::<SafeMode>)?;
+        let env = created_arc.read()?;
+
+        Ok(Self {
+            events: env.open_single("evts", StoreOptions::default())?,
+            datetime_stamps: env.open_single("dtss", StoreOptions::default())?,
+            signatures: env.open_multi("sigs", StoreOptions::default())?,
+            receipts_nt: env.open_multi("rcts", StoreOptions::default())?,
+            escrowed_receipts_nt: env.open_multi("ures", StoreOptions::default())?,
+            receipts_t: env.open_multi("vrcs", StoreOptions::default())?,
+            escrowed_receipts_t: env.open_multi("vres", StoreOptions::default())?,
+            key_event_logs: env.open_multi("kels", StoreOptions::default())?,
+            partially_signed_events: env.open_multi("pses", StoreOptions::default())?,
+            out_of_order_events: env.open_multi("ooes", StoreOptions::default())?,
+            likely_duplicitous_events: env.open_multi("ldes", StoreOptions::default())?,
+            duplicitous_events: env.open_multi("dels", StoreOptions::default())?,
             env: created_arc.clone(),
         })
     }
