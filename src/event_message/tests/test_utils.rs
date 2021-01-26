@@ -120,7 +120,7 @@ fn test_update_identifier_state(
     assert_eq!(new_state.current.public_keys.len(), 1);
     assert_eq!(new_state.current.public_keys[0], current_key_pref);
     assert_eq!(new_state.current.threshold, 1);
-    assert_eq!(new_state.current.threshold_key_digest, next_dig);
+    assert_eq!(new_state.current.threshold_key_digest, Some(next_dig));
     assert_eq!(new_state.witnesses, vec![]);
     assert_eq!(new_state.tally, 0);
     assert_eq!(new_state.delegates, vec![]);

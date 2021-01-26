@@ -1,14 +1,12 @@
 use crate::{
     derivation::{attached_signature_code::get_sig_count, self_addressing::SelfAddressing},
     error::Error,
-    event::event_data::delegated::DelegatedInceptionEvent,
     event::{
-        event_data::{inception::InceptionEvent, EventData},
+        event_data::{inception::InceptionEvent, DelegatedInceptionEvent, DummyEvent, EventData},
         Event,
     },
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
     state::{EventSemantics, IdentifierState},
-    util::dfs_serializer,
 };
 pub mod serialization_info;
 use serde::{Deserialize, Serialize};
@@ -63,66 +61,6 @@ impl EventMessage {
 
     pub fn serialization(&self) -> SerializationFormats {
         self.serialization_info.kind
-    }
-
-    /// Get Inception Data
-    ///
-    /// Strips prefix and version string length info from an event
-    /// used for verifying identifier binding for self-addressing and self-certifying
-    pub fn get_inception_data(
-        icp: &InceptionEvent,
-        code: SelfAddressing,
-        format: SerializationFormats,
-    ) -> Result<Vec<u8>, Error> {
-        // use dummy prefix to get correct size info
-        // TODO: dynamically size dummy derivative, non-32 byte prefixes will fail
-        let icp_event_data = Event {
-            prefix: IdentifierPrefix::SelfAddressing(code.derive(&[0u8; 32])),
-            sn: 0,
-            event_data: EventData::Icp(icp.clone()),
-        };
-        Ok(dfs_serializer::to_vec(&Self {
-            serialization_info: icp_event_data
-                .clone()
-                .to_message(format)
-                .unwrap()
-                .serialization_info,
-            event: Event {
-                // default prefix serializes to empty string
-                prefix: IdentifierPrefix::default(),
-                ..icp_event_data
-            },
-        })?)
-    }
-
-    /// Get Delegated Inception Data
-    ///
-    /// Strips prefix and version string length info from an event
-    /// used for verifying identifier binding for self-addressing and self-certifying
-    pub fn get_delegated_inception_data(
-        dip: &DelegatedInceptionEvent,
-        code: SelfAddressing,
-        format: SerializationFormats,
-    ) -> Result<Vec<u8>, Error> {
-        // use dummy prefix to get correct size info
-        // TODO: dynamically size dummy derivative, non-32 byte prefixes will fail
-        let dip_event_data = Event {
-            prefix: IdentifierPrefix::SelfAddressing(code.derive(&[0u8; 32])),
-            sn: 0,
-            event_data: EventData::Dip(dip.clone()),
-        };
-        Ok(dfs_serializer::to_vec(&Self {
-            serialization_info: dip_event_data
-                .clone()
-                .to_message(format)
-                .unwrap()
-                .serialization_info,
-            event: Event {
-                // default prefix serializes to empty string
-                prefix: IdentifierPrefix::default(),
-                ..dip_event_data
-            },
-        })?)
     }
 
     /// Serialize
@@ -253,15 +191,20 @@ pub fn verify_identifier_binding(icp_event: &EventMessage) -> Result<bool, Error
         EventData::Icp(icp) => match &icp_event.event.prefix {
             IdentifierPrefix::Basic(bp) => Ok(icp.key_config.public_keys.len() == 1
                 && bp == icp.key_config.public_keys.first().unwrap()),
-            IdentifierPrefix::SelfAddressing(sap) => Ok(sap.verify_binding(
-                &EventMessage::get_inception_data(icp, sap.derivation, icp_event.serialization())?,
-            )),
+            // TODO update with new inception process
+            IdentifierPrefix::SelfAddressing(sap) => {
+                Ok(sap.verify_binding(&DummyEvent::derive_inception_data(
+                    icp.clone(),
+                    sap.derivation,
+                    icp_event.serialization(),
+                )?))
+            }
             IdentifierPrefix::SelfSigning(_ssp) => todo!(),
         },
         EventData::Dip(dip) => match &icp_event.event.prefix {
             IdentifierPrefix::SelfAddressing(sap) => Ok(sap.verify_binding(
-                &EventMessage::get_delegated_inception_data(
-                    dip,
+                &DummyEvent::derive_delegated_inception_data(
+                    dip.clone(),
                     sap.derivation,
                     icp_event.serialization(),
                 )?,
@@ -318,7 +261,7 @@ mod tests {
             prefix: IdentifierPrefix::Basic(pref0.clone()),
             sn: 0,
             event_data: EventData::Icp(InceptionEvent {
-                key_config: KeyConfig::new(vec![pref0.clone()], nxt.clone(), Some(1)),
+                key_config: KeyConfig::new(vec![pref0.clone()], Some(nxt.clone()), Some(1)),
                 witness_config: InceptionWitnessConfig::default(),
                 inception_configuration: vec![],
             }),
@@ -351,7 +294,7 @@ mod tests {
         assert_eq!(s0.current.public_keys.len(), 1);
         assert_eq!(s0.current.public_keys[0], pref0);
         assert_eq!(s0.current.threshold, 1);
-        assert_eq!(s0.current.threshold_key_digest, nxt);
+        assert_eq!(s0.current.threshold_key_digest, Some(nxt));
         assert_eq!(s0.witnesses, vec![]);
         assert_eq!(s0.tally, 0);
         assert_eq!(s0.delegates, vec![]);
@@ -396,7 +339,7 @@ mod tests {
         let icp = InceptionEvent::new(
             KeyConfig::new(
                 vec![sig_pref_0.clone(), enc_pref_0.clone()],
-                nexter_pref.clone(),
+                Some(nexter_pref.clone()),
                 Some(1),
             ),
             None,
@@ -430,7 +373,7 @@ mod tests {
         assert_eq!(s0.current.public_keys[0], sig_pref_0);
         assert_eq!(s0.current.public_keys[1], enc_pref_0);
         assert_eq!(s0.current.threshold, 1);
-        assert_eq!(s0.current.threshold_key_digest, nexter_pref);
+        assert_eq!(s0.current.threshold_key_digest, Some(nexter_pref));
         assert_eq!(s0.witnesses, vec![]);
         assert_eq!(s0.tally, 0);
         assert_eq!(s0.delegates, vec![]);

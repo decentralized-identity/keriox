@@ -1,6 +1,6 @@
 use super::{
     super::sections::{InceptionWitnessConfig, KeyConfig},
-    EventData,
+    DummyEvent, EventData,
 };
 use crate::{
     derivation::self_addressing::SelfAddressing,
@@ -50,13 +50,11 @@ impl InceptionEvent {
         derivation: SelfAddressing,
         format: SerializationFormats,
     ) -> Result<EventMessage, Error> {
-        let prefix = IdentifierPrefix::SelfAddressing(derivation.derive(
-            &EventMessage::get_inception_data(&self, derivation, format)?,
-        ));
-
         EventMessage::new(
             Event {
-                prefix,
+                prefix: IdentifierPrefix::SelfAddressing(derivation.derive(
+                    &DummyEvent::derive_inception_data(self.clone(), derivation, format)?,
+                )),
                 sn: 0,
                 event_data: EventData::Icp(self),
             },

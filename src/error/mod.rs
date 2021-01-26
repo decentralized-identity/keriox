@@ -1,4 +1,3 @@
-use crate::util::dfs_serializer;
 use base64::DecodeError;
 use core::num::ParseIntError;
 use rmp_serde as serde_mgpk;
@@ -28,12 +27,6 @@ pub enum Error {
     MsgPackSerializationError {
         #[from]
         source: serde_mgpk::encode::Error,
-    },
-
-    #[error("DFS Serialization error")]
-    DFSSerializationError {
-        #[from]
-        source: dfs_serializer::Error,
     },
 
     #[error("Error parsing numerical value: {source}")]

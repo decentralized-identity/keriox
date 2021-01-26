@@ -30,7 +30,6 @@ use crate::{
     prefix::Prefix,
     signer::CryptoBox,
     state::IdentifierState,
-    util::dfs_serializer,
 };
 mod test;
 pub struct Keri {
@@ -49,11 +48,11 @@ impl Keri {
         let icp = InceptionEvent::new(
             KeyConfig::new(
                 vec![Basic::Ed25519.derive(key_manager.public_key())],
-                nxt_commitment(
+                Some(nxt_commitment(
                     1,
                     &[Basic::Ed25519.derive(key_manager.next_pub_key.clone())],
                     SelfAddressing::Blake3_256,
-                ),
+                )),
                 Some(1),
             ),
             None,
@@ -95,11 +94,11 @@ impl Keri {
                     previous_event_hash: SelfAddressing::Blake3_256.derive(&self.state.last),
                     key_config: KeyConfig::new(
                         vec![Basic::Ed25519.derive(self.key_manager.public_key())],
-                        nxt_commitment(
+                        Some(nxt_commitment(
                             1,
                             &[Basic::Ed25519.derive(self.key_manager.next_pub_key.clone())],
                             SelfAddressing::Blake3_256,
-                        ),
+                        )),
                         Some(1),
                     ),
                     witness_config: WitnessConfig::default(),

@@ -27,10 +27,10 @@ fn test_process() -> Result<(), Error> {
     let db = LmdbEventDatabase::new(root.path()).unwrap();
     let event_processor = EventProcessor::new(db);
     // Events and sigs are from keripy `test_multisig_digprefix` test.
-    // (keripy/tests/core/test_eventing.py#1098)
+    // (keripy/tests/core/test_eventing.py#1138)
 
-    let icp_raw = r#"{"v":"KERI10JSON000144_","i":"EIP6JVp53VZau8wPba8mMsc8wRH1eySlFvCOuMmxm_-w","s":"0","t":"icp","kt":"2","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"E9izzBkXX76sqt0N-tfLzJeRqj0W56p4pDQ_ZqNCDpyw","wt":"0","w":[],"c":[]}-AADAAPGMuShtKCzc_oXMViVhVPMkAfmSyeRtQ2EHtvgRy2NrcXbx-o-vAOwMVv2gOit2JetBrIpJ9Vrk7AIqlUUfCAQABq8xN8U7XetGS5ayeX7dd9jZ4dTdNSBcF4Ov57k0TzdBh5ukwi3ocpY77qZ4vr0nlK83iIbLBu999UZ7XoljBBgACKJuVmv5usbWsDOjq_I8028pXe0Nib2YlKgKKtx1AblOCtWBU2zD_qgXUs58ACmOcFIdTfkxhR3u_jCN8XfHSAw"#;
-    let deserialized_icp = parse::signed_message(icp_raw.as_bytes()).unwrap().1;
+    let icp_raw = br#"{"v":"KERI10JSON000144_","i":"EJPRBUSEdUuZnh9kRGg8y7uBJDxTGZdp4YeUSqBv5sEk","s":"0","t":"icp","kt":"2","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"E9izzBkXX76sqt0N-tfLzJeRqj0W56p4pDQ_ZqNCDpyw","wt":"0","w":[],"c":[]}-AADAA74a3kHBjpaY2h3AzX8UursaGoW8kKU1rRLlMTYffMvKSTbhHHy96brGN2P6ehcmEW2nlUNZVuMf8zo6Qd8PkCgABIJfoSJejaDh1g-UZKkldxtTCwic7kB3s15EsDPKpm_6EhGcxVTt0AFXQUQMroKgKrGnxL0GP6gwEdmdu9dVRAgACtJFQBQiRX5iqWpJQntfAZTx6VIv_Ghydg1oB0QCq7s8D8LuKH5n1S5t8AbbQPXv6Paf7AVJRFv8lhCT5cdx3Bg"#;
+    let deserialized_icp = parse::signed_message(icp_raw).unwrap().1;
 
     let (id, raw_parsed) = match &deserialized_icp {
         Deserialized::Event(e) => (e.event.event.event.prefix.clone(), e.event.raw.to_vec()),
@@ -44,8 +44,8 @@ fn test_process() -> Result<(), Error> {
     let icp_from_db = event_processor.db.last_event_at_sn(&id, 0).unwrap();
     assert_eq!(icp_from_db, Some(raw_parsed));
 
-    let rot_raw = r#"{"v":"KERI10JSON000180_","i":"EIP6JVp53VZau8wPba8mMsc8wRH1eySlFvCOuMmxm_-w","s":"1","t":"rot","p":"EpD0mQV1R-FV-CD3nSjIyOPvUItXIu2FuUBHeq4FWsxo","kt":"2","k":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ","D1kcBE7h0ImWW6_Sp7MQxGYSshZZz6XM7OiUE5DXm0dU","D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM"],"n":"EQpRYqbID2rW8X5lB6mOzDckJEIFae6NbJISXgJSN9qg","wt":"0","wr":[],"wa":[],"a":[]}-AADAAna082cl4258N_HDljuoHW7JsjsCXQW_7oyG4L20_fDyfgPjjsnrDLQITfuAamBwG0Rf5PHB06nLBA0dm8RviBQABnL_386sC_MaKTMa8lfnkTl0Q69I45ES7ZGuQhmU6HuyNFznJ5qFlO63h7uDmxueuQdw5VycjY1_OI7PTeDqpCAACzuK1_P_u1-Z14WWPBDP64R_ZEjRHnJqHl35Ljh22jOBwdD7t6Vo-GKkEQTKVLTHf7FBsUni7l-qc4DSMdmibAA"#;
-    let deserialized_rot = parse::signed_message(rot_raw.as_bytes()).unwrap().1;
+    let rot_raw = br#"{"v":"KERI10JSON000180_","i":"EJPRBUSEdUuZnh9kRGg8y7uBJDxTGZdp4YeUSqBv5sEk","s":"1","t":"rot","p":"EBI6frz8AI-glGeV60vAaSAiI5mxGFWUeyzADKYHzaPU","kt":"2","k":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ","D1kcBE7h0ImWW6_Sp7MQxGYSshZZz6XM7OiUE5DXm0dU","D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM"],"n":"EQpRYqbID2rW8X5lB6mOzDckJEIFae6NbJISXgJSN9qg","wt":"0","wr":[],"wa":[],"a":[]}-AADAAC-daSxzSMhp4Sptp_3RLfOjK04Gi7beE7luKrZmT1QoCdsMq6n2XZ5X_V8FoC7U16tLESDVY3wMrIkq8kzFnBwABSNp89up9bg97gmVgCx-Hkumjh8h9bOBlyoPk0pD2e0EuaKGdP9prsvsnD8UzFgqynlIjkvJY9CNX4Yta09CDBQACnU4KEpqLqSTuGyphlcgSCwBF-8tnKKyEt2_ROONJiD5Pod8nJVMfj-OvAqkyXGTu53YAXz-B984ndAnPWzrVAg"#;
+    let deserialized_rot = parse::signed_message(rot_raw).unwrap().1;
 
     let raw_parsed = match &deserialized_rot {
         Deserialized::Event(e) => e.event.raw.to_vec(),
@@ -62,8 +62,8 @@ fn test_process() -> Result<(), Error> {
     assert!(id_state.is_err());
     assert!(matches!(id_state, Err(Error::EventDuplicateError)));
 
-    let ixn_raw = r#"{"v":"KERI10JSON000098_","i":"EIP6JVp53VZau8wPba8mMsc8wRH1eySlFvCOuMmxm_-w","s":"2","t":"ixn","p":"E2kVOUclXo6wqjXjCKt41rus_Ho96mYE56OlpQb0tq5s","a":[]}-AADAAoTpCeTyXrK1xjxJ_w9qIjD7lefA9-Az60f5WLGcPO2iUcIiNPgIrpvJzqxg9KYlqLccuY3jcHM-eUkATMz2AAgABTVN0lACMDRWG2wT_FjcYiVAhi7a2xVqUgUOPkmXgUGZo4tzLAYr9UB4aB8f87UQSHEF3eLkfMnDReY37Yg9fDgACOCt5-HG-_9-M5zVaMIAmRw5B38mbsQ2cTmduOLtWF6wu9PSoXMiDmJs1O47apUtXgTOWESQjMkLX32kLIv5hBw"#;
-    let deserialized_ixn = parse::signed_message(ixn_raw.as_bytes()).unwrap().1;
+    let ixn_raw = br#"{"v":"KERI10JSON000098_","i":"EJPRBUSEdUuZnh9kRGg8y7uBJDxTGZdp4YeUSqBv5sEk","s":"2","t":"ixn","p":"EH4SWmiiDBa9pN89Hg9EXXaccYkBYiTB_lnjo_bmVfjY","a":[]}-AADAAliN9WXT4t2bSliF19e1MN7sj3mU13c_DtHfumAunfo4u5_-X_7rFN4FZBMeb7QuXioWFki7qzf4VAr94hxN4BAABK2yFgdhLCiGaFjFjXEuwS6oSuRom3EXLQM1dNVwBbVYEoYlGK9FT8vXJ-nb_eo26xPoMAbvq364zT7HFP_PiCAACBc-Ck4fnPNi-JDNHE8TpPkutyRZ0bJ1cdadui3lbuw2-dgACtWwMH5viiR83djYdzKjCZtKpIz7o31hL39tmAw"#;
+    let deserialized_ixn = parse::signed_message(ixn_raw).unwrap().1;
 
     let raw_parsed = match &deserialized_ixn {
         Deserialized::Event(e) => e.event.raw.to_vec(),
@@ -78,8 +78,8 @@ fn test_process() -> Result<(), Error> {
     assert_eq!(ixn_from_db, Some(raw_parsed));
 
     // Construct partially signed interaction event.
-    let ixn_raw = r#"{"v":"KERI10JSON000098_","i":"EIP6JVp53VZau8wPba8mMsc8wRH1eySlFvCOuMmxm_-w","s":"3","t":"ixn","p":"E7BKx8z9PBrqMbFBeGiOCtmztcis5wYr00A_JKR-LNTk","a":[]}-AADAA_PKQF2k_24rdwuegqnBbYZNupL_PK0cohtva28ljBAJL0bsL6E_jrkKKQhf94zS83xo7q_RtXz0vdPzf331zBAABgOrBBLxB5_B4xacS8sQl56W_ovRfY9JKYznc7-tUtx7tuAlJbLIqvX31BOj11n1tBWBGtSJl6jozNMbl7YfEAQACPRBxWdlhJq_sko6s9HmzCO_979nAeGF1uMKrvuS7F267dsZ6uDRSbXdxTPy8sTSQILFug5v-iumvZFo-X8usDw"#;
-    let deserialized_ixn = parse::signed_message(ixn_raw.as_bytes()).unwrap().1;
+    let ixn_raw = br#"{"v":"KERI10JSON000098_","i":"EJPRBUSEdUuZnh9kRGg8y7uBJDxTGZdp4YeUSqBv5sEk","s":"3","t":"ixn","p":"EpAHPuE6SqPw_oodA7utfEUxFh2pL6iYJ7Uwy1UQqi08","a":[]}-AADAAsMWMYvI8ymFUmdwiOSBqS16nOSYT70xKMztFprjdpDQC4VGsOcChyd9XsCqu_UId0H2-gbesX-ql3skh-qf0DwABVVVWbOMbnO8gn4EOAiY9wrGP7Q1uh8a-WUyPYlaii3iQ2Qucu_kzznl7MgnKeH2c7m_3h7HfoebC5wngg5-SAQACiau2633rcR8zTlvCMq4tQL2BpPMV61FgAU-9RVvBsbSkEs00mxwoxN_Xz4nqUaCX9bR8t9Mx3mgABXemOeTMAQ"#;
+    let deserialized_ixn = parse::signed_message(ixn_raw).unwrap().1;
     // Make event partially signed.
     let partially_signed_deserialized_ixn = match deserialized_ixn {
         Deserialized::Event(mut e) => {
@@ -99,18 +99,16 @@ fn test_process() -> Result<(), Error> {
     assert!(matches!(ixn_from_db, Ok(None)));
 
     // Out of order event.
-    let out_of_order_ixn_raw = r#"{"v":"KERI10JSON000098_","i":"EIP6JVp53VZau8wPba8mMsc8wRH1eySlFvCOuMmxm_-w","s":"4","t":"ixn","p":"E7BKx8z9PBrqMbFBeGiOCtmztcis5wYr00A_JKR-LNTk","a":[]}-AADAA_PKQF2k_24rdwuegqnBbYZNupL_PK0cohtva28ljBAJL0bsL6E_jrkKKQhf94zS83xo7q_RtXz0vdPzf331zBAABgOrBBLxB5_B4xacS8sQl56W_ovRfY9JKYznc7-tUtx7tuAlJbLIqvX31BOj11n1tBWBGtSJl6jozNMbl7YfEAQACPRBxWdlhJq_sko6s9HmzCO_979nAeGF1uMKrvuS7F267dsZ6uDRSbXdxTPy8sTSQILFug5v-iumvZFo-X8usDw"#;
-    let out_of_order_ixn = parse::signed_message(out_of_order_ixn_raw.as_bytes())
-        .unwrap()
-        .1;
+    let out_of_order_rot_raw = br#"{"v":"KERI10JSON000154_","i":"EJPRBUSEdUuZnh9kRGg8y7uBJDxTGZdp4YeUSqBv5sEk","s":"4","t":"rot","p":"E1-rI18gS9qOinFpkbhlLOjOh_V8Sy90qIU_xfd-OxWk","kt":"2","k":["D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM","DVjWcaNX2gCkHOjk6rkmqPBCxkRCqwIJ-3OjdYmMwxf4","DT1nEDepd6CSAMCE7NY_jlLdG6_mKUlKS_mW-2HJY1hg"],"n":"","wt":"0","wr":[],"wa":[],"a":[]}-AADAAt2REL9QiIbO71AiYh4R4tpuG5mDTViVmvOesmAxG29UIB_FZT-vMPUpM1k52CwU-yB_YI_zneruJuDdMzTUhDAABHZyt_gu_6pql52HnLVCmu6mCPzH3D8GkMW1cAykkUtve32A6Xz31cMrABl8AJMQTK_fCchp_qwsisbR-1Un1BAACGoJ1eRTTwyLzeoXegQgqseEv3JREFYWGEuiB-LVSlb0-L1aTegUIop6wos0uZltsAqmt3zNA-AMxIkXF8qhLDg"#;
+    let out_of_order_rot = parse::signed_message(out_of_order_rot_raw).unwrap().1;
 
-    let id_state = event_processor.process(out_of_order_ixn);
+    let id_state = event_processor.process(out_of_order_rot);
     assert!(id_state.is_err());
     assert!(matches!(id_state, Err(Error::EventOutOfOrderError)));
 
     // Check if processed event is in kel. It shouldn't.
-    let ixn_from_db = event_processor.db.last_event_at_sn(&id, 4);
-    assert!(matches!(ixn_from_db, Ok(None)));
+    let raw_from_db = event_processor.db.last_event_at_sn(&id, 4);
+    assert!(matches!(raw_from_db, Ok(None)));
 
     Ok(())
 }
@@ -126,24 +124,24 @@ fn test_process_receipt() -> Result<(), Error> {
     let event_processor = EventProcessor::new(db);
 
     // Events and sigs are from keripy `test_direct_mode` test.
-    // (keripy/tests/core/test_eventing.py#1791)
+    // (keripy/tests/core/test_eventing.py#1855)
     // Parse and process controller's inception event.
-    let icp_raw = r#"{"v":"KERI10JSON0000e6_","i":"ENqFtH6_cfDg8riLZ-GDvDaCKVn6clOJa7ZXXVXSWpRY","s":"0","t":"icp","kt":"1","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"n":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","wt":"0","w":[],"c":[]}-AABAAMiMnE1gmjqoEuDmhbU7aqYBUqKCqAmrHPQB-tPUKSbH_IUXsbglEQ6TGlQT1k7G4VlnKoczYBUd7CPJuo5TnDg"#;
-    let icp = parse::signed_message(icp_raw.as_bytes()).unwrap().1;
+    let icp_raw = br#"{"v":"KERI10JSON0000e6_","i":"EH7Oq9oxCgYa-nnNLvwhp9sFZpALILlRYyB-6n4WDi7w","s":"0","t":"icp","kt":"1","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"n":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","wt":"0","w":[],"c":[]}-AABAAmDoPp9jDio1hznNDO-3T2KA_FUbY8f_qybT6_FqPAuf89e9AMDXP5wch6jvT4Ev4QRp8HqtTb9t2Y6_KJPYlBw"#;
+    let icp = parse::signed_message(icp_raw).unwrap().1;
 
     let controller_id_state = event_processor.process(icp)?;
 
     // Parse receipt of controller's inception event.
-    let vrc_raw = r#"{"v":"KERI10JSON000105_","i":"ENqFtH6_cfDg8riLZ-GDvDaCKVn6clOJa7ZXXVXSWpRY","s":"0","t":"vrc","d":"E9ZTKOhr-lqB7jbBMBpUIdMpfWvEswoMoc5UrwCRcTSc","a":{"i":"EmGTyV9unQ59uIQIYv6Vsc7KweyTbplfumEV-IB33bEg","s":"0","d":"E-_qFJZK8ER6rJA7W4WR2xxSwKT1RLi8yCCyZ0XHTnLU"}}-AABAAmptM4R0KnuzFtY4WTqdzUOuhkD_Rl6dKyX8a71NdoZSbCE5hbBlGh4NoxkdchGuF0jM1Ss-uHUfdoyICZsQvCg"#;
-    let rcp = parse::signed_message(vrc_raw.as_bytes()).unwrap().1;
+    let vrc_raw = br#"{"v":"KERI10JSON000105_","i":"EH7Oq9oxCgYa-nnNLvwhp9sFZpALILlRYyB-6n4WDi7w","s":"0","t":"vrc","d":"EEnwxEm5Bg5s5aTLsgQCNpubIYzwlvMwZIzdOM0Z3u7o","a":{"i":"EpDA1n-WiBA0A8YOqnKrB-wWQYYC49i5zY_qrIZIicQg","s":"0","d":"EGFSGYH2BjtKwX1osO0ZvLw98nuuo3lMkveRoPIJzupo"}}-AABAAb6S-RXeAqUKl8UuNwYpiaFARhMj-95elxmr7uNU8m7buVSPVLbTWcQYfI_04HoP_A_fvlU_b099fiEJyDSA2Cg"#;
+    let rcp = parse::signed_message(vrc_raw).unwrap().1;
 
     let id_state = event_processor.process(rcp.clone());
     // Validator not yet in db. Event should be escrowed.
     assert!(id_state.is_err());
 
     // Parse and process validator's inception event.
-    let val_icp_raw = r#"{"v":"KERI10JSON0000e6_","i":"EmGTyV9unQ59uIQIYv6Vsc7KweyTbplfumEV-IB33bEg","s":"0","t":"icp","kt":"1","k":["D8KY1sKmgyjAiUDdUBPNPyrSz_ad_Qf9yzhDNZlEKiMc"],"n":"EOWDAJvex5dZzDxeHBANyaIoUG3F4-ic81G6GwtnC4f4","wt":"0","w":[],"c":[]}-AABAApBSsY9FoB9RRRL3L4YTri4cY2RWtk2I3oX6z7fZLc4Nh7AB_d9yZya5cVWhuFiLFSrDYNpFvHBYWAix4CfhTAQ"#;
-    let val_icp = parse::signed_message(val_icp_raw.as_bytes()).unwrap().1;
+    let val_icp_raw = br#"{"v":"KERI10JSON0000e6_","i":"EpDA1n-WiBA0A8YOqnKrB-wWQYYC49i5zY_qrIZIicQg","s":"0","t":"icp","kt":"1","k":["D8KY1sKmgyjAiUDdUBPNPyrSz_ad_Qf9yzhDNZlEKiMc"],"n":"EOWDAJvex5dZzDxeHBANyaIoUG3F4-ic81G6GwtnC4f4","wt":"0","w":[],"c":[]}-AABAAll_W0_FsjUyJnYokSNPqq7xdwIBs0ebq2eUez6RKNB-UG_y6fD0e6fb_nANvmNCWjsoFjWv3XP3ApXUabMgyBA"#;
+    let val_icp = parse::signed_message(val_icp_raw).unwrap().1;
 
     event_processor.process(val_icp)?;
 
@@ -172,29 +170,31 @@ fn test_process_delegated() -> Result<(), Error> {
         }
     };
 
-    let bobs_pref: IdentifierPrefix = "DcIFrd3nstoRRo2LIDTgj5Pt4aZcYR20Mmp2m2eSd8KI".parse()?;
+    // Events and sigs are from keripy `test_delegation` test.
+    // (keripy/tests/core/test_delegating.py#62)
+    let bobs_pref: IdentifierPrefix = "EiBlVttjqvySMbA4ShN19rSrz3D0ioNW-Uj92Ri7XnFE".parse()?;
 
-    let bobs_icp = r#"{"v":"KERI10JSON0000e6_","i":"DcIFrd3nstoRRo2LIDTgj5Pt4aZcYR20Mmp2m2eSd8KI","s":"0","t":"icp","kt":"1","k":["DcIFrd3nstoRRo2LIDTgj5Pt4aZcYR20Mmp2m2eSd8KI"],"n":"EIz9z6JYfIhnFKt5V8vZR_6aEG2R-LElRUlYR7tjcnhM","wt":"0","w":[],"c":[]}-AABAATYqdgjSbMFBX7T4KwSXHT_Um3DMfrnloNd59sDqYd7uB0Acvtazn0vjxhjHGP-Jg8gyMFn7284S0C4UMW3ZABw"#;
-    let msg = signed_message(bobs_icp.as_bytes()).unwrap().1;
+    let bobs_icp = br#"{"v":"KERI10JSON0000e6_","i":"EiBlVttjqvySMbA4ShN19rSrz3D0ioNW-Uj92Ri7XnFE","s":"0","t":"icp","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","wt":"0","w":[],"c":[]}-AABAAQPFdtnncXLz6dE6A-tXGYYK0BHu3I3Pj-G8DxlbzC3yx5MV8yucZILqAA5toZNODnHVHZtPIMkDknqldL4utBQ"#;
+    let msg = signed_message(bobs_icp).unwrap().1;
     event_processor.process(msg)?;
 
     // Delegated inception event.
-    let dip_raw = r#"{"v":"KERI10JSON000165_","i":"EUWbCTh_Q-GCNA5S93qjGFDehaxFROR6YyhQ7L7qJ6SI","s":"0","t":"dip","kt":"1","k":["DSW9x_sF6IVsUGhgtq5THbQ9OpJuUXQCQkuBWoYlSLFQ"],"n":"EUpF_MIgcEiT9RnGvwbz_TqHHctKRZEUiWWQTO1gIZlw","wt":"0","w":[],"c":[],"da":{"i":"DcIFrd3nstoRRo2LIDTgj5Pt4aZcYR20Mmp2m2eSd8KI","s":"1","t":"ixn","p":"ECK2OTG_AcrLf74_fknLxzt5lziU-crgYVgLbGp4jg2o"}}-AABAAHCLBmbnei-5gxBTGyXFJrF3DjTDQL15sjN5XbtJ07bQPoDCJw46XXx4TURCfhiAAhKTsskkqxCBOpYsMPpdTCw"#;
-    let deserialized_dip = signed_message(dip_raw.as_bytes()).unwrap().1;
+    let dip_raw = br#"{"v":"KERI10JSON000165_","i":"ErLe2qWp4VCmDp7v_R01tC-ha13ZEZY0VGcgYtPRhqPs","s":"0","t":"dip","kt":"1","k":["DuK1x8ydpucu3480Jpd1XBfjnCwb3dZ3x5b1CJmuUphA"],"n":"EWWkjZkZDXF74O2bOQ4H5hu4nXDlKg2m4CBEBkUxibiU","wt":"0","w":[],"c":[],"da":{"i":"EiBlVttjqvySMbA4ShN19rSrz3D0ioNW-Uj92Ri7XnFE","s":"1","t":"ixn","p":"EvP2kWxEjTMI3auc6x64EpU-nMQZHiBeKeuavcGdRB24"}}-AABAADv-a3LeXEStuY1LHknepuJ7mBcTByugqQ1TNRMrIa0rctfjKsh-hkkkpwDj6M_OLLaFtLqBpmdNTUgBPANLzCQ"#;
+    let deserialized_dip = signed_message(dip_raw).unwrap().1;
 
     // Process dip event before delegating ixn event.
     let state = event_processor.process(deserialized_dip.clone());
     assert!(matches!(state, Err(Error::EventOutOfOrderError)));
 
-    let child_prefix: IdentifierPrefix = "EUWbCTh_Q-GCNA5S93qjGFDehaxFROR6YyhQ7L7qJ6SI".parse()?;
+    let child_prefix: IdentifierPrefix = "ErLe2qWp4VCmDp7v_R01tC-ha13ZEZY0VGcgYtPRhqPs".parse()?;
 
     // Check if processed dip is in kel.
     let dip_from_db = event_processor.db.last_event_at_sn(&child_prefix, 0);
     assert!(matches!(dip_from_db, Ok(None)));
 
     // Bob's ixn event with delegating event seal.
-    let bobs_ixn = r#"{"v":"KERI10JSON000107_","i":"DcIFrd3nstoRRo2LIDTgj5Pt4aZcYR20Mmp2m2eSd8KI","s":"1","t":"ixn","p":"ECK2OTG_AcrLf74_fknLxzt5lziU-crgYVgLbGp4jg2o","a":[{"i":"EUWbCTh_Q-GCNA5S93qjGFDehaxFROR6YyhQ7L7qJ6SI","s":"0","d":"EeOS5Xa51C-H9HCzuumjj4Rso8t0T8p1WaHg72tTrqhc"}]}-AABAArBypvPpBoKTTE_4zaOI4H9xxFxlsZ6Z8VLDGjxAZa_4ucRKAjNRTSe7nX5IgeiwIW6mek5J3_mUP27dRGMsNCw"#;
-    let deserialized_ixn = signed_message(bobs_ixn.as_bytes()).unwrap().1;
+    let bobs_ixn = br#"{"v":"KERI10JSON000107_","i":"EiBlVttjqvySMbA4ShN19rSrz3D0ioNW-Uj92Ri7XnFE","s":"1","t":"ixn","p":"EvP2kWxEjTMI3auc6x64EpU-nMQZHiBeKeuavcGdRB24","a":[{"i":"ErLe2qWp4VCmDp7v_R01tC-ha13ZEZY0VGcgYtPRhqPs","s":"0","d":"ESDuaqpoI8-HLD8-eLijUMZpXqYFkNArJFDvt3ABYr9I"}]}-AABAAZ4V2cSIXYEPg5BtkJSHVBj-A0dGI6rH2XGaVt1kewqGeJjpy4uzObPWnoBpaEojFa5AnrUJEgMytORoWMqEhCw"#;
+    let deserialized_ixn = signed_message(bobs_ixn).unwrap().1;
     event_processor.process(deserialized_ixn.clone())?;
 
     // Check if processed event is in db.
@@ -212,12 +212,12 @@ fn test_process_delegated() -> Result<(), Error> {
     assert_eq!(dip_from_db, Some(raw_parsed(deserialized_dip)?));
 
     // Bobs interaction event with delegated event seal.
-    let bob_ixn = r#"{"v":"KERI10JSON000107_","i":"DcIFrd3nstoRRo2LIDTgj5Pt4aZcYR20Mmp2m2eSd8KI","s":"2","t":"ixn","p":"EbEidxcOohgeM966TOonWlaOSRdK2Bsuxb0s0S04CX1g","a":[{"i":"EUWbCTh_Q-GCNA5S93qjGFDehaxFROR6YyhQ7L7qJ6SI","s":"1","d":"Edf4rT9DnCl58X1DEoWBsouXqPqO2ahI_oHjS1fltodQ"}]}-AABAAei17qaEa7VF6utjHay8L0TNWSPhw0Oj9Ho9zS0Mda2Oo5TkELA6Dd1jkTYwiTSecaX85-L56PC1-apEz2Bb3DA"#;
-    let deserialized_ixn_drt = signed_message(bob_ixn.as_bytes()).unwrap().1;
+    let bob_ixn = br#"{"v":"KERI10JSON000107_","i":"EiBlVttjqvySMbA4ShN19rSrz3D0ioNW-Uj92Ri7XnFE","s":"2","t":"ixn","p":"EtzXPztLsGC5DGyooSdHdBGIOHjhblBWtZ_AOhGS-hDE","a":[{"i":"ErLe2qWp4VCmDp7v_R01tC-ha13ZEZY0VGcgYtPRhqPs","s":"1","d":"E-dZsWLp2IIPVDbGdGS-yvuw4HeV_w_w76FHsofmuiq0"}]}-AABAAmloDxOwz6ztvRR_4N8Hn-6ZJk6_0nQhfNE7bzX6NpJRfYDwmUw3rXod0g46iFOLqEWw12oaFVzVH85NYAh67Ag"#;
+    let deserialized_ixn_drt = signed_message(bob_ixn).unwrap().1;
 
     // Delegated rotation event.
-    let drt_raw = r#"{"v":"KERI10JSON0001a1_","i":"EUWbCTh_Q-GCNA5S93qjGFDehaxFROR6YyhQ7L7qJ6SI","s":"1","t":"drt","p":"EeOS5Xa51C-H9HCzuumjj4Rso8t0T8p1WaHg72tTrqhc","kt":"1","k":["Dk0Wp-dkcPdbEkBGLvJGlrL5SAG0kBELx61B8e1bGi2o"],"n":"E_zHkOoJvV46tJI54ssGszaA351wem7_I_I3ZurpFbUA","wt":"0","wr":[],"wa":[],"a":[],"da":{"i":"DcIFrd3nstoRRo2LIDTgj5Pt4aZcYR20Mmp2m2eSd8KI","s":"2","t":"ixn","p":"EbEidxcOohgeM966TOonWlaOSRdK2Bsuxb0s0S04CX1g"}}-AABAAiqETyyvcU31_N7vgLzhe-tP4kMe0NneQaxFjYahq_IPK79k3nuLmeIAoA-FJTjGepHQ56CgUQUsTh0PLVD0mDA"#;
-    let deserialized_drt = signed_message(drt_raw.as_bytes()).unwrap().1;
+    let drt_raw = br#"{"v":"KERI10JSON0001a1_","i":"ErLe2qWp4VCmDp7v_R01tC-ha13ZEZY0VGcgYtPRhqPs","s":"1","t":"drt","p":"ESDuaqpoI8-HLD8-eLijUMZpXqYFkNArJFDvt3ABYr9I","kt":"1","k":["DTf6QZWoet154o9wvzeMuNhLQRr8JaAUeiC6wjB_4_08"],"n":"E8kyiXDfkE7idwWnAZQjHbUZMz-kd_yIMH0miptIFFPo","wt":"0","wr":[],"wa":[],"a":[],"da":{"i":"EiBlVttjqvySMbA4ShN19rSrz3D0ioNW-Uj92Ri7XnFE","s":"2","t":"ixn","p":"EtzXPztLsGC5DGyooSdHdBGIOHjhblBWtZ_AOhGS-hDE"}}-AABAAXcUl6KlY4VOx8ZumFMc0uR4iHBGmPQo4IAx0nIiiEDB_u2ewkvgIDIp1ELDGxfc2VVUkl38Z7PqwydBdpIK0DA"#;
+    let deserialized_drt = signed_message(drt_raw).unwrap().1;
 
     // Process drt event before delegating ixn event.
     let child_state = event_processor.process(deserialized_drt.clone());

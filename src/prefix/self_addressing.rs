@@ -2,7 +2,7 @@ use super::Prefix;
 use crate::derivation::{self_addressing::SelfAddressing, DerivationCode};
 use crate::error::Error;
 use base64::decode_config;
-use core::str::FromStr;
+use core::{fmt, str::FromStr};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, PartialEq, Clone)]
@@ -50,6 +50,12 @@ impl Prefix for SelfAddressingPrefix {
     }
     fn derivation_code(&self) -> String {
         self.derivation.to_str()
+    }
+}
+
+impl fmt::Display for SelfAddressingPrefix {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_str())
     }
 }
 
