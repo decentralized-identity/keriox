@@ -10,12 +10,10 @@ use crate::{
         BasicPrefix, SelfSigningPrefix,
     },
     state::IdentifierState,
-    util::dfs_serializer,
 };
 use nom::{branch::*, combinator::*, error::ErrorKind, multi::*, sequence::*};
 use rmp_serde as serde_mgpk;
 use serde::{Deserialize, Deserializer, Serialize};
-use serde_transcode::transcode;
 use std::io::Cursor;
 
 #[derive(Clone, Debug)]
@@ -90,73 +88,6 @@ fn mgpk_message(s: &[u8]) -> nom::IResult<&[u8], DeserializedEvent> {
 
 pub fn message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], DeserializedEvent> {
     alt((json_message, cbor_message, mgpk_message))(s).map(|d| (d.0, d.1))
-}
-
-fn json_sed_block(s: &[u8]) -> Result<Vec<u8>, Error> {
-    let mut res = Vec::with_capacity(128);
-    transcode(
-        &mut serde_json::Deserializer::from_slice(s),
-        &mut dfs_serializer::Serializer::new(&mut res),
-    )?;
-    Ok(res)
-}
-
-fn cbor_sed_block(s: &[u8]) -> Result<Vec<u8>, Error> {
-    let mut res = Vec::with_capacity(128);
-    transcode(
-        &mut serde_json::Deserializer::from_slice(s),
-        &mut dfs_serializer::Serializer::new(&mut res),
-    )?;
-    Ok(res)
-}
-
-fn mgpk_sed_block(s: &[u8]) -> Result<Vec<u8>, Error> {
-    let mut res = Vec::with_capacity(128);
-    transcode(
-        &mut serde_mgpk::Deserializer::from_read_ref(s),
-        &mut dfs_serializer::Serializer::new(&mut res),
-    )?;
-    Ok(res)
-}
-
-fn json_sed(s: &[u8]) -> nom::IResult<&[u8], Vec<u8>> {
-    let mut stream = serde_json::Deserializer::from_slice(s).into_iter::<EventMessage>();
-    match stream.next() {
-        Some(Ok(_)) => Ok((
-            &s[stream.byte_offset()..],
-            json_sed_block(&s[..stream.byte_offset()])
-                .map_err(|_| nom::Err::Error((&s[..stream.byte_offset()], ErrorKind::IsNot)))?,
-        )),
-        _ => Err(nom::Err::Error((s, ErrorKind::IsNot))),
-    }
-}
-
-fn cbor_sed(s: &[u8]) -> nom::IResult<&[u8], Vec<u8>> {
-    let mut stream = serde_cbor::Deserializer::from_slice(s).into_iter::<EventMessage>();
-    match stream.next() {
-        Some(Ok(_)) => Ok((
-            &s[stream.byte_offset()..],
-            cbor_sed_block(&s[..stream.byte_offset()])
-                .map_err(|_| nom::Err::Error((s, ErrorKind::IsNot)))?,
-        )),
-        _ => Err(nom::Err::Error((s, ErrorKind::IsNot))),
-    }
-}
-
-fn mgpk_sed(s: &[u8]) -> nom::IResult<&[u8], Vec<u8>> {
-    let mut deser = serde_mgpk::Deserializer::new(Cursor::new(s));
-    match EventMessage::deserialize(&mut deser) {
-        Ok(_) => Ok((
-            &s[deser.get_ref().position() as usize..],
-            mgpk_sed_block(&s[deser.get_ref().position() as usize..])
-                .map_err(|_| nom::Err::Error((s, ErrorKind::IsNot)))?,
-        )),
-        _ => Err(nom::Err::Error((s, ErrorKind::IsNot))),
-    }
-}
-
-pub fn sed(s: &[u8]) -> nom::IResult<&[u8], Vec<u8>> {
-    alt((json_sed, cbor_sed, mgpk_sed))(s)
 }
 
 /// extracts the count from the sig count code

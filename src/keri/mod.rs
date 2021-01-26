@@ -30,7 +30,6 @@ use crate::{
     prefix::Prefix,
     signer::CryptoBox,
     state::IdentifierState,
-    util::dfs_serializer,
 };
 mod test;
 pub struct Keri {

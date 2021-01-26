@@ -7,7 +7,6 @@ use crate::{
     },
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
     state::{EventSemantics, IdentifierState},
-    util::dfs_serializer,
 };
 pub mod serialization_info;
 use serde::{Deserialize, Serialize};
