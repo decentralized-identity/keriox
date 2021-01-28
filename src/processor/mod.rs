@@ -71,6 +71,13 @@ impl<D: EventDatabase> EventProcessor<D> {
         Ok(Some(state))
     }
 
+    /// Get KERL for Prefix
+    ///
+    /// Returns the current validated KEL for a given Prefix
+    pub fn get_kerl(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Error> {
+        self.db.get_kerl(id).map_err(|_| Error::StorageError)
+    }
+
     /// Get keys from Establishment Event
     ///
     /// Returns the current Key Config associated with

@@ -16,13 +16,13 @@ use rmp_serde as serde_mgpk;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::io::Cursor;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DeserializedEvent<'a> {
     pub event: EventMessage,
     pub raw: &'a [u8],
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DeserializedSignedEvent<'a> {
     pub event: DeserializedEvent<'a>,
     pub signatures: Vec<AttachedSignaturePrefix>,

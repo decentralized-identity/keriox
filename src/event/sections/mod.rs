@@ -141,7 +141,7 @@ mod empty_string_as_none {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct WitnessConfig {
     #[serde(rename = "wt", with = "SerHex::<Compact>")]
     pub tally: u64,
@@ -153,7 +153,7 @@ pub struct WitnessConfig {
     pub graft: Vec<BasicPrefix>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct InceptionWitnessConfig {
     #[serde(rename = "wt", with = "SerHex::<Compact>")]
     pub tally: u64,

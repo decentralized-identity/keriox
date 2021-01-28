@@ -78,8 +78,8 @@ fn test_process() -> Result<(), Error> {
     assert_eq!(ixn_from_db, Some(raw_parsed));
 
     // Construct partially signed interaction event.
-    let ixn_raw = br#"{"v":"KERI10JSON000098_","i":"EJPRBUSEdUuZnh9kRGg8y7uBJDxTGZdp4YeUSqBv5sEk","s":"3","t":"ixn","p":"EpAHPuE6SqPw_oodA7utfEUxFh2pL6iYJ7Uwy1UQqi08","a":[]}-AADAAsMWMYvI8ymFUmdwiOSBqS16nOSYT70xKMztFprjdpDQC4VGsOcChyd9XsCqu_UId0H2-gbesX-ql3skh-qf0DwABVVVWbOMbnO8gn4EOAiY9wrGP7Q1uh8a-WUyPYlaii3iQ2Qucu_kzznl7MgnKeH2c7m_3h7HfoebC5wngg5-SAQACiau2633rcR8zTlvCMq4tQL2BpPMV61FgAU-9RVvBsbSkEs00mxwoxN_Xz4nqUaCX9bR8t9Mx3mgABXemOeTMAQ"#;
-    let deserialized_ixn = parse::signed_message(ixn_raw).unwrap().1;
+    let ixn_raw_2 = br#"{"v":"KERI10JSON000098_","i":"EJPRBUSEdUuZnh9kRGg8y7uBJDxTGZdp4YeUSqBv5sEk","s":"3","t":"ixn","p":"EpAHPuE6SqPw_oodA7utfEUxFh2pL6iYJ7Uwy1UQqi08","a":[]}-AADAAsMWMYvI8ymFUmdwiOSBqS16nOSYT70xKMztFprjdpDQC4VGsOcChyd9XsCqu_UId0H2-gbesX-ql3skh-qf0DwABVVVWbOMbnO8gn4EOAiY9wrGP7Q1uh8a-WUyPYlaii3iQ2Qucu_kzznl7MgnKeH2c7m_3h7HfoebC5wngg5-SAQACiau2633rcR8zTlvCMq4tQL2BpPMV61FgAU-9RVvBsbSkEs00mxwoxN_Xz4nqUaCX9bR8t9Mx3mgABXemOeTMAQ"#;
+    let deserialized_ixn = parse::signed_message(ixn_raw_2).unwrap().1;
     // Make event partially signed.
     let partially_signed_deserialized_ixn = match deserialized_ixn {
         Deserialized::Event(mut e) => {
@@ -109,6 +109,14 @@ fn test_process() -> Result<(), Error> {
     // Check if processed event is in kel. It shouldn't.
     let raw_from_db = event_processor.db.last_event_at_sn(&id, 4);
     assert!(matches!(raw_from_db, Ok(None)));
+
+    let id: IdentifierPrefix = "EJPRBUSEdUuZnh9kRGg8y7uBJDxTGZdp4YeUSqBv5sEk".parse()?;
+    let mut kel = Vec::new();
+    kel.extend(icp_raw);
+    kel.extend(rot_raw);
+    kel.extend(ixn_raw);
+
+    assert_eq!(event_processor.get_kerl(&id)?, Some(kel));
 
     Ok(())
 }

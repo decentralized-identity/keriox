@@ -4,7 +4,7 @@ use crate::prefix::SelfAddressingPrefix;
 use crate::state::{EventSemantics, IdentifierState};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct InteractionEvent {
     #[serde(rename = "p")]
     pub previous_event_hash: SelfAddressingPrefix,

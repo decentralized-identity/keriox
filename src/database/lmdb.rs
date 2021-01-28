@@ -1,6 +1,6 @@
 use super::EventDatabase;
 use crate::{
-    error::Error,
+    derivation::attached_signature_code::get_sig_count,
     prefix::{
         AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
         SelfSigningPrefix,
@@ -186,6 +186,73 @@ impl EventDatabase for LmdbEventDatabase {
         }
     }
 
+    fn get_kerl(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Self::Error> {
+        let mut buf = Vec::<u8>::new();
+
+        let lock = self.env.read()?;
+        let reader = lock.read()?;
+
+        for sn in 0.. {
+            let seq_index: Vec<u8> = SequenceIndex(id, sn).into();
+            let dig: SelfAddressingPrefix =
+                match self.key_event_logs.get(&reader, &seq_index)?.last() {
+                    Some(v) => match v?.1 {
+                        Value::Blob(b) => {
+                            bincode::deserialize(b).map_err(|e| DataError::DecodingError {
+                                value_type: Type::Blob,
+                                err: e,
+                            })?
+                        }
+                        _ => {
+                            return Err(StoreError::DataError(DataError::UnexpectedType {
+                                expected: Type::Blob,
+                                actual: Type::from_tag(0u8)?,
+                            }))
+                        }
+                    },
+                    None if sn == 0 => return Ok(None),
+                    None => return Ok(Some(buf)),
+                };
+
+            let dig_index: Vec<u8> = ContentIndex(id, &dig).into();
+
+            buf.extend(match self.events.get(&reader, &dig_index)? {
+                Some(v) => match v {
+                    Value::Blob(b) => b,
+                    _ => Err(StoreError::DataError(DataError::UnexpectedType {
+                        expected: Type::Blob,
+                        actual: Type::from_tag(0u8)?,
+                    }))?,
+                },
+                None => &[],
+            });
+
+            let mut sigs = Vec::new();
+
+            for sig_res in self.signatures.get(&reader, &dig_index)? {
+                match sig_res?.1 {
+                    Value::Blob(sig_bytes) => {
+                        // TODO I wonder if we can skip this deserialize/reserialize process
+                        sigs.push(sig_bytes.to_owned());
+                    }
+                    _ => {
+                        return Err(StoreError::DataError(DataError::UnexpectedType {
+                            expected: Type::Blob,
+                            actual: Type::from_tag(0u8)?,
+                        }))
+                    }
+                }
+            }
+
+            buf.extend(get_sig_count(sigs.len() as u16).as_bytes());
+            buf.extend(sigs.into_iter().flatten());
+
+            // TODO also attach witness receipts!!
+        }
+
+        Ok(Some(buf))
+    }
+
     fn log_event(
         &self,
         pref: &IdentifierPrefix,
@@ -203,11 +270,8 @@ impl EventDatabase for LmdbEventDatabase {
 
         // insert signatures for event
         for sig in sigs.iter() {
-            self.signatures.put(
-                &mut writer,
-                &key,
-                &Value::Blob(&bincode::serialize(&sig).unwrap()),
-            )?;
+            self.signatures
+                .put(&mut writer, &key, &Value::Blob(&sig.to_str().as_bytes()))?;
         }
 
         // insert event itself
