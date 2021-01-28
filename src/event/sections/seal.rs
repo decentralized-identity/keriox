@@ -2,7 +2,7 @@ use crate::prefix::{IdentifierPrefix, SelfAddressingPrefix};
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum Seal {
     Location(LocationSeal),
@@ -11,19 +11,19 @@ pub enum Seal {
     Root(RootSeal),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct DigestSeal {
     #[serde(rename = "d")]
     pub dig: SelfAddressingPrefix,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct RootSeal {
     #[serde(rename = "rd")]
     pub tree_root: SelfAddressingPrefix,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct EventSeal {
     #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
@@ -35,7 +35,7 @@ pub struct EventSeal {
     pub event_digest: SelfAddressingPrefix,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct LocationSeal {
     #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
@@ -50,7 +50,7 @@ pub struct LocationSeal {
     pub prior_digest: SelfAddressingPrefix,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct DelegatingEventSeal {
     #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,

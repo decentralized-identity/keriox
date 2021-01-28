@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 /// Inception Event
 ///
 /// Describes the inception (icp) event data,
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct InceptionEvent {
     #[serde(flatten)]
     pub key_config: KeyConfig,

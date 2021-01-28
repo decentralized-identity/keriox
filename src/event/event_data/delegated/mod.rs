@@ -9,7 +9,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct DelegatedInceptionEvent {
     #[serde(flatten)]
     pub inception_data: InceptionEvent,
@@ -18,7 +18,7 @@ pub struct DelegatedInceptionEvent {
     pub seal: LocationSeal,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct DelegatedRotationEvent {
     #[serde(flatten)]
     pub rotation_data: RotationEvent,

@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use serialization_info::*;
 pub mod parse;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct EventMessage {
     /// Serialization Information
     ///

@@ -25,7 +25,7 @@ pub use self::{
 /// Event Data
 ///
 /// Event Data conveys the semantic content of a KERI event.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(tag = "t", rename_all = "lowercase")]
 pub enum EventData {
     Icp(InceptionEvent),

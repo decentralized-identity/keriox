@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 /// Mostly intended for use by Witnesses.
 /// NOTE: This receipt has a unique structure to it's appended
 /// signatures
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ReceiptNonTransferable {
     /// Receipted Event Digest
     ///
@@ -26,7 +26,7 @@ impl EventSemantics for ReceiptNonTransferable {}
 /// Identifiers. Provides both the signatures and a commitment to
 /// the latest establishment event of the receipt creator.
 /// Mostly intended for use by Validators
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ReceiptTransferable {
     /// Receipted Event Digest
     ///

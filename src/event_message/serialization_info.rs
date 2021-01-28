@@ -41,7 +41,7 @@ impl FromStr for SerializationFormats {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SerializationInfo {
     pub major_version: u8,
     pub minor_version: u8,
