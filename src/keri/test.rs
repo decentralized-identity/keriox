@@ -1,35 +1,38 @@
-use crate::{error::Error, keri::Keri, prefix::Prefix};
+use std::fs;
+
+use crate::{database::lmdb::LmdbEventDatabase, error::Error, keri::Keri, prefix::Prefix};
 
 #[test]
 fn test_direct_mode() -> Result<(), Error> {
+    use tempfile::Builder;
+
+    // Create test db and event processor.
+    let alices_root = Builder::new().prefix("test-db").tempdir().unwrap();
+    let bobs_root = Builder::new().prefix("test-db2").tempdir().unwrap();
+    fs::create_dir_all(alices_root.path()).unwrap();
+    let alices_db = LmdbEventDatabase::new(alices_root.path()).unwrap();
+    let bobs_db = LmdbEventDatabase::new(bobs_root.path()).unwrap();
+
     // Init alice.
-    let mut alice = Keri::new()?;
-    assert_eq!(alice.get_state().sn, 0);
-    assert_eq!(alice.kel.get_len(), 1);
-    assert!(alice.other_instances.is_empty());
-    assert!(alice.receipts.is_empty());
-    assert!(alice.escrow_sigs.is_empty());
+    let mut alice = Keri::new(alices_db)?;
+    assert_eq!(alice.get_state()?, None);
 
     // Init bob.
-    let mut bob = Keri::new()?;
-    assert_eq!(bob.get_state().sn, 0);
+    let mut bob = Keri::new(bobs_db)?;
+    bob.incept()?;
+    assert_eq!(bob.get_state()?.unwrap().sn, 0);
     assert_eq!(bob.get_log_len(), 1);
-    assert!(bob.other_instances.is_empty());
-    assert!(bob.receipts.is_empty());
-    assert!(bob.escrow_sigs.is_empty());
 
     // Get alice's inception event.
-    let mut msg_to_bob = alice.get_last_event();
+    let mut msg_to_bob = String::from_utf8(alice.incept()?.serialize()?).unwrap();
+    assert_eq!(alice.get_log_len(), 1);
 
     // Send it to bob.
     let mut msg_to_alice = bob.process_events(&msg_to_bob.as_bytes())?;
     {
         // Check if bob's state of alice is the same as current alice state.
-        let alice_state_in_bob = bob
-            .other_instances
-            .get(&alice.get_state().prefix.to_str())
-            .unwrap();
-        assert_eq!(*alice_state_in_bob, alice.get_state());
+        let alice_state_in_bob = bob.get_state_for_prefix(&alice.prefix)?.unwrap();
+        assert_eq!(alice_state_in_bob, alice.get_state()?.unwrap());
     }
 
     // Send message from bob to alice and get alice's receipts.
@@ -37,61 +40,46 @@ fn test_direct_mode() -> Result<(), Error> {
 
     {
         // Check if alice's state of bob is the same as current bob state.
-        let bob_state_in_alice = alice
-            .other_instances
-            .get(&bob.get_state().prefix.to_str())
-            .unwrap();
-        assert_eq!(*bob_state_in_alice, bob.get_state());
-        assert_eq!(alice.receipts[&0].len(), 1);
+        let bob_state_in_alice = alice.get_state_for_prefix(&bob.prefix)?.unwrap();
+        assert_eq!(bob_state_in_alice, bob.get_state()?.unwrap());
     }
 
     // Send it to bob.
     bob.process_events(&msg_to_bob.as_bytes())?;
-    assert_eq!(bob.receipts[&0].len(), 1);
 
     // Rotation event.
-    alice.rotate()?;
+    let alice_rot = alice.rotate()?;
     assert_eq!(alice.get_log_len(), 2);
-    assert_eq!(alice.get_state().sn, 1);
+    assert_eq!(alice.get_state()?.unwrap().sn, 1);
 
     // Send rotation event to bob.
-    msg_to_bob = alice.get_last_event();
+    msg_to_bob = String::from_utf8(alice_rot.serialize()?).unwrap();
     msg_to_alice = bob.process_events(&msg_to_bob.as_bytes())?;
     {
         // Check if bob's state of alice is the same as current alice state.
-        let alice_state_in_bob = bob
-            .other_instances
-            .get(&alice.get_state().prefix.to_str())
-            .unwrap();
-        assert_eq!(*alice_state_in_bob, alice.get_state());
+        let alice_state_in_bob = bob.get_state_for_prefix(&alice.prefix)?.unwrap();
+        assert_eq!(alice_state_in_bob, alice.get_state()?.unwrap());
     }
 
     // Send bob's receipt to alice.
     alice.process_events(&msg_to_alice.as_bytes())?;
-    assert_eq!(alice.receipts.len(), 2);
-    assert_eq!(alice.escrow_sigs.len(), 0);
 
     // Interaction event.
-    alice.make_ixn("")?;
+    let alice_ixn = alice.make_ixn("")?;
     assert_eq!(alice.get_log_len(), 3);
-    assert_eq!(alice.get_state().sn, 2);
+    assert_eq!(alice.get_state()?.unwrap().sn, 2);
 
     // Send interaction event to bob.
-    msg_to_bob = alice.get_last_event();
+    msg_to_bob = String::from_utf8(alice_ixn.serialize()?).unwrap();
     msg_to_alice = bob.process_events(&msg_to_bob.as_bytes())?;
 
     {
         // Check if bob's state of alice is the same as current alice state.
-        let alice_state_in_bob = bob
-            .other_instances
-            .get(&alice.get_state().prefix.to_str())
-            .unwrap();
-        assert_eq!(*alice_state_in_bob, alice.get_state());
+        let alice_state_in_bob = bob.get_state_for_prefix(&alice.prefix)?.unwrap();
+        assert_eq!(alice_state_in_bob, alice.get_state()?.unwrap());
     }
 
     alice.process_events(&msg_to_alice.as_bytes())?;
-    assert_eq!(alice.receipts.len(), 3);
-    assert_eq!(alice.escrow_sigs.len(), 0);
 
     Ok(())
 }

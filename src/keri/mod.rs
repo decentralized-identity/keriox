@@ -1,6 +1,7 @@
-use std::{collections::HashMap, str::from_utf8};
+use std::str::from_utf8;
 
 use crate::{
+    database::EventDatabase,
     derivation::basic::Basic,
     derivation::self_addressing::SelfAddressing,
     derivation::self_signing::SelfSigning,
@@ -19,38 +20,42 @@ use crate::{
     },
     event::{
         event_data::EventData,
-        sections::{nxt_commitment, InceptionWitnessConfig, KeyConfig},
+        sections::{nxt_commitment, KeyConfig},
         Event, EventMessage, SerializationFormats,
     },
+    event_message::parse::signed_message,
     event_message::parse::{signed_event_stream, Deserialized},
     event_message::SignedEventMessage,
-    log::EventLog,
     prefix::AttachedSignaturePrefix,
     prefix::IdentifierPrefix,
-    prefix::Prefix,
+    processor::EventProcessor,
     signer::CryptoBox,
     state::IdentifierState,
 };
 mod test;
-pub struct Keri {
+pub struct Keri<D: EventDatabase> {
+    prefix: IdentifierPrefix,
     key_manager: CryptoBox,
-    kel: EventLog,
-    state: IdentifierState,
-    receipts: HashMap<u64, Vec<SignedEventMessage>>,
-    escrow_sigs: Vec<SignedEventMessage>,
-    other_instances: HashMap<String, IdentifierState>,
+    processor: EventProcessor<D>,
 }
-impl Keri {
-    // incept a state and keys
-    pub fn new() -> Result<Keri, Error> {
-        let key_manager = CryptoBox::new()?;
 
+impl<D: EventDatabase> Keri<D> {
+    // incept a state and keys
+    pub fn new(db: D) -> Result<Keri<D>, Error> {
+        Ok(Keri {
+            prefix: IdentifierPrefix::default(),
+            key_manager: CryptoBox::new()?,
+            processor: EventProcessor::new(db),
+        })
+    }
+
+    pub fn incept(&mut self) -> Result<SignedEventMessage, Error> {
         let icp = InceptionEvent::new(
             KeyConfig::new(
-                vec![Basic::Ed25519.derive(key_manager.public_key())],
+                vec![Basic::Ed25519.derive(self.key_manager.public_key())],
                 Some(nxt_commitment(
                     1,
-                    &[Basic::Ed25519.derive(key_manager.next_pub_key.clone())],
+                    &[Basic::Ed25519.derive(self.key_manager.next_pub_key.clone())],
                     SelfAddressing::Blake3_256,
                 )),
                 Some(1),
@@ -62,36 +67,28 @@ impl Keri {
 
         let sigged = icp.sign(vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
-            key_manager.sign(&icp.serialize()?)?,
+            self.key_manager.sign(&icp.serialize()?)?,
             0,
         )]);
-        let mut log = EventLog::new();
 
-        let s0 = IdentifierState::default().apply(&sigged)?;
-        s0.current
-            .verify(&sigged.event_message.serialize()?, &sigged.signatures)?;
+        self.processor
+            .process(signed_message(&sigged.serialize()?).unwrap().1)?;
 
-        log.commit(sigged)?;
+        self.prefix = icp.event.prefix;
 
-        Ok(Keri {
-            kel: log,
-            receipts: HashMap::new(),
-            state: s0,
-            key_manager,
-            escrow_sigs: vec![],
-            other_instances: HashMap::new(),
-        })
+        Ok(sigged)
     }
 
     pub fn rotate(&mut self) -> Result<SignedEventMessage, Error> {
         self.key_manager = self.key_manager.rotate()?;
+        let state = self.processor.compute_state(&self.prefix)?.unwrap();
 
         let ev = {
             Event {
-                prefix: self.state.prefix.clone(),
-                sn: self.state.sn + 1,
+                prefix: self.prefix.clone(),
+                sn: state.sn + 1,
                 event_data: EventData::Rot(RotationEvent {
-                    previous_event_hash: SelfAddressing::Blake3_256.derive(&self.state.last),
+                    previous_event_hash: SelfAddressing::Blake3_256.derive(&state.last),
                     key_config: KeyConfig::new(
                         vec![Basic::Ed25519.derive(self.key_manager.public_key())],
                         Some(nxt_commitment(
@@ -115,12 +112,8 @@ impl Keri {
             0,
         )]);
 
-        self.state = self.state.clone().apply(&rot)?;
-        self.state
-            .current
-            .verify(&rot.event_message.serialize()?, &rot.signatures)?;
-
-        self.kel.commit(rot.clone())?;
+        self.processor
+            .process(signed_message(&rot.serialize()?).unwrap().1)?;
 
         Ok(rot)
     }
@@ -129,12 +122,13 @@ impl Keri {
         let dig_seal = DigestSeal {
             dig: SelfAddressing::Blake3_256.derive(payload.as_bytes()),
         };
+        let state = self.processor.compute_state(&self.prefix)?.unwrap();
 
         let ev = Event {
-            prefix: self.state.prefix.clone(),
-            sn: self.state.sn + 1,
+            prefix: self.prefix.clone(),
+            sn: state.sn + 1,
             event_data: EventData::Ixn(InteractionEvent {
-                previous_event_hash: SelfAddressing::Blake3_256.derive(&self.state.last),
+                previous_event_hash: SelfAddressing::Blake3_256.derive(&state.last),
                 data: vec![Seal::Digest(dig_seal)],
             }),
         }
@@ -147,134 +141,61 @@ impl Keri {
             0,
         )]);
 
-        self.state = self.state.clone().apply(&ixn)?;
-        self.state
-            .current
-            .verify(&ixn.event_message.serialize()?, &ixn.signatures)?;
+        self.processor
+            .process(signed_message(&ixn.serialize()?).unwrap().1)?;
 
-        self.kel.commit(ixn.clone())?;
         Ok(ixn)
     }
 
-    pub fn process_events(&mut self, msg: &[u8]) -> Result<String, Error> {
+    pub fn process_events(&self, msg: &[u8]) -> Result<String, Error> {
         let events = signed_event_stream(msg)
             .map_err(|_| Error::DeserializationError)?
             .1;
-        let mut response: Vec<SignedEventMessage> = vec![];
+        let mut response: Vec<Vec<u8>> = vec![];
         for dev in events {
             match dev {
-                Deserialized::Event(ev) => match ev.event.event.event.event_data {
+                Deserialized::Event(ref ev) => match ev.event.event.event.event_data {
                     EventData::Icp(_) => {
-                        let ev_prefix = ev.event.event.event.prefix.to_str();
-                        let state = IdentifierState::default().apply(&ev.event.event)?;
-                        state.current.verify(ev.event.raw, &ev.signatures)?;
+                        let s = self.processor.compute_state(&ev.event.event.event.prefix)?;
+                        if s == None {
+                            self.processor.process(dev.clone())?;
+                            let own_kel = self.processor.get_kerl(&self.prefix)?.unwrap();
+                            response.push(own_kel);
 
-                        if !self.other_instances.contains_key(&ev_prefix) {
-                            if let Some(icp) = self.kel.get_last() {
-                                response.push(icp);
-                            }
+                            let rct = self.make_rct(ev.event.event.clone())?;
+                            response.push(rct.serialize()?);
                         }
-                        self.other_instances.insert(ev_prefix.clone(), state);
-                        let rct = self.make_rct(ev.event.event)?;
-                        response.push(rct);
                     }
                     _ => {
-                        let prefix_str = ev.event.event.event.prefix.to_str();
-
-                        let state = self
-                            .other_instances
-                            .remove(&prefix_str)
-                            .unwrap_or(IdentifierState::default());
-                        self.other_instances
-                            .insert(prefix_str.clone(), state.apply(&ev.event.event)?);
-
-                        let rct = self.make_rct(ev.event.event)?;
-                        response.push(rct);
+                        let s = self.processor.process(dev.clone());
+                        if s.is_ok() {
+                            response.push(self.make_rct(ev.event.event.clone())?.serialize()?);
+                        }
                     }
                 },
-                Deserialized::Vrc(r) => match r.event_message.event.event_data {
-                    EventData::Vrc(ref rct) => {
-                        let prefix_str = rct.validator_seal.prefix.to_str();
-                        let validator = self.other_instances.get(&prefix_str).unwrap().clone();
-
-                        self.process_receipt(validator, r).unwrap();
-                    }
-                    // NOTE should never happen
-                    _ => Err(Error::SemanticError("Incorrect Receipt Structure".into()))?,
-                },
+                Deserialized::Vrc(_) => {
+                    self.processor.process(dev.clone())?;
+                }
                 Deserialized::Rct(_) => todo!(),
             }
         }
-        let str_res = response
-            .iter()
-            .map(|ev| from_utf8(&ev.serialize().unwrap()).unwrap().to_string())
-            .collect::<Vec<_>>()
-            .concat();
-        Ok(str_res)
-    }
-
-    // take a receipt made by validator, verify it and add to receipts or escrow
-    fn process_receipt(
-        &mut self,
-        validator: IdentifierState,
-        sigs: SignedEventMessage,
-    ) -> Result<(), Error> {
-        match sigs.event_message.event.event_data.clone() {
-            EventData::Vrc(rct) => {
-                let event = self.kel.get(sigs.event_message.event.sn)?;
-
-                // This logic can in future be moved to the correct place in the Kever equivalent here
-                // receipt pref is the ID who made the event being receipted
-                if sigs.event_message.event.prefix == self.state.prefix
-                            // dig is the digest of the event being receipted
-                            && rct.receipted_event_digest
-                                == rct
-                                    .receipted_event_digest
-                                    .derivation
-                                    .derive(&event.event_message.serialize()?)
-                            // seal pref is the pref of the validator
-                            && rct.validator_seal.prefix == validator.prefix
-                {
-                    if rct.validator_seal.event_digest
-                        == rct
-                            .validator_seal
-                            .event_digest
-                            .derivation
-                            .derive(&validator.last)
-                    {
-                        // seal dig is the digest of the last establishment event for the validator, verify the rct
-                        validator
-                            .current
-                            .verify(&event.event_message.serialize()?, &sigs.signatures)?;
-                        self.receipts
-                            .entry(sigs.event_message.event.sn)
-                            .or_insert_with(|| vec![])
-                            .push(sigs);
-                    } else {
-                        // escrow the seal
-                        self.escrow_sigs.push(sigs)
-                    }
-                    Ok(())
-                } else {
-                    Err(Error::SemanticError("incorrect receipt binding".into()))
-                }
-            }
-            _ => Err(Error::SemanticError("not a receipt".into())),
-        }
+        let str_res = response.join(&0);
+        Ok(from_utf8(&str_res).unwrap().to_string())
     }
 
     fn make_rct(&self, event: EventMessage) -> Result<SignedEventMessage, Error> {
         let ser = event.serialize()?;
         let signature = self.key_manager.sign(&ser)?;
-        Ok(Event {
+        let state = self.processor.compute_state(&self.prefix)?.unwrap();
+        let rcp = Event {
             prefix: event.event.prefix,
             sn: event.event.sn,
             event_data: EventData::Vrc(ReceiptTransferable {
                 receipted_event_digest: SelfAddressing::Blake3_256.derive(&ser),
                 validator_seal: EventSeal {
-                    prefix: self.state.prefix.clone(),
-                    sn: self.state.sn,
-                    event_digest: SelfAddressing::Blake3_256.derive(&self.state.last),
+                    prefix: self.prefix.clone(),
+                    sn: state.sn,
+                    event_digest: SelfAddressing::Blake3_256.derive(&state.last),
                 },
             }),
         }
@@ -283,21 +204,31 @@ impl Keri {
             SelfSigning::Ed25519Sha512,
             signature,
             0,
-        )]))
+        )]);
+
+        self.processor
+            .process(signed_message(&rcp.serialize()?).unwrap().1)?;
+
+        Ok(rcp)
     }
 
-    pub fn get_last_event(&self) -> String {
-        match self.kel.get_last() {
-            Some(ev) => from_utf8(&ev.serialize().unwrap()).unwrap().to_string(),
-            None => String::new(),
-        }
+    pub fn get_log_len(&self) -> u64 {
+        self.processor
+            .compute_state(&self.prefix)
+            .unwrap()
+            .unwrap()
+            .sn
+            + 1
     }
 
-    pub fn get_log_len(&self) -> usize {
-        self.kel.get_len()
+    pub fn get_state(&self) -> Result<Option<IdentifierState>, Error> {
+        self.processor.compute_state(&self.prefix)
     }
 
-    pub fn get_state(&self) -> IdentifierState {
-        self.state.clone()
+    pub fn get_state_for_prefix(
+        &self,
+        prefix: &IdentifierPrefix,
+    ) -> Result<Option<IdentifierState>, Error> {
+        self.processor.compute_state(prefix)
     }
 }
