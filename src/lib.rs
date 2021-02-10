@@ -9,6 +9,3 @@ pub mod prefix;
 pub mod processor;
 pub mod signer;
 pub mod state;
-
-#[cfg(feature = "exp_ursa")]
-pub use ursa;
