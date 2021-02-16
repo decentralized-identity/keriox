@@ -27,11 +27,9 @@ fn test_direct_mode() -> Result<(), Error> {
     let mut bob = Keri::new(bobs_db, CryptoBox::new()?, IdentifierPrefix::default())?;
     bob.incept()?;
     assert_eq!(bob.get_state()?.unwrap().sn, 0);
-    assert_eq!(bob.get_log_len(), 1);
 
     // Get alice's inception event.
     let mut msg_to_bob = String::from_utf8(alice.incept()?.serialize()?).unwrap();
-    assert_eq!(alice.get_log_len(), 1);
 
     // Send it to bob.
     let mut msg_to_alice = bob.process_events(&msg_to_bob.as_bytes())?;
@@ -55,7 +53,6 @@ fn test_direct_mode() -> Result<(), Error> {
 
     // Rotation event.
     let alice_rot = alice.rotate()?;
-    assert_eq!(alice.get_log_len(), 2);
     assert_eq!(alice.get_state()?.unwrap().sn, 1);
 
     // Send rotation event to bob.
@@ -72,7 +69,6 @@ fn test_direct_mode() -> Result<(), Error> {
 
     // Interaction event.
     let alice_ixn = alice.make_ixn("")?;
-    assert_eq!(alice.get_log_len(), 3);
     assert_eq!(alice.get_state()?.unwrap().sn, 2);
 
     // Send interaction event to bob.
