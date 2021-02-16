@@ -56,6 +56,22 @@ impl CryptoBox {
             next_pub_key,
         })
     }
+
+    pub fn rotate_from_seed(&self, next_secret: &str) -> Result<Self, Error> {
+        let next_secret: SeedPrefix = next_secret.parse()?;
+        let (next_pub_key, next_priv_key) = next_secret.derive_key_pair()?;
+
+        let new_signer = Signer {
+            priv_key: self.next_priv_key.clone(),
+            pub_key: self.next_pub_key.clone(),
+        };
+
+        Ok(CryptoBox {
+            signer: new_signer,
+            next_pub_key,
+            next_priv_key,
+        })
+    }
 }
 
 struct Signer {

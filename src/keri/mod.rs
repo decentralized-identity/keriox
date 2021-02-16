@@ -40,6 +40,7 @@ impl<D: EventDatabase> Keri<D> {
 
     pub fn incept(&mut self) -> Result<SignedEventMessage, Error> {
         let icp = EventMsgBuilder::new(EventType::Inception)?
+            .with_prefix(self.prefix.clone())
             .with_keys(vec![Basic::Ed25519.derive(self.key_manager.public_key())])
             .with_next_keys(vec![
                 Basic::Ed25519.derive(self.key_manager.next_pub_key.clone())
@@ -62,21 +63,8 @@ impl<D: EventDatabase> Keri<D> {
 
     pub fn rotate(&mut self) -> Result<SignedEventMessage, Error> {
         self.key_manager = self.key_manager.rotate()?;
-        let state = self
-            .processor
-            .compute_state(&self.prefix)?
-            .ok_or(Error::SemanticError("There is no state".into()))?;
 
-        let rot = EventMsgBuilder::new(EventType::Rotation)?
-            .with_prefix(self.prefix.clone())
-            .with_sn(state.sn + 1)
-            .with_previous_event(SelfAddressing::Blake3_256.derive(&state.last))
-            .with_keys(vec![Basic::Ed25519.derive(self.key_manager.public_key())])
-            .with_next_keys(vec![
-                Basic::Ed25519.derive(self.key_manager.next_pub_key.clone())
-            ])
-            .build()?;
-
+        let rot = self.make_rotation()?;
         let rot = rot.sign(vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
             self.key_manager.sign(&rot.serialize()?)?,
@@ -89,9 +77,45 @@ impl<D: EventDatabase> Keri<D> {
         Ok(rot)
     }
 
-    pub fn make_ixn(&mut self, payload: &str) -> Result<SignedEventMessage, Error> {
-        let dig_seal = DigestSeal {
-            dig: SelfAddressing::Blake3_256.derive(payload.as_bytes()),
+    pub fn rotate_with_seed(&mut self, secret: &str) -> Result<SignedEventMessage, Error> {
+        self.key_manager = self.key_manager.rotate_from_seed(secret)?;
+        let rot = self.make_rotation()?;
+        let rot = rot.sign(vec![AttachedSignaturePrefix::new(
+            SelfSigning::Ed25519Sha512,
+            self.key_manager.sign(&rot.serialize()?)?,
+            0,
+        )]);
+
+        self.processor
+            .process(signed_message(&rot.serialize()?).unwrap().1)?;
+
+        Ok(rot)
+    }
+
+    fn make_rotation(&self) -> Result<EventMessage, Error> {
+        let state = self
+            .processor
+            .compute_state(&self.prefix)?
+            .ok_or(Error::SemanticError("There is no state".into()))?;
+        EventMsgBuilder::new(EventType::Rotation)?
+            .with_prefix(self.prefix.clone())
+            .with_sn(state.sn + 1)
+            .with_previous_event(SelfAddressing::Blake3_256.derive(&state.last))
+            .with_keys(vec![Basic::Ed25519.derive(self.key_manager.public_key())])
+            .with_next_keys(vec![
+                Basic::Ed25519.derive(self.key_manager.next_pub_key.clone())
+            ])
+            .build()
+    }
+
+    pub fn make_ixn(&mut self, payload: Option<&str>) -> Result<SignedEventMessage, Error> {
+        let seal_list = match payload {
+            Some(payload) => {
+                vec![Seal::Digest(DigestSeal {
+                    dig: SelfAddressing::Blake3_256.derive(payload.as_bytes()),
+                })]
+            }
+            None => vec![],
         };
         let state = self
             .processor
@@ -102,7 +126,7 @@ impl<D: EventDatabase> Keri<D> {
             .with_prefix(self.prefix.clone())
             .with_sn(state.sn + 1)
             .with_previous_event(SelfAddressing::Blake3_256.derive(&state.last))
-            .with_seal(vec![Seal::Digest(dig_seal)])
+            .with_seal(seal_list)
             .build()?;
 
         let ixn = ev.sign(vec![AttachedSignaturePrefix::new(
@@ -117,28 +141,44 @@ impl<D: EventDatabase> Keri<D> {
         Ok(ixn)
     }
 
-    pub fn process_events(&self, msg: &[u8]) -> Result<String, Error> {
+    pub fn respond(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
         let events = signed_event_stream(msg)
             .map_err(|_| Error::DeserializationError)?
             .1;
-        let mut append_own_kel = false;
-        let receipts: Vec<_> = events
+        let (processed_ok, processed_failed): (Vec<_>, Vec<_>) = events
             .into_iter()
-            .filter(|event| self.processor.process(event.clone()).is_ok())
+            .map(|event| {
+                self.processor
+                    .process(event.clone())
+                    .and_then(|_| Ok(event))
+            })
+            .partition(Result::is_ok);
+        let response: Vec<u8> = processed_ok
+            .into_iter()
+            .map(Result::unwrap)
             .map(|des_event| {
                 match des_event {
                     Deserialized::Event(ev) => {
+                        let mut buf = vec![];
                         if let EventData::Icp(_) = ev.event.event.event.event_data {
-                            // Check for self receipt
-                            // If i have receipt of mine icp, dont append own kel
-                            if self.prefix != IdentifierPrefix::default() {
-                                append_own_kel = true;
+                            if !self
+                                .processor
+                                .has_receipt(&self.prefix, 0, &ev.event.event.event.prefix)
+                                .unwrap()
+                            {
+                                buf.append(
+                                    &mut self.processor.get_kerl(&self.prefix).unwrap().unwrap(),
+                                )
                             }
                         }
-                        self.make_rct(ev.event.event.clone())
-                            .unwrap()
-                            .serialize()
-                            .unwrap()
+                        buf.append(
+                            &mut self
+                                .make_rct(ev.event.event.clone())
+                                .unwrap()
+                                .serialize()
+                                .unwrap(),
+                        );
+                        buf
                     }
                     _ => vec![],
                 }
@@ -146,21 +186,7 @@ impl<D: EventDatabase> Keri<D> {
             .flatten()
             .collect();
 
-        let out = if append_own_kel {
-            vec![self.processor.get_kerl(&self.prefix)?.unwrap(), receipts]
-                .into_iter()
-                .flatten()
-                .collect()
-        } else {
-            receipts
-        };
-        println!(
-            "self id:{},\n responses to {}: \n\n {}\n\n",
-            self.prefix.to_str(),
-            from_utf8(msg).unwrap(),
-            from_utf8(&out).unwrap()
-        );
-        Ok(from_utf8(&out).unwrap().to_string())
+        Ok(response)
     }
 
     fn make_rct(&self, event: EventMessage) -> Result<SignedEventMessage, Error> {

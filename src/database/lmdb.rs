@@ -186,6 +186,55 @@ impl EventDatabase for LmdbEventDatabase {
         }
     }
 
+    fn has_receipt(
+        &self,
+        pref: &IdentifierPrefix,
+        sn: u64,
+        validator_id: &IdentifierPrefix,
+    ) -> Result<bool, Self::Error> {
+        let lock = self.env.read()?;
+        let reader = lock.read()?;
+        let seq_index: Vec<u8> = SequenceIndex(pref, sn).into();
+
+        let dig: SelfAddressingPrefix = match self.key_event_logs.get(&reader, &seq_index)?.last() {
+            Some(v) => match v?.1 {
+                Value::Blob(b) => {
+                    bincode::deserialize(b).map_err(|e| DataError::DecodingError {
+                        value_type: Type::Blob,
+                        err: e,
+                    })?
+                }
+                _ => {
+                    return Err(StoreError::DataError(DataError::UnexpectedType {
+                        expected: Type::Blob,
+                        actual: Type::from_tag(0u8)?,
+                    }))
+                }
+            },
+            None => return Ok(false),
+        };
+
+        let dig_index: Vec<u8> = ContentIndex(pref, &dig).into();
+
+        let has_vrc = self
+            .receipts_t
+            .get(&reader, &dig_index)?
+            .filter_map(Result::ok)
+            .map(|e| match e.1 {
+                Value::Blob(b) => bincode::deserialize(b)
+                    .map_err(|e| DataError::DecodingError {
+                        value_type: Type::Blob,
+                        err: e,
+                    })
+                    .unwrap(),
+                _ => {
+                    vec![]
+                }
+            })
+            .any(|e: Vec<u8>| e == validator_id.to_str().as_bytes());
+        Ok(has_vrc)
+    }
+
     fn get_kerl(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Self::Error> {
         let mut buf = Vec::<u8>::new();
 
