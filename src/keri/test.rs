@@ -1,6 +1,12 @@
 use std::fs;
 
-use crate::{database::lmdb::LmdbEventDatabase, error::Error, keri::Keri, prefix::Prefix};
+use crate::{
+    database::lmdb::LmdbEventDatabase,
+    error::Error,
+    keri::Keri,
+    prefix::{IdentifierPrefix, Prefix},
+    signer::CryptoBox,
+};
 
 #[test]
 fn test_direct_mode() -> Result<(), Error> {
@@ -14,11 +20,11 @@ fn test_direct_mode() -> Result<(), Error> {
     let bobs_db = LmdbEventDatabase::new(bobs_root.path()).unwrap();
 
     // Init alice.
-    let mut alice = Keri::new(alices_db)?;
+    let mut alice = Keri::new(alices_db, CryptoBox::new()?, IdentifierPrefix::default())?;
     assert_eq!(alice.get_state()?, None);
 
     // Init bob.
-    let mut bob = Keri::new(bobs_db)?;
+    let mut bob = Keri::new(bobs_db, CryptoBox::new()?, IdentifierPrefix::default())?;
     bob.incept()?;
     assert_eq!(bob.get_state()?.unwrap().sn, 0);
     assert_eq!(bob.get_log_len(), 1);

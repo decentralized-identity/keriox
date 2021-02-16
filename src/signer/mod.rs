@@ -1,4 +1,4 @@
-use crate::error::Error;
+use crate::{error::Error, prefix::SeedPrefix};
 use ursa::{
     keys::{PrivateKey, PublicKey},
     signatures::{ed25519, SignatureScheme},
@@ -17,6 +17,18 @@ impl CryptoBox {
         let (next_pub_key, next_priv_key) = ed.keypair(None).map_err(|e| Error::CryptoError(e))?;
         Ok(CryptoBox {
             signer,
+            next_pub_key,
+            next_priv_key,
+        })
+    }
+
+    pub fn derive_from_seed(current_secret: &str, next_secret: &str) -> Result<Self, Error> {
+        let current_secret: SeedPrefix = current_secret.parse()?;
+        let (pub_key, priv_key) = current_secret.derive_key_pair()?;
+        let next_secret: SeedPrefix = next_secret.parse()?;
+        let (next_pub_key, next_priv_key) = next_secret.derive_key_pair()?;
+        Ok(CryptoBox {
+            signer: Signer { pub_key, priv_key },
             next_pub_key,
             next_priv_key,
         })

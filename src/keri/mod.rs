@@ -41,10 +41,10 @@ pub struct Keri<D: EventDatabase> {
 
 impl<D: EventDatabase> Keri<D> {
     // incept a state and keys
-    pub fn new(db: D) -> Result<Keri<D>, Error> {
+    pub fn new(db: D, key_manager: CryptoBox, prefix: IdentifierPrefix) -> Result<Keri<D>, Error> {
         Ok(Keri {
-            prefix: IdentifierPrefix::default(),
-            key_manager: CryptoBox::new()?,
+            prefix,
+            key_manager,
             processor: EventProcessor::new(db),
         })
     }
@@ -157,7 +157,7 @@ impl<D: EventDatabase> Keri<D> {
                 Deserialized::Event(ref ev) => match ev.event.event.event.event_data {
                     EventData::Icp(_) => {
                         let s = self.processor.compute_state(&ev.event.event.event.prefix)?;
-                        if s == None {
+                        if s == None && self.prefix != IdentifierPrefix::default() {
                             self.processor.process(dev.clone())?;
                             let own_kel = self.processor.get_kerl(&self.prefix)?.unwrap();
                             response.push(own_kel);
@@ -179,7 +179,7 @@ impl<D: EventDatabase> Keri<D> {
                 Deserialized::Rct(_) => todo!(),
             }
         }
-        let str_res = response.join(&0);
+        let str_res: Vec<u8> = response.into_iter().flatten().collect();
         Ok(from_utf8(&str_res).unwrap().to_string())
     }
 

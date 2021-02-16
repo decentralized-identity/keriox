@@ -15,9 +15,9 @@ pub enum SeedPrefix {
 impl SeedPrefix {
     pub fn derive_key_pair(&self) -> Result<(PublicKey, PrivateKey), Error> {
         match self {
-            Self::RandomSeed256Ed25519(seed) => Ed25519Sha512::new()
-                .keypair(Some(KeyGenOption::UseSeed(seed.clone())))
-                .map_err(|e| Error::CryptoError(e)),
+            Self::RandomSeed256Ed25519(seed) => {
+                Ed25519Sha512::expand_keypair(&seed.clone()).map_err(|e| Error::CryptoError(e))
+            }
             Self::RandomSeed256ECDSAsecp256k1(seed) => EcdsaSecp256k1Sha256::new()
                 .keypair(Some(KeyGenOption::UseSeed(seed.clone())))
                 .map_err(|e| Error::CryptoError(e)),
