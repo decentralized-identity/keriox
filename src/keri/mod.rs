@@ -1,5 +1,3 @@
-use std::str::from_utf8;
-
 use crate::{
     database::EventDatabase,
     derivation::basic::Basic,
@@ -18,19 +16,19 @@ use crate::{
     prefix::AttachedSignaturePrefix,
     prefix::{IdentifierPrefix, Prefix},
     processor::EventProcessor,
-    signer::CryptoBox,
+    signer::KeyManager,
     state::IdentifierState,
 };
 mod test;
-pub struct Keri<D: EventDatabase> {
+pub struct Keri<D: EventDatabase, K: KeyManager> {
     prefix: IdentifierPrefix,
-    key_manager: CryptoBox,
+    key_manager: K,
     processor: EventProcessor<D>,
 }
 
-impl<D: EventDatabase> Keri<D> {
+impl<D: EventDatabase, K: KeyManager> Keri<D, K> {
     // incept a state and keys
-    pub fn new(db: D, key_manager: CryptoBox, prefix: IdentifierPrefix) -> Result<Keri<D>, Error> {
+    pub fn new(db: D, key_manager: K, prefix: IdentifierPrefix) -> Result<Keri<D, K>, Error> {
         Ok(Keri {
             prefix,
             key_manager,
@@ -43,7 +41,7 @@ impl<D: EventDatabase> Keri<D> {
             .with_prefix(self.prefix.clone())
             .with_keys(vec![Basic::Ed25519.derive(self.key_manager.public_key())])
             .with_next_keys(vec![
-                Basic::Ed25519.derive(self.key_manager.next_pub_key.clone())
+                Basic::Ed25519.derive(self.key_manager.next_public_key().clone())
             ])
             .build()?;
 
@@ -62,23 +60,8 @@ impl<D: EventDatabase> Keri<D> {
     }
 
     pub fn rotate(&mut self) -> Result<SignedEventMessage, Error> {
-        self.key_manager = self.key_manager.rotate()?;
+        self.key_manager.rotate()?;
 
-        let rot = self.make_rotation()?;
-        let rot = rot.sign(vec![AttachedSignaturePrefix::new(
-            SelfSigning::Ed25519Sha512,
-            self.key_manager.sign(&rot.serialize()?)?,
-            0,
-        )]);
-
-        self.processor
-            .process(signed_message(&rot.serialize()?).unwrap().1)?;
-
-        Ok(rot)
-    }
-
-    pub fn rotate_with_seed(&mut self, secret: &str) -> Result<SignedEventMessage, Error> {
-        self.key_manager = self.key_manager.rotate_from_seed(secret)?;
         let rot = self.make_rotation()?;
         let rot = rot.sign(vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
@@ -103,7 +86,7 @@ impl<D: EventDatabase> Keri<D> {
             .with_previous_event(SelfAddressing::Blake3_256.derive(&state.last))
             .with_keys(vec![Basic::Ed25519.derive(self.key_manager.public_key())])
             .with_next_keys(vec![
-                Basic::Ed25519.derive(self.key_manager.next_pub_key.clone())
+                Basic::Ed25519.derive(self.key_manager.next_public_key().clone())
             ])
             .build()
     }
@@ -156,32 +139,28 @@ impl<D: EventDatabase> Keri<D> {
         let response: Vec<u8> = processed_ok
             .into_iter()
             .map(Result::unwrap)
-            .map(|des_event| {
-                match des_event {
-                    Deserialized::Event(ev) => {
-                        let mut buf = vec![];
-                        if let EventData::Icp(_) = ev.event.event.event.event_data {
-                            if !self
-                                .processor
-                                .has_receipt(&self.prefix, 0, &ev.event.event.event.prefix)
-                                .unwrap()
-                            {
-                                buf.append(
-                                    &mut self.processor.get_kerl(&self.prefix).unwrap().unwrap(),
-                                )
-                            }
+            .map(|des_event| match des_event {
+                Deserialized::Event(ev) => {
+                    let mut buf = vec![];
+                    if let EventData::Icp(_) = ev.event.event.event.event_data {
+                        if !self
+                            .processor
+                            .has_receipt(&self.prefix, 0, &ev.event.event.event.prefix)
+                            .unwrap()
+                        {
+                            buf.append(&mut self.processor.get_kerl(&self.prefix).unwrap().unwrap())
                         }
-                        buf.append(
-                            &mut self
-                                .make_rct(ev.event.event.clone())
-                                .unwrap()
-                                .serialize()
-                                .unwrap(),
-                        );
-                        buf
                     }
-                    _ => vec![],
+                    buf.append(
+                        &mut self
+                            .make_rct(ev.event.event.clone())
+                            .unwrap()
+                            .serialize()
+                            .unwrap(),
+                    );
+                    buf
                 }
+                _ => vec![],
             })
             .flatten()
             .collect();

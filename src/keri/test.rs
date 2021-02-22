@@ -1,5 +1,3 @@
-use std::fs;
-
 use crate::{
     database::lmdb::LmdbEventDatabase,
     error::Error,
@@ -7,6 +5,7 @@ use crate::{
     prefix::{IdentifierPrefix, Prefix},
     signer::CryptoBox,
 };
+use std::fs;
 
 #[test]
 fn test_direct_mode() -> Result<(), Error> {
