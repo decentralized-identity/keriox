@@ -137,13 +137,14 @@ impl EventMsgBuilder {
                     witness_config: InceptionWitnessConfig::default(),
                     inception_configuration: vec![],
                 };
+
                 match prefix {
                     IdentifierPrefix::Basic(_) => Event {
                         prefix: prefix,
                         sn: 0,
                         event_data: EventData::Icp(icp_event),
                     }
-                    .to_message(SerializationFormats::JSON)?,
+                    .to_message(self.format)?,
                     IdentifierPrefix::SelfAddressing(_) => {
                         icp_event.incept_self_addressing(self.derivation, self.format)?
                     }

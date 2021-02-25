@@ -14,7 +14,7 @@ use crate::{
         parse::{signed_event_stream, Deserialized},
     },
     prefix::AttachedSignaturePrefix,
-    prefix::{IdentifierPrefix, Prefix},
+    prefix::{IdentifierPrefix},
     processor::EventProcessor,
     signer::KeyManager,
     state::IdentifierState,
@@ -128,7 +128,7 @@ impl<D: EventDatabase, K: KeyManager> Keri<D, K> {
         let events = signed_event_stream(msg)
             .map_err(|_| Error::DeserializationError)?
             .1;
-        let (processed_ok, processed_failed): (Vec<_>, Vec<_>) = events
+        let (processed_ok, _processed_failed): (Vec<_>, Vec<_>) = events
             .into_iter()
             .map(|event| {
                 self.processor
@@ -202,6 +202,10 @@ impl<D: EventDatabase, K: KeyManager> Keri<D, K> {
 
     pub fn get_state(&self) -> Result<Option<IdentifierState>, Error> {
         self.processor.compute_state(&self.prefix)
+    }
+
+    pub fn get_kerl(&self) -> Result<Option<Vec<u8>>, Error> {
+        self.processor.get_kerl(&self.prefix)
     }
 
     pub fn get_state_for_prefix(
