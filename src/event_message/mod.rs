@@ -8,6 +8,7 @@ use crate::{
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
     state::{EventSemantics, IdentifierState},
 };
+pub mod event_msg_builder;
 pub mod serialization_info;
 use serde::{Deserialize, Serialize};
 use serialization_info::*;
@@ -217,7 +218,6 @@ pub fn verify_identifier_binding(icp_event: &EventMessage) -> Result<bool, Error
 
 #[cfg(test)]
 mod tests {
-    mod event_msg_builder;
     mod test_utils;
     use self::{event_msg_builder::EventType, test_utils::test_mock_event_sequence};
     use super::*;

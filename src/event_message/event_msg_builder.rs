@@ -1,5 +1,7 @@
 use std::str::FromStr;
 
+use ursa::signatures::{ed25519, SignatureScheme};
+
 use crate::{
     derivation::{basic::Basic, self_addressing::SelfAddressing},
     error::Error,
@@ -21,7 +23,6 @@ use crate::{
         Event, EventMessage,
     },
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
-    signer::CryptoBox,
 };
 
 pub struct EventMsgBuilder {
@@ -61,8 +62,10 @@ impl EventType {
 
 impl EventMsgBuilder {
     pub fn new(event_type: EventType) -> Result<Self, Error> {
-        let key_manager = CryptoBox::new().unwrap();
-        let basic_pref = Basic::Ed25519.derive(key_manager.public_key());
+        let ed = ed25519::Ed25519Sha512::new();
+        let (pk, _sk) = ed.keypair(None).map_err(|e| Error::CryptoError(e))?;
+        let (npk, _nsk) = ed.keypair(None).map_err(|e| Error::CryptoError(e))?;
+        let basic_pref = Basic::Ed25519.derive(pk);
         let dummy_loc_seal = LocationSeal {
             prefix: IdentifierPrefix::from_str("EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM")?,
             sn: 2,
@@ -75,7 +78,7 @@ impl EventMsgBuilder {
             event_type,
             prefix: IdentifierPrefix::default(),
             keys: vec![basic_pref],
-            next_keys: vec![Basic::Ed25519.derive(key_manager.next_pub_key.clone())],
+            next_keys: vec![Basic::Ed25519.derive(npk)],
             key_threshold: 1,
             sn: 1,
             prev_event: SelfAddressing::Blake3_256.derive(&[0u8; 32]),
@@ -134,13 +137,14 @@ impl EventMsgBuilder {
                     witness_config: InceptionWitnessConfig::default(),
                     inception_configuration: vec![],
                 };
+
                 match prefix {
                     IdentifierPrefix::Basic(_) => Event {
                         prefix: prefix,
                         sn: 0,
                         event_data: EventData::Icp(icp_event),
                     }
-                    .to_message(SerializationFormats::JSON)?,
+                    .to_message(self.format)?,
                     IdentifierPrefix::SelfAddressing(_) => {
                         icp_event.incept_self_addressing(self.derivation, self.format)?
                     }

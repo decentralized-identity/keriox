@@ -181,6 +181,17 @@ impl<D: EventDatabase> EventProcessor<D> {
         Ok(())
     }
 
+    pub fn has_receipt(
+        &self,
+        id: &IdentifierPrefix,
+        sn: u64,
+        validator_pref: &IdentifierPrefix,
+    ) -> Result<bool, Error> {
+        self.db
+            .has_receipt(id, sn, validator_pref)
+            .map_err(|_e| Error::StorageError)
+    }
+
     /// Process
     ///
     /// Process a deserialized KERI message

@@ -198,6 +198,13 @@ pub trait EventDatabase {
         signer: &IdentifierPrefix,
         sig: &AttachedSignaturePrefix,
     ) -> Result<(), Self::Error>;
+
+    fn has_receipt(
+        &self,
+        pref: &IdentifierPrefix,
+        sn: u64,
+        validator: &IdentifierPrefix,
+    ) -> Result<bool, Self::Error>;
 }
 
 pub(crate) fn test_db<D: EventDatabase>(db: D) -> Result<(), D::Error> {
