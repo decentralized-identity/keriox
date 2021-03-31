@@ -71,6 +71,33 @@ impl<D: EventDatabase> EventProcessor<D> {
         Ok(Some(state))
     }
 
+    /// Compute State for Prefix and sn
+    ///
+    /// Returns the State associated with the given
+    /// Prefix after applying event of given sn.
+    pub fn compute_state_at_sn(
+        &self,
+        id: &IdentifierPrefix,
+        sn: u64,
+    ) -> Result<Option<IdentifierState>, Error> {
+        let mut state = IdentifierState::default();
+        for sn in 0..sn + 1 {
+            let raw = match self
+                .db
+                .last_event_at_sn(id, sn)
+                .map_err(|_| Error::StorageError)?
+            {
+                Some(r) => r,
+                // There is no event for sn
+                None => return Ok(None),
+            };
+            // update state
+            let parsed = message(&raw).map_err(|_| Error::DeserializationError)?.1;
+            state = state.clone().apply(&parsed.event)?;
+        }
+        Ok(Some(state))
+    }
+
     /// Get last establishment event seal for Prefix
     ///
     /// Returns the EventSeal of last establishment event

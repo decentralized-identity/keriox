@@ -210,4 +210,8 @@ impl<D: EventDatabase, K: KeyManager> Keri<D, K> {
     ) -> Result<Option<IdentifierState>, Error> {
         self.processor.compute_state(prefix)
     }
+
+    pub fn get_state_for_seal(&self, seal: &EventSeal) -> Result<Option<IdentifierState>, Error> {
+        self.processor.compute_state_at_sn(&seal.prefix, seal.sn)
+    }
 }
