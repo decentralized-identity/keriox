@@ -14,7 +14,7 @@ use crate::{
         parse::{signed_event_stream, Deserialized},
     },
     prefix::AttachedSignaturePrefix,
-    prefix::{IdentifierPrefix},
+    prefix::IdentifierPrefix,
     processor::EventProcessor,
     signer::KeyManager,
     state::IdentifierState,
@@ -139,52 +139,49 @@ impl<D: EventDatabase, K: KeyManager> Keri<D, K> {
         let response: Vec<u8> = processed_ok
             .into_iter()
             .map(Result::unwrap)
-            .map(|des_event| match des_event {
-                Deserialized::Event(ev) => {
-                    let mut buf = vec![];
-                    if let EventData::Icp(_) = ev.event.event.event.event_data {
-                        if !self
-                            .processor
-                            .has_receipt(&self.prefix, 0, &ev.event.event.event.prefix)
-                            .unwrap()
-                        {
-                            buf.append(&mut self.processor.get_kerl(&self.prefix).unwrap().unwrap())
+            .map(|des_event| -> Result<Vec<u8>, Error> {
+                match des_event {
+                    Deserialized::Event(ev) => {
+                        let mut buf = vec![];
+                        if let EventData::Icp(_) = ev.event.event.event.event_data {
+                            if !self.processor.has_receipt(
+                                &self.prefix,
+                                0,
+                                &ev.event.event.event.prefix,
+                            )? {
+                                buf.append(
+                                    &mut self
+                                        .processor
+                                        .get_kerl(&self.prefix)?
+                                        .ok_or(Error::SemanticError("KEL is empty".into()))?,
+                                )
+                            }
                         }
+                        buf.append(&mut self.make_rct(ev.event.event.clone())?.serialize()?);
+                        Ok(buf)
                     }
-                    buf.append(
-                        &mut self
-                            .make_rct(ev.event.event.clone())
-                            .unwrap()
-                            .serialize()
-                            .unwrap(),
-                    );
-                    buf
+                    _ => Ok(vec![]),
                 }
-                _ => vec![],
             })
+            .filter_map(|x| x.ok())
             .flatten()
             .collect();
-
         Ok(response)
     }
 
     fn make_rct(&self, event: EventMessage) -> Result<SignedEventMessage, Error> {
         let ser = event.serialize()?;
         let signature = self.key_manager.sign(&ser)?;
-        let state = self
+        let validator_event_seal = self
             .processor
-            .compute_state(&self.prefix)?
-            .ok_or(Error::SemanticError("There is no state".into()))?;
+            .get_last_establishment_event_seal(&self.prefix)?
+            .ok_or(Error::SemanticError("No establishment event seal".into()))?;
         let rcp = Event {
             prefix: event.event.prefix,
             sn: event.event.sn,
             event_data: EventData::Vrc(ReceiptTransferable {
                 receipted_event_digest: SelfAddressing::Blake3_256.derive(&ser),
-                validator_seal: EventSeal {
-                    prefix: self.prefix.clone(),
-                    sn: state.sn,
-                    event_digest: SelfAddressing::Blake3_256.derive(&state.last),
-                },
+                validator_seal: validator_event_seal,
             }),
         }
         .to_message(SerializationFormats::JSON)?
@@ -193,7 +190,6 @@ impl<D: EventDatabase, K: KeyManager> Keri<D, K> {
             signature,
             0,
         )]);
-
         self.processor
             .process(signed_message(&rcp.serialize()?).unwrap().1)?;
 
