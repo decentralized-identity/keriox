@@ -5,7 +5,7 @@ use crate::{
     event::{
         event_data::EventData,
         sections::{
-            seal::{LocationSeal, Seal},
+            seal::{EventSeal, LocationSeal, Seal},
             KeyConfig,
         },
     },
@@ -69,6 +69,76 @@ impl<D: EventDatabase> EventProcessor<D> {
         }
 
         Ok(Some(state))
+    }
+
+    /// Compute State for Prefix and sn
+    ///
+    /// Returns the State associated with the given
+    /// Prefix after applying event of given sn.
+    pub fn compute_state_at_sn(
+        &self,
+        id: &IdentifierPrefix,
+        sn: u64,
+    ) -> Result<Option<IdentifierState>, Error> {
+        let mut state = IdentifierState::default();
+        for sn in 0..sn + 1 {
+            let raw = match self
+                .db
+                .last_event_at_sn(id, sn)
+                .map_err(|_| Error::StorageError)?
+            {
+                Some(r) => r,
+                // There is no event for sn
+                None => return Ok(None),
+            };
+            // update state
+            let parsed = message(&raw).map_err(|_| Error::DeserializationError)?.1;
+            state = state.clone().apply(&parsed.event)?;
+        }
+        Ok(Some(state))
+    }
+
+    /// Get last establishment event seal for Prefix
+    ///
+    /// Returns the EventSeal of last establishment event
+    /// from KEL of given Prefix.
+    pub fn get_last_establishment_event_seal(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Option<EventSeal>, Error> {
+        let mut state = IdentifierState::default();
+        let mut last_est = None;
+        for sn in 0.. {
+            let raw = match self
+                .db
+                .last_event_at_sn(id, sn)
+                .map_err(|_| Error::StorageError)?
+            {
+                Some(raw) => raw,
+                None => {
+                    // end of kel
+                    break;
+                }
+            };
+            // parse event
+            let parsed = message(&raw).map_err(|_| Error::DeserializationError)?.1;
+            state = state.clone().apply(&parsed.event)?;
+
+            last_est = match parsed.event.event.event_data {
+                EventData::Icp(_) => Some(parsed.event),
+                EventData::Rot(_) => Some(parsed.event),
+                _ => last_est,
+            }
+        }
+        let seal = last_est.and_then(|event| {
+            let event_digest = SelfAddressing::Blake3_256.derive(&event.serialize().unwrap());
+            Some(EventSeal {
+                prefix: event.event.prefix,
+                sn: event.event.sn,
+                event_digest,
+            })
+        });
+        Ok(seal)
     }
 
     /// Get KERL for Prefix
@@ -325,7 +395,7 @@ impl<D: EventDatabase> EventProcessor<D> {
                                         &r.validator_seal.prefix,
                                         &sig,
                                     )
-                                    .map_err(|_| Error::StorageError);
+                                    .map_err(|_| Error::StorageError)?;
                             }
                         } else {
                             Err(Error::SemanticError("Incorrect receipt signatures".into()))?;

@@ -10,7 +10,7 @@ use crate::{
 use crate::{
     event_message::{
         parse,
-        parse::{signed_message, Deserialized},
+        parse::{signed_event_stream, signed_message, Deserialized},
     },
     prefix::IdentifierPrefix,
 };
@@ -299,6 +299,46 @@ fn test_validate_seal() -> Result<(), Error> {
     assert!(event_processor
         .validate_seal(seal, dip_raw.as_bytes())
         .is_ok());
+
+    Ok(())
+}
+
+#[test]
+fn test_compute_state_at_sn() -> Result<(), Error> {
+    use crate::database::lmdb::LmdbEventDatabase;
+    use crate::event::sections::seal::EventSeal;
+    use tempfile::Builder;
+
+    // Create test db and event processor.
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    fs::create_dir_all(root.path()).unwrap();
+    let db = LmdbEventDatabase::new(root.path()).unwrap();
+    let event_processor = EventProcessor::new(db);
+
+    let kerl_str = br#"{"v":"KERI10JSON0000e6_","i":"Dw6a91H7DSGKViP5rXvq3ToosLbsD9EQvwEAP2h4fp5w","s":"0","t":"icp","kt":"1","k":["Dw6a91H7DSGKViP5rXvq3ToosLbsD9EQvwEAP2h4fp5w"],"n":"EASFIEHtrEl7m-4L4_6fLUwE8VSsWVyw_2si5vb4jnrk","wt":"0","w":[],"c":[]}-AABAAttCGUqzUu8rQPl9TkPzs-MuczytlwI6XUekUeoa6waaY9hHWPpetFJ5M0zjEdFUR1s0kN0U5n-jyk-r-K0vUDg{"v":"KERI10JSON000122_","i":"Dw6a91H7DSGKViP5rXvq3ToosLbsD9EQvwEAP2h4fp5w","s":"1","t":"rot","p":"EuCdQ84sUCImYeXgfDcoIPYW1pQ6WBBIQHAfyGRKGN4Q","kt":"1","k":["DoCl1sPSeuzGoLQ_83qHtuZeAVThLu13kb4k23FkVDOg"],"n":"EiFDXLjMHWktBaDptBlmWvarRGO2G--7eUUllWwYJDyE","wt":"0","wr":[],"wa":[],"a":[]}-AABAAMg3D1oTUIuaDymERF-zD6tF1r9EatcOTcRQ1EQEV1h9CQoBSqfasfQBymyJDo2IOPA5hqirLqMfajZSoTgKZAg{"v":"KERI10JSON000122_","i":"Dw6a91H7DSGKViP5rXvq3ToosLbsD9EQvwEAP2h4fp5w","s":"2","t":"rot","p":"EA31ALscbTvnpsA0Uhl9euQYm9bVmHtNvP8I3Ctz8RGM","kt":"1","k":["DGTEck3tn-RmmvVpQb9YJyXSkTVrW8umwUzXQbsDDo3s"],"n":"E3bqoGXtOr6blxbatLZkv9g-Eap0247DOJh4jD81H4g4","wt":"0","wr":[],"wa":[],"a":[]}-AABAAoQCoJb3adFGNXHE9TF-e_efDGu1BJPQyCHZr6kHc1tYp0olKfdKAcYIN_JSGgtLMYKwswLq__KYIRtMfg-U4Bg{"v":"KERI10JSON0000cc_","i":"Dw6a91H7DSGKViP5rXvq3ToosLbsD9EQvwEAP2h4fp5w","s":"3","t":"ixn","p":"EIdLcIxlYfZuk20iUXuWLDVi8wXuGU38yvBIu-Ac_2w8","a":[{"d":"Ey9J7Ef2rjpSot3EahpwllhDzUWRynt7Z_J5TG_5OZS8"}]}-AABAA3yC6xkpug37v9Wkh5ctejpjYzPArAbnk70_HQ4CaeCzFbuu8KJhqkkH2voSLBqntU9AGrKMALjrsyXN9JVBCDQ{"v":"KERI10JSON000122_","i":"Dw6a91H7DSGKViP5rXvq3ToosLbsD9EQvwEAP2h4fp5w","s":"4","t":"rot","p":"EF5TFIpq4u_8DCu8CRqcJ_naeQ0Gj5URqjLkRYozTvbE","kt":"1","k":["DLngmY2lz5xtBJ3K8vzwDVnp2_57GOXS7Eph9ainHBm4"],"n":"Egq_ChqsiVDfFBMJSdqsJEGBu35pjYrsr59IHLLfw5Es","wt":"0","wr":[],"wa":[],"a":[]}-AABAAL6jWv7NkOEiqV59Z7DWva0RwL64xwgV8TeNRl-ucYj6bQyVWamL42742C3_s8ZYBte5zQq15pvFU8E3JfDO0CQ"#;
+    // Process kerl
+    signed_event_stream(kerl_str)
+        .map_err(|_| Error::DeserializationError)?
+        .1
+        .into_iter()
+        .for_each(|event| {
+            event_processor
+                .process(event.clone()).unwrap();
+        });
+
+    let event_seal = EventSeal {
+        prefix: "Dw6a91H7DSGKViP5rXvq3ToosLbsD9EQvwEAP2h4fp5w".parse()?,
+        sn: 2,
+        event_digest: "EIdLcIxlYfZuk20iUXuWLDVi8wXuGU38yvBIu-Ac_2w8".parse()?,
+    };
+
+    let state_at_sn = event_processor
+        .compute_state_at_sn(&event_seal.prefix, event_seal.sn)?
+        .unwrap();
+    assert_eq!(state_at_sn.sn, event_seal.sn);
+    assert_eq!(state_at_sn.prefix, event_seal.prefix);
+    let ev_dig = event_seal.event_digest.derivation.derive(&state_at_sn.last);
+    assert_eq!(event_seal.event_digest, ev_dig);
 
     Ok(())
 }
