@@ -1,7 +1,7 @@
 use super::DerivationCode;
-use crate::{error::Error, prefix::BasicPrefix};
+use crate::{error::Error, prefix::BasicPrefix, keys::KeriPublicKey};
 use core::str::FromStr;
-pub use ursa::keys::PublicKey;
+use std::rc::Rc;
 
 /// Basic Derivations
 ///
@@ -19,7 +19,7 @@ pub enum Basic {
 }
 
 impl Basic {
-    pub fn derive(&self, public_key: PublicKey) -> BasicPrefix {
+    pub fn derive(&self, public_key: Rc<dyn KeriPublicKey>) -> BasicPrefix {
         BasicPrefix::new(*self, public_key)
     }
 }

@@ -1,42 +1,29 @@
-use ursa::{
-    keys::{PrivateKey, PublicKey},
-    signatures::{ed25519, SignatureScheme},
-};
-
-use crate::{
-    derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
-    error::Error,
-    event::sections::nxt_commitment,
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
-    state::IdentifierState,
-};
-
+use std::rc::Rc;
+use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning}, error::Error, event::sections::nxt_commitment, keys::{KeriPublicKey, KeriSecretKey, KeriSignerKey, sk_try_from_secret}, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix}, state::IdentifierState};
+use ed25519_dalek::Keypair;
+use k256::elliptic_curve::rand_core::OsRng;
 use super::event_msg_builder::{EventMsgBuilder, EventType};
 
 /// Collects data for testing `IdentifierState` update. `prev_event_hash`, `sn`,
 /// `current_keypair` and `new_keypair` are used to generate mock event message
 /// of given type, `keys_history` is used to check if any keypair used earlier
 /// in event message sequence can verify current message.
-#[derive(Debug)]
 pub struct TestStateData {
     state: IdentifierState,
     prefix: IdentifierPrefix,
     keys_history: Vec<BasicPrefix>,
     prev_event_hash: SelfAddressingPrefix,
     sn: u64,
-    current_keypair: (PublicKey, PrivateKey),
-    new_keypair: (PublicKey, PrivateKey),
+    current_keypair: (Rc<dyn KeriPublicKey>, Rc<dyn KeriSecretKey>),
+    new_keypair: (Rc<dyn KeriPublicKey>, Rc<dyn KeriSecretKey>),
 }
 
 /// Create initial `TestStateData`, before application of any Event.
 /// Provides only keypair for next event.
 fn get_initial_test_data() -> Result<TestStateData, Error> {
-    let ed = ed25519::Ed25519Sha512::new();
-
-    // Get initial ed25519 keypair.
-    let keypair = ed
-        .keypair(Option::None)
-        .map_err(|e| Error::CryptoError(e))?;
+    let keypair = Keypair::generate(&mut OsRng);
+    let pk: Rc<dyn KeriPublicKey> = Rc::new(keypair.public);
+    let sk: Rc<dyn KeriSecretKey> = Rc::new(keypair.secret);
 
     Ok(TestStateData {
         state: IdentifierState::default(),
@@ -44,8 +31,8 @@ fn get_initial_test_data() -> Result<TestStateData, Error> {
         keys_history: vec![],
         prev_event_hash: SelfAddressingPrefix::default(),
         sn: 0,
-        current_keypair: keypair.clone(),
-        new_keypair: keypair.clone(),
+        current_keypair: (pk, sk),
+        new_keypair: (pk, sk),
     })
 }
 
@@ -60,19 +47,18 @@ fn test_update_identifier_state(
     let (mut next_pk, mut next_sk) = state_data.new_keypair;
 
     // If event is establishment event, rotate keypair.
-    let ed = ed25519::Ed25519Sha512::new();
     if event_type.is_establishment_event() {
-        cur_pk = next_pk.clone();
-        cur_sk = next_sk.clone();
-        let next_keypair = ed
-            .keypair(Option::None)
-            .map_err(|e| Error::CryptoError(e))?;
-        next_pk = next_keypair.0;
-        next_sk = next_keypair.1;
+        cur_pk = next_pk;
+        cur_sk = next_sk;
+        let keypair = Keypair::generate(&mut OsRng);
+        let pk: Rc<dyn KeriPublicKey> = Rc::new(keypair.public);
+        let sk: Rc<dyn KeriSecretKey> = Rc::new(keypair.secret);
+        next_pk = pk;
+        next_sk = sk;
     };
 
-    let current_key_pref = Basic::Ed25519.derive(cur_pk.clone());
-    let next_key_prefix = Basic::Ed25519.derive(next_pk.clone());
+    let current_key_pref = Basic::Ed25519.derive(cur_pk);
+    let next_key_prefix = Basic::Ed25519.derive(next_pk);
     let next_dig = nxt_commitment(1, &[next_key_prefix.clone()], SelfAddressing::Blake3_256);
 
     // Build event msg of given type.
@@ -90,7 +76,8 @@ fn test_update_identifier_state(
 
     let attached_sig = {
         // Sign.
-        let sig = ed.sign(&sed, &cur_sk).map_err(|e| Error::CryptoError(e))?;
+        let signer: Rc<dyn KeriSignerKey> = sk_try_from_secret(cur_sk)?;
+        let sig = signer.sign(&sed)?;
         AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig, 0)
     };
 

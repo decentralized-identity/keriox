@@ -79,9 +79,7 @@ impl<'de> Deserialize<'de> for AttachedSignaturePrefix {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::derivation::{
-        attached_signature_code::AttachedSignatureCode, self_signing::SelfSigning,
-    };
+    use crate::derivation::self_signing::SelfSigning;
 
     #[test]
     fn deserialize() -> Result<(), Error> {

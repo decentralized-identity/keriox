@@ -1,20 +1,19 @@
-use crate::{error::Error, prefix::SeedPrefix};
-use ursa::{
-    keys::{PrivateKey, PublicKey},
-    signatures::{ed25519, SignatureScheme},
-};
+use std::rc::Rc;
+use crate::{error::Error, keys::{KeriPublicKey, KeriSignerKey, pk_into_vk, vk_into_pk}, prefix::SeedPrefix};
+use ed25519_dalek::{PublicKey, SecretKey, Keypair};
+use k256::elliptic_curve::rand_core::OsRng;
 
 pub trait KeyManager {
     fn sign(&self, msg: &Vec<u8>) -> Result<Vec<u8>, Error>;
-    fn public_key(&self) -> PublicKey;
-    fn next_public_key(&self) -> PublicKey;
+    fn public_key(&self) -> Rc<dyn KeriPublicKey>;
+    fn next_public_key(&self) -> Rc<dyn KeriPublicKey>;
     fn rotate(&mut self) -> Result<(), Error>;
 }
 
 pub struct CryptoBox {
     signer: Signer,
-    next_priv_key: PrivateKey,
-    pub next_pub_key: PublicKey,
+    next_priv_key: Rc<dyn KeriSignerKey>,
+    pub next_pub_key: Rc<dyn KeriPublicKey>,
     seeds: Vec<String>,
 }
 
@@ -23,12 +22,12 @@ impl KeyManager for CryptoBox {
         self.signer.sign(msg)
     }
 
-    fn public_key(&self) -> PublicKey {
-        self.signer.pub_key.clone()
+    fn public_key(&self) -> Rc<dyn KeriPublicKey> {
+        self.signer.pub_key
     }
 
-    fn next_public_key(&self) -> PublicKey {
-        self.next_pub_key.clone()
+    fn next_public_key(&self) -> Rc<dyn KeriPublicKey> {
+        self.next_pub_key
     }
 
     fn rotate(&mut self) -> Result<(), Error> {
@@ -38,31 +37,33 @@ impl KeyManager for CryptoBox {
                 self.seeds = next_seeds.to_vec();
                 next_secret.derive_key_pair()?
             } else {
-                let ed = ed25519::Ed25519Sha512::new();
-                ed.keypair(None).map_err(|e| Error::CryptoError(e))?
+                let kp = Keypair::generate(&mut OsRng{});
+                let vk: Rc<dyn KeriPublicKey> = Rc::new(kp.public);
+                let sk: Rc<dyn KeriSignerKey> = Rc::new(kp.secret);
+                (pk_into_vk(vk), sk)
             };
 
         let new_signer = Signer {
-            priv_key: self.next_priv_key.clone(),
-            pub_key: self.next_pub_key.clone(),
+            priv_key: self.next_priv_key,
+            pub_key: self.next_pub_key,
         };
         self.signer = new_signer;
         self.next_priv_key = next_priv_key;
-        self.next_pub_key = next_pub_key;
+        self.next_pub_key = vk_into_pk(next_pub_key);
 
         Ok(())
     }
 }
-
+//#[cfg(feature = "demo")]
 impl CryptoBox {
     pub fn new() -> Result<Self, Error> {
-        let ed = ed25519::Ed25519Sha512::new();
         let signer = Signer::new()?;
-        let (next_pub_key, next_priv_key) = ed.keypair(None).map_err(|e| Error::CryptoError(e))?;
+        let kp = Keypair::generate(&mut OsRng{});
+        let (next_pub_key, next_priv_key) = (kp.public, kp.secret);
         Ok(CryptoBox {
             signer,
-            next_pub_key,
-            next_priv_key,
+            next_pub_key: Rc::new(next_pub_key),
+            next_priv_key: Rc::new(next_priv_key),
             seeds: vec![],
         })
     }
@@ -70,12 +71,13 @@ impl CryptoBox {
     pub fn derive_from_seed(seeds: &[&str]) -> Result<Self, Error> {
         let (pub_key, priv_key) = match seeds.get(0) {
             Some(secret) => {
-                let seed: SeedPrefix = secret.parse()?;
-                seed.derive_key_pair()?
+                let secret = SecretKey::from_bytes(secret.as_bytes())
+                    .map_err(|e| Error::SemanticError("failed to convert provided seet to SecretKey".into()))?;
+                let public = PublicKey::from(&secret);
+                (public, secret)
             }
             None => {
-                let ed = ed25519::Ed25519Sha512::new();
-                ed.keypair(None).map_err(|e| Error::CryptoError(e))?
+               ed_new_public_private()
             }
         };
 
@@ -85,8 +87,10 @@ impl CryptoBox {
                 seed.derive_key_pair()?
             }
             None => {
-                let ed = ed25519::Ed25519Sha512::new();
-                ed.keypair(None).map_err(|e| Error::CryptoError(e))?
+                let (vk, sk) = ed_new_public_private();
+                let vk: Rc<dyn KeriPublicKey> = Rc::new(vk);
+                let sk: Rc<dyn KeriSignerKey> = Rc::new(sk);
+                (pk_into_vk(vk), sk)
             }
         };
 
@@ -98,31 +102,35 @@ impl CryptoBox {
             .collect();
 
         Ok(CryptoBox {
-            signer: Signer { pub_key, priv_key },
-            next_pub_key,
+            signer: Signer { pub_key: Rc::new(pub_key), priv_key: Rc::new(priv_key) },
+            next_pub_key: vk_into_pk(next_pub_key),
             next_priv_key,
-            seeds: seeds,
+            seeds,
         })
     }
 }
 
 struct Signer {
-    priv_key: PrivateKey,
-    pub pub_key: PublicKey,
+    priv_key: Rc<dyn KeriSignerKey>,
+    pub pub_key: Rc<dyn KeriPublicKey>,
 }
 
 impl Signer {
     pub fn new() -> Result<Self, Error> {
-        let ed = ed25519::Ed25519Sha512::new();
-        let (pub_key, priv_key) = ed.keypair(None).map_err(|e| Error::CryptoError(e))?;
+        let ed = Keypair::generate(&mut OsRng);
+        let pub_key: Rc<dyn KeriPublicKey> = Rc::new(ed.public);
+        let priv_key: Rc<dyn KeriSignerKey> = Rc::new(ed.secret);
 
         Ok(Signer { pub_key, priv_key })
     }
 
     pub fn sign(&self, msg: &Vec<u8>) -> Result<Vec<u8>, Error> {
-        let signature = ed25519::Ed25519Sha512::new()
-            .sign(&msg, &self.priv_key)
-            .map_err(|e| Error::CryptoError(e))?;
-        Ok(signature)
+        self.priv_key.sign(msg)
     }
 }
+
+fn ed_new_public_private() -> (PublicKey, SecretKey) {
+    let kp = Keypair::generate(&mut OsRng{});
+    (kp.public, kp.secret)
+}
+

@@ -16,7 +16,13 @@ lmdb = ["rkv", "bincode"]
 default = ["lmdb"]
 
 [dependencies]
-ursa = { git = "https://github.com/hyperledger/ursa", rev = "d4af8efd", default-features = false, features = ["portable"]}
+ed25519-dalek = "1"
+k256 = { version = "0.7.2", features = ["ecdsa", "sha256"] }
+chacha20poly1305 = "0.7"
+blake2 = "0.9.1"
+sha2 = "0.9.3"
+sha3 = "0.9.1"
+rand = "0.8"
 base64 = "0.12"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -29,6 +35,7 @@ ryu = "1.0"
 blake3 = { version = "0.3", default-features = false }
 chrono = "0.4.18"
 rmp-serde = "0.14"
+arrayref = "0.3.6"
 
 rkv = { version = "0.17", optional = true }
 bincode = { version = "1.3.1", optional = true }

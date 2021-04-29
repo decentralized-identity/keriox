@@ -1,7 +1,6 @@
-use std::str::FromStr;
-
-use ursa::signatures::{ed25519, SignatureScheme};
-
+use std::{rc::Rc, str::FromStr};
+use ed25519_dalek::Keypair;
+use k256::elliptic_curve::rand_core::OsRng;
 use crate::{
     derivation::{basic::Basic, self_addressing::SelfAddressing},
     error::Error,
@@ -23,6 +22,7 @@ use crate::{
         Event, EventMessage,
     },
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
+    keys::KeriPublicKey,
 };
 
 pub struct EventMsgBuilder {
@@ -62,9 +62,10 @@ impl EventType {
 
 impl EventMsgBuilder {
     pub fn new(event_type: EventType) -> Result<Self, Error> {
-        let ed = ed25519::Ed25519Sha512::new();
-        let (pk, _sk) = ed.keypair(None).map_err(|e| Error::CryptoError(e))?;
-        let (npk, _nsk) = ed.keypair(None).map_err(|e| Error::CryptoError(e))?;
+        let kp = Keypair::generate(&mut OsRng);
+        let nkp = Keypair::generate(&mut OsRng);
+        let pk: Rc<dyn KeriPublicKey> = Rc::new(kp.public);
+        let npk: Rc<dyn KeriPublicKey> = Rc::new(nkp.public);
         let basic_pref = Basic::Ed25519.derive(pk);
         let dummy_loc_seal = LocationSeal {
             prefix: IdentifierPrefix::from_str("EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM")?,

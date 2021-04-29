@@ -1,21 +1,22 @@
 use super::{verify, Prefix, SelfSigningPrefix};
 use crate::{
     derivation::{basic::Basic, DerivationCode},
+    keys::{KeriPublicKey, try_pk_from_vec},
     error::Error,
 };
 use base64::decode_config;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use ursa::keys::PublicKey;
+use std::rc::Rc;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct BasicPrefix {
     pub derivation: Basic,
-    pub public_key: PublicKey,
+    pub public_key: Rc<dyn KeriPublicKey>,
 }
 
 impl BasicPrefix {
-    pub fn new(code: Basic, public_key: PublicKey) -> Self {
+    pub fn new(code: Basic, public_key: Rc<dyn KeriPublicKey>) -> Self {
         Self {
             derivation: code,
             public_key,
@@ -27,6 +28,12 @@ impl BasicPrefix {
     }
 }
 
+impl PartialEq for BasicPrefix {
+    fn eq(&self, other: &Self) -> bool {
+        *self == *other
+    }
+}
+
 impl FromStr for BasicPrefix {
     type Err = Error;
 
@@ -34,13 +41,15 @@ impl FromStr for BasicPrefix {
         let code = Basic::from_str(s)?;
 
         if s.len() == code.prefix_b64_len() {
-            Ok(Self::new(
-                code,
-                PublicKey(decode_config(
+            let k_vec= decode_config(
                     &s[code.code_len()..code.prefix_b64_len()],
                     base64::URL_SAFE,
-                )?),
-            ))
+                )?;
+            Ok(Self::new(
+                code,
+                try_pk_from_vec(k_vec)?
+                ),
+            )
         } else {
             Err(Error::SemanticError(format!(
                 "Incorrect Prefix Length: {}",
@@ -52,7 +61,7 @@ impl FromStr for BasicPrefix {
 
 impl Prefix for BasicPrefix {
     fn derivative(&self) -> &[u8] {
-        &self.public_key.0
+        &self.public_key.as_bytes()
     }
     fn derivation_code(&self) -> String {
         self.derivation.to_str()

@@ -1,8 +1,13 @@
 use super::Prefix;
-use crate::error::Error;
+use crate::{
+    keys::{KeriVerifyingKey, KeriSignerKey},
+    error::Error,
+};
+use k256::ecdsa::{SigningKey, VerifyingKey};
+use ed25519_dalek::{PublicKey, SecretKey};
 use base64::decode_config;
 use core::str::FromStr;
-use ursa::{keys::*, signatures::prelude::*};
+use std::rc::Rc;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum SeedPrefix {
@@ -13,14 +18,18 @@ pub enum SeedPrefix {
 }
 
 impl SeedPrefix {
-    pub fn derive_key_pair(&self) -> Result<(PublicKey, PrivateKey), Error> {
+    pub fn derive_key_pair(&self) -> Result<(Rc<dyn KeriVerifyingKey>, Rc<dyn KeriSignerKey>), Error> {
         match self {
             Self::RandomSeed256Ed25519(seed) => {
-                Ed25519Sha512::expand_keypair(&seed.clone()).map_err(|e| Error::CryptoError(e))
+                let secret = SecretKey::from_bytes(seed)?;
+                let vk: Rc<dyn KeriVerifyingKey> = Rc::new(PublicKey::from(&secret));
+                let sk: Rc<dyn KeriSignerKey> = Rc::new(secret);
+                Ok((vk, sk))
             }
-            Self::RandomSeed256ECDSAsecp256k1(seed) => EcdsaSecp256k1Sha256::new()
-                .keypair(Some(KeyGenOption::UseSeed(seed.clone())))
-                .map_err(|e| Error::CryptoError(e)),
+            Self::RandomSeed256ECDSAsecp256k1(seed) => {
+                let sk = SigningKey::from_bytes(&seed)?;
+                Ok((Rc::new(VerifyingKey::from(&sk)), Rc::new(sk)))
+            }
             _ => Err(Error::ImproperPrefixType),
         }
     }

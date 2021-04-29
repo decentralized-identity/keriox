@@ -41,7 +41,7 @@ impl<D: EventDatabase, K: KeyManager> Keri<D, K> {
             .with_prefix(self.prefix.clone())
             .with_keys(vec![Basic::Ed25519.derive(self.key_manager.public_key())])
             .with_next_keys(vec![
-                Basic::Ed25519.derive(self.key_manager.next_public_key().clone())
+                Basic::Ed25519.derive(self.key_manager.next_public_key())
             ])
             .build()?;
 
@@ -86,7 +86,7 @@ impl<D: EventDatabase, K: KeyManager> Keri<D, K> {
             .with_previous_event(SelfAddressing::Blake3_256.derive(&state.last))
             .with_keys(vec![Basic::Ed25519.derive(self.key_manager.public_key())])
             .with_next_keys(vec![
-                Basic::Ed25519.derive(self.key_manager.next_public_key().clone())
+                Basic::Ed25519.derive(self.key_manager.next_public_key())
             ])
             .build()
     }

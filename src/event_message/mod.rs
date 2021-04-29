@@ -1,8 +1,8 @@
 use crate::{
-    derivation::{attached_signature_code::get_sig_count, self_addressing::SelfAddressing},
+    derivation::{attached_signature_code::get_sig_count},
     error::Error,
     event::{
-        event_data::{inception::InceptionEvent, DelegatedInceptionEvent, DummyEvent, EventData},
+        event_data::{DummyEvent, EventData},
         Event,
     },
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
@@ -219,35 +219,29 @@ pub fn verify_identifier_binding(icp_event: &EventMessage) -> Result<bool, Error
 #[cfg(test)]
 mod tests {
     mod test_utils;
+    use std::rc::Rc;
+
     use self::{event_msg_builder::EventType, test_utils::test_mock_event_sequence};
     use super::*;
-    use crate::{
-        derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
-        event::{
-            event_data::{inception::InceptionEvent, interaction::InteractionEvent, EventData},
+    use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning}, event::{
+            event_data::{inception::InceptionEvent, EventData},
             sections::InceptionWitnessConfig,
             sections::KeyConfig,
-        },
-        prefix::{AttachedSignaturePrefix, IdentifierPrefix, SelfAddressingPrefix},
-    };
-    use serde_json;
-    use ursa::{
-        kex::{x25519, KeyExchangeScheme},
-        signatures::{ed25519, SignatureScheme},
-    };
+        }, keys::{KeriSecretKey, KeriSignerKey, sk_try_from_secret}, prefix::{AttachedSignaturePrefix, IdentifierPrefix}};
+    use k256::elliptic_curve::rand_core::OsRng;
+    use chacha20poly1305::{XChaCha20Poly1305, aead::NewAead};
+    use ed25519_dalek::Keypair;
 
     #[test]
     fn basic_create() -> Result<(), Error> {
         // hi Ed!
-        let ed = ed25519::Ed25519Sha512::new();
+        let kp0 = Keypair::generate(&mut OsRng);
+        let kp1 = Keypair::generate(&mut OsRng);
 
         // get two ed25519 keypairs
-        let (pub_key0, priv_key0) = ed
-            .keypair(Option::None)
-            .map_err(|e| Error::CryptoError(e))?;
-        let (pub_key1, _priv_key1) = ed
-            .keypair(Option::None)
-            .map_err(|e| Error::CryptoError(e))?;
+        let pub_key0 = Rc::new(kp0.public);
+        let priv_key0: Rc<dyn KeriSignerKey> = Rc::new(kp0.secret);
+        let (pub_key1, _priv_key1) = (Rc::new(kp1.public), Rc::new(kp1.secret));
 
         // initial signing key prefix
         let pref0 = Basic::Ed25519.derive(pub_key0);
@@ -273,9 +267,7 @@ mod tests {
         let ser = icp_m.serialize()?;
 
         // sign
-        let sig = ed
-            .sign(&ser, &priv_key0)
-            .map_err(|e| Error::CryptoError(e))?;
+        let sig = priv_key0.sign(&ser)?;
         let attached_sig = AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig, 0);
 
         assert!(pref0.verify(&ser, &attached_sig.signature)?);
@@ -305,28 +297,29 @@ mod tests {
     #[test]
     fn self_addressing_create() -> Result<(), Error> {
         // hi Ed!
-        let ed = ed25519::Ed25519Sha512::new();
+        let kp0 = Keypair::generate(&mut OsRng);
+        let kp1 = Keypair::generate(&mut OsRng);
+        let kp2 = Keypair::generate(&mut OsRng);
+        let kp3 = Keypair::generate(&mut OsRng);
 
-        let (sig_key_0, sig_priv_0) = ed
-            .keypair(Option::None)
-            .map_err(|e| Error::CryptoError(e))?;
-        let (sig_key_1, sig_priv_1) = ed
-            .keypair(Option::None)
-            .map_err(|e| Error::CryptoError(e))?;
+        // get two ed25519 keypairs
+        let pub_key0 = Rc::new(kp0.public);
+        let priv_key0: Rc<dyn KeriSecretKey> = Rc::new(kp0.secret);
+        let (pub_key1, sig_key_1) = (Rc::new(kp1.public), Rc::new(kp1.secret));
 
         // hi X!
-        let x = x25519::X25519Sha256::new();
+        let x = XChaCha20Poly1305::new((&priv_key0.into_bytes()[..]).into());
 
         // get two X25519 keypairs
-        let (enc_key_0, enc_priv_0) = x.keypair(Option::None).map_err(|e| Error::CryptoError(e))?;
-        let (enc_key_1, enc_priv_1) = x.keypair(Option::None).map_err(|e| Error::CryptoError(e))?;
+        let (enc_key_0, enc_priv_0) = (Rc::new(kp2.public), Rc::new(kp2.secret));
+        let (enc_key_1, enc_priv_1) = (Rc::new(kp2.public), Rc::new(kp2.secret));
 
         // initial key set
-        let sig_pref_0 = Basic::Ed25519.derive(sig_key_0);
+        let sig_pref_0 = Basic::Ed25519.derive(pub_key0);
         let enc_pref_0 = Basic::X25519.derive(enc_key_0);
 
         // next key set
-        let sig_pref_1 = Basic::Ed25519.derive(sig_key_1);
+        let sig_pref_1 = Basic::Ed25519.derive(pub_key1);
         let enc_pref_1 = Basic::X25519.derive(enc_key_1);
 
         // next key set pre-commitment
@@ -351,9 +344,8 @@ mod tests {
         let serialized = icp.serialize()?;
 
         // sign
-        let sig = ed
-            .sign(&serialized, &sig_priv_0)
-            .map_err(|e| Error::CryptoError(e))?;
+        let sk: Rc<dyn KeriSignerKey> = sk_try_from_secret(priv_key0)?;
+        let sig = sk.sign(&serialized)?;
         let attached_sig = AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig, 0);
 
         assert!(sig_pref_0.verify(&serialized, &attached_sig.signature)?);
