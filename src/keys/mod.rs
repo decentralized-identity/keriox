@@ -22,9 +22,8 @@ use std::{convert::TryInto, fmt::Debug, rc::Rc};
 pub(crate) trait KeriSecretKey {
     fn into_bytes(&self) -> Vec<u8>;
 }
-pub(crate) trait KeriPublicKey: Debug {
+pub trait KeriPublicKey: Debug {
     fn into_bytes(&self) -> Vec<u8>;
-    fn as_bytes(&self) -> &[u8];
 }
 
 pub(crate) fn try_pk_from_vec(slice: Vec<u8>) -> Result<Rc<dyn KeriPublicKey>, Error> {
@@ -34,7 +33,7 @@ pub(crate) fn try_pk_from_vec(slice: Vec<u8>) -> Result<Rc<dyn KeriPublicKey>, E
     }
 }
 
-pub(crate) trait KeriSignerKey {
+pub trait KeriSignerKey {
     fn into_bytes(&self) -> Vec<u8>;
     fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
         match SigningKey::from_bytes(&self.into_bytes()) {
@@ -63,7 +62,7 @@ impl KeriSignerKey for SecretKey {
         self.as_bytes().to_vec()
     }
 }
-pub(crate) trait KeriVerifyingKey: Debug {
+pub trait KeriVerifyingKey: Debug {
     fn into_bytes(&self) -> Vec<u8>;
     fn verify(&self, msg: &[u8], signature: &[u8]) -> bool {
         match VerifyingKey::from_sec1_bytes(&self.into_bytes()) {
@@ -121,16 +120,10 @@ impl KeriPublicKey for VerifyingKey {
     fn into_bytes(&self) -> Vec<u8> {
         self.to_bytes().to_vec()
     }
-    fn as_bytes(&self) -> &[u8] {
-        &self.to_bytes()
-    }
 }
 impl KeriPublicKey for PublicKey {
     fn into_bytes(&self) -> Vec<u8> {
         self.to_bytes().to_vec()
-    }
-    fn as_bytes(&self) -> &[u8] {
-        &self.to_bytes()
     }
 }
 

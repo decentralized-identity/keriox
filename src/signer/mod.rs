@@ -23,11 +23,11 @@ impl KeyManager for CryptoBox {
     }
 
     fn public_key(&self) -> Rc<dyn KeriPublicKey> {
-        self.signer.pub_key
+        Rc::clone(&self.signer.pub_key)
     }
 
     fn next_public_key(&self) -> Rc<dyn KeriPublicKey> {
-        self.next_pub_key
+        Rc::clone(&self.next_pub_key)
     }
 
     fn rotate(&mut self) -> Result<(), Error> {
@@ -44,8 +44,8 @@ impl KeyManager for CryptoBox {
             };
 
         let new_signer = Signer {
-            priv_key: self.next_priv_key,
-            pub_key: self.next_pub_key,
+            priv_key: Rc::clone(&self.next_priv_key),
+            pub_key: Rc::clone(&self.next_pub_key),
         };
         self.signer = new_signer;
         self.next_priv_key = next_priv_key;
@@ -72,7 +72,7 @@ impl CryptoBox {
         let (pub_key, priv_key) = match seeds.get(0) {
             Some(secret) => {
                 let secret = SecretKey::from_bytes(secret.as_bytes())
-                    .map_err(|e| Error::SemanticError("failed to convert provided seet to SecretKey".into()))?;
+                    .map_err(|_| Error::SemanticError("failed to convert provided seet to SecretKey".into()))?;
                 let public = PublicKey::from(&secret);
                 (public, secret)
             }

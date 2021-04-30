@@ -2,7 +2,6 @@ use super::Prefix;
 use crate::{
     derivation::{self_signing::SelfSigning, DerivationCode},
     error::Error,
-    prefix::AttachedSignaturePrefix,
 };
 use base64::decode_config;
 use core::str::FromStr;
@@ -44,8 +43,8 @@ impl FromStr for SelfSigningPrefix {
 }
 
 impl Prefix for SelfSigningPrefix {
-    fn derivative(&self) -> &[u8] {
-        &self.signature
+    fn derivative(&self) -> Vec<u8> {
+        self.signature.to_owned()
     }
     fn derivation_code(&self) -> String {
         self.derivation.to_str()

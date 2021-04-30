@@ -65,12 +65,12 @@ impl FromStr for SeedPrefix {
 }
 
 impl Prefix for SeedPrefix {
-    fn derivative(&self) -> &[u8] {
+    fn derivative(&self) -> Vec<u8> {
         match self {
-            Self::RandomSeed256Ed25519(seed) => &seed,
-            Self::RandomSeed256ECDSAsecp256k1(seed) => &seed,
-            Self::RandomSeed448(seed) => &seed,
-            Self::RandomSeed128(seed) => &seed,
+            Self::RandomSeed256Ed25519(seed) => seed.to_owned(),
+            Self::RandomSeed256ECDSAsecp256k1(seed) => seed.to_owned(),
+            Self::RandomSeed448(seed) => seed.to_owned(),
+            Self::RandomSeed128(seed) => seed.to_owned(),
         }
     }
     fn derivation_code(&self) -> String {

@@ -53,7 +53,7 @@ impl InceptionEvent {
         EventMessage::new(
             Event {
                 prefix: IdentifierPrefix::SelfAddressing(derivation.derive(
-                    &DummyEvent::derive_inception_data(self.clone(), derivation, format)?,
+                    &DummyEvent::derive_inception_data(self.clone(), &derivation, format)?,
                 )),
                 sn: 0,
                 event_data: EventData::Icp(self),

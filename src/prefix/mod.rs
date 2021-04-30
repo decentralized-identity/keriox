@@ -18,7 +18,7 @@ pub use self_addressing::SelfAddressingPrefix;
 pub use self_signing::SelfSigningPrefix;
 
 pub trait Prefix: FromStr<Err = Error> {
-    fn derivative(&self) -> &[u8];
+    fn derivative(&self) -> Vec<u8>;
     fn derivation_code(&self) -> String;
     fn to_str(&self) -> String {
         // empty data cannot be prefixed!
@@ -54,7 +54,7 @@ impl FromStr for IdentifierPrefix {
 }
 
 impl Prefix for IdentifierPrefix {
-    fn derivative(&self) -> &[u8] {
+    fn derivative(&self) -> Vec<u8> {
         match self {
             Self::Basic(bp) => bp.derivative(),
             Self::SelfAddressing(sap) => sap.derivative(),

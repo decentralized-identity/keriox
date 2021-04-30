@@ -30,7 +30,8 @@ impl BasicPrefix {
 
 impl PartialEq for BasicPrefix {
     fn eq(&self, other: &Self) -> bool {
-        *self == *other
+        self.derivation == other.derivation &&
+        self.public_key.into_bytes() == other.public_key.into_bytes()
     }
 }
 
@@ -60,8 +61,8 @@ impl FromStr for BasicPrefix {
 }
 
 impl Prefix for BasicPrefix {
-    fn derivative(&self) -> &[u8] {
-        &self.public_key.as_bytes()
+    fn derivative(&self) -> Vec<u8> {
+        self.public_key.into_bytes()
     }
     fn derivation_code(&self) -> String {
         self.derivation.to_str()

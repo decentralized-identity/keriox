@@ -46,8 +46,8 @@ impl FromStr for AttachedSignaturePrefix {
 }
 
 impl Prefix for AttachedSignaturePrefix {
-    fn derivative(&self) -> &[u8] {
-        &self.signature.signature
+    fn derivative(&self) -> Vec<u8> {
+        self.signature.signature.to_vec()
     }
     fn derivation_code(&self) -> String {
         AttachedSignatureCode::new(self.signature.derivation, self.index).to_str()
