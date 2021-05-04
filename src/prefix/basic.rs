@@ -1,9 +1,8 @@
 use super::{verify, Prefix, SelfSigningPrefix};
-use crate::{derivation::{DerivationCode, basic::Basic, self_signing::SelfSigning}, error::Error, keys::Key};
+use crate::{derivation::{DerivationCode, basic::Basic}, error::Error, keys::Key};
 use base64::decode_config;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct BasicPrefix {
@@ -106,12 +105,6 @@ fn serialize_deserialize() {
 
     assert!(deserialized.is_ok());
     assert_eq!(bp, deserialized.unwrap());
-
-  //  let bp_s = bp.to_str();
-  //  let mut b_deserialized = serde_json::Deserializer::from_slice(&bp_s.as_bytes()).into_iter::<BasicPrefix>();
-  //  let bp_deserialized = b_deserialized.next();
-  //  assert!(bp_deserialized.is_some());
-  //  assert_eq!(bp, bp_deserialized.unwrap().unwrap());
 }
 
 #[test]
@@ -124,7 +117,7 @@ fn to_from_string() {
     let signer = Key::new(kp.secret.to_bytes().to_vec());
 
     let message = b"hello there";
-    let sig = SelfSigningPrefix::new(SelfSigning::Ed25519Sha512, 
+    let sig = SelfSigningPrefix::new(crate::derivation::self_signing::SelfSigning::Ed25519Sha512, 
         signer.sign_ed(message).unwrap());
 
     let bp = BasicPrefix {

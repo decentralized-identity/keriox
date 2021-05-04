@@ -95,7 +95,8 @@ fn test_update_identifier_state(
     // keys can verify message and signature.
     if event_type.is_establishment_event() {
         for old_key in state_data.keys_history.clone() {
-            assert!(old_key.verify(&sed, &attached_sig.signature).is_err())
+            let ver = old_key.verify(&sed, &attached_sig.signature);
+            assert!(ver.is_err() || !ver.unwrap())
         }
     };
 

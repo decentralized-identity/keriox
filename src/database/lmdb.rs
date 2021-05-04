@@ -11,7 +11,7 @@ use chrono::prelude::*;
 use rkv::{
     backend::{BackendEnvironmentBuilder, SafeMode, SafeModeDatabase, SafeModeEnvironment},
     value::Type,
-    CloseOptions, DataError, Manager, MultiStore, Rkv, SingleStore, StoreError, StoreOptions,
+    DataError, Manager, MultiStore, Rkv, SingleStore, StoreError, StoreOptions,
     Value,
 };
 use serde::Serialize;

@@ -290,8 +290,10 @@ mod tests {
             BasicPrefix::new(Basic::Ed25519, Key::new(PublicKey::from_bytes(&[0; 32])?.to_bytes().to_vec())).to_str(),
             ["D".to_string(), "A".repeat(43)].join("")
         );
+        // FIXME: why there is a difference?...
+        use x448::Secret;
         assert_eq!(
-            BasicPrefix::new(Basic::X448, Key::new(PublicKey::from_bytes(&[0; 32])?.to_bytes().to_vec())).to_str(),
+            BasicPrefix::new(Basic::X448, Key::new(Secret::from([0; 56]).as_bytes().to_vec())).to_str(),
             ["L".to_string(), "A".repeat(75)].join("")
         );
         assert_eq!(
