@@ -1,10 +1,9 @@
-use std::rc::Rc;
 use crate::{derivation::{
         attached_signature_code::b64_to_num,
         basic::Basic,
         self_signing::SelfSigning,
         DerivationCode,
-    }, keys::{KeriPublicKey, try_pk_from_vec}, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}};
+    }, keys::Key, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}};
 use nom::{
     bytes::complete::take, error::ErrorKind,
 };
@@ -92,8 +91,7 @@ pub fn basic_prefix(s: &[u8]) -> nom::IResult<&[u8], BasicPrefix> {
         .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
 
     let (extra, b) = take(code.derivative_b64_len())(rest)?;
-    // TODO: dont unwrap
-    let pk: Rc<dyn KeriPublicKey> = try_pk_from_vec(b.to_vec()).unwrap();
+    let pk = Key::new(b.to_vec());
     Ok((extra, code.derive(pk)))
 }
 

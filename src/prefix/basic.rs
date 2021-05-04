@@ -1,9 +1,5 @@
 use super::{verify, Prefix, SelfSigningPrefix};
-use crate::{
-    derivation::{basic::Basic, DerivationCode},
-    keys::{KeriPublicKey, try_pk_from_vec},
-    error::Error,
-};
+use crate::{derivation::{DerivationCode, basic::Basic, self_signing::SelfSigning}, error::Error, keys::Key};
 use base64::decode_config;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -12,11 +8,11 @@ use std::rc::Rc;
 #[derive(Debug, Clone)]
 pub struct BasicPrefix {
     pub derivation: Basic,
-    pub public_key: Rc<dyn KeriPublicKey>,
+    pub public_key: Key,
 }
 
 impl BasicPrefix {
-    pub fn new(code: Basic, public_key: Rc<dyn KeriPublicKey>) -> Self {
+    pub fn new(code: Basic, public_key: Key) -> Self {
         Self {
             derivation: code,
             public_key,
@@ -31,7 +27,7 @@ impl BasicPrefix {
 impl PartialEq for BasicPrefix {
     fn eq(&self, other: &Self) -> bool {
         self.derivation == other.derivation &&
-        self.public_key.into_bytes() == other.public_key.into_bytes()
+        self.public_key == other.public_key
     }
 }
 
@@ -48,7 +44,7 @@ impl FromStr for BasicPrefix {
                 )?;
             Ok(Self::new(
                 code,
-                try_pk_from_vec(k_vec)?
+                Key::new(k_vec)
                 ),
             )
         } else {
@@ -62,7 +58,7 @@ impl FromStr for BasicPrefix {
 
 impl Prefix for BasicPrefix {
     fn derivative(&self) -> Vec<u8> {
-        self.public_key.into_bytes()
+        self.public_key.key()
     }
     fn derivation_code(&self) -> String {
         self.derivation.to_str()
@@ -89,4 +85,62 @@ impl<'de> Deserialize<'de> for BasicPrefix {
 
         BasicPrefix::from_str(&s).map_err(serde::de::Error::custom)
     }
+}
+
+#[test]
+fn serialize_deserialize() {
+    use rand::rngs::OsRng;
+    use ed25519_dalek::Keypair;
+
+    let kp = Keypair::generate(&mut OsRng);
+
+    let bp = BasicPrefix {
+        derivation: Basic::Ed25519,
+        public_key: Key::new(kp.public.to_bytes().to_vec())
+    };
+
+    let serialized = serde_json::to_string(&bp);
+    assert!(serialized.is_ok());
+
+    let deserialized = serde_json::from_str(&serialized.unwrap());
+
+    assert!(deserialized.is_ok());
+    assert_eq!(bp, deserialized.unwrap());
+
+  //  let bp_s = bp.to_str();
+  //  let mut b_deserialized = serde_json::Deserializer::from_slice(&bp_s.as_bytes()).into_iter::<BasicPrefix>();
+  //  let bp_deserialized = b_deserialized.next();
+  //  assert!(bp_deserialized.is_some());
+  //  assert_eq!(bp, bp_deserialized.unwrap().unwrap());
+}
+
+#[test]
+fn to_from_string() {
+    use rand::rngs::OsRng;
+    use ed25519_dalek::Keypair;
+
+    let kp = Keypair::generate(&mut OsRng);
+
+    let signer = Key::new(kp.secret.to_bytes().to_vec());
+
+    let message = b"hello there";
+    let sig = SelfSigningPrefix::new(SelfSigning::Ed25519Sha512, 
+        signer.sign_ed(message).unwrap());
+
+    let bp = BasicPrefix {
+        derivation: Basic::Ed25519,
+        public_key: Key::new(kp.public.to_bytes().to_vec())
+    };
+
+    assert!(bp.verify(message, &sig).unwrap());
+
+    let string = bp.to_str();
+
+    let from_str = BasicPrefix::from_str(&string);
+    
+    assert!(from_str.is_ok());
+    let deser = from_str.unwrap();
+    assert_eq!(bp, deser);
+
+    assert!(deser.verify(message, &sig).unwrap());
 }

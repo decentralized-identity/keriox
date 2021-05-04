@@ -1,8 +1,7 @@
-use std::rc::Rc;
-use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning}, error::Error, event::sections::nxt_commitment, keys::{KeriPublicKey, KeriSecretKey, KeriSignerKey, sk_try_from_secret}, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix}, state::IdentifierState};
+use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning}, error::Error, event::sections::nxt_commitment, keys::Key, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix}, state::IdentifierState};
 use ed25519_dalek::Keypair;
-use k256::elliptic_curve::rand_core::OsRng;
 use super::event_msg_builder::{EventMsgBuilder, EventType};
+use rand::rngs::OsRng;
 
 /// Collects data for testing `IdentifierState` update. `prev_event_hash`, `sn`,
 /// `current_keypair` and `new_keypair` are used to generate mock event message
@@ -14,16 +13,16 @@ pub struct TestStateData {
     keys_history: Vec<BasicPrefix>,
     prev_event_hash: SelfAddressingPrefix,
     sn: u64,
-    current_keypair: (Rc<dyn KeriPublicKey>, Rc<dyn KeriSecretKey>),
-    new_keypair: (Rc<dyn KeriPublicKey>, Rc<dyn KeriSecretKey>),
+    current_keypair: (Key, Key),
+    new_keypair: (Key, Key),
 }
 
 /// Create initial `TestStateData`, before application of any Event.
 /// Provides only keypair for next event.
 fn get_initial_test_data() -> Result<TestStateData, Error> {
     let keypair = Keypair::generate(&mut OsRng);
-    let pk: Rc<dyn KeriPublicKey> = Rc::new(keypair.public);
-    let sk: Rc<dyn KeriSecretKey> = Rc::new(keypair.secret);
+    let pk = Key::new(keypair.public.as_bytes().to_vec());
+    let sk = Key::new(keypair.secret.as_bytes().to_vec());
 
     Ok(TestStateData {
         state: IdentifierState::default(),
@@ -31,8 +30,8 @@ fn get_initial_test_data() -> Result<TestStateData, Error> {
         keys_history: vec![],
         prev_event_hash: SelfAddressingPrefix::default(),
         sn: 0,
-        current_keypair: (Rc::clone(&pk), Rc::clone(&sk)),
-        new_keypair: (Rc::clone(&pk), Rc::clone(&sk)),
+        current_keypair: (pk.clone(), sk.clone()),
+        new_keypair: (pk, sk),
     })
 }
 
@@ -51,14 +50,14 @@ fn test_update_identifier_state(
         cur_pk = next_pk;
         cur_sk = next_sk;
         let keypair = Keypair::generate(&mut OsRng);
-        let pk: Rc<dyn KeriPublicKey> = Rc::new(keypair.public);
-        let sk: Rc<dyn KeriSecretKey> = Rc::new(keypair.secret);
+        let pk = Key::new(keypair.public.as_bytes().to_vec());
+        let sk = Key::new(keypair.secret.as_bytes().to_vec());
         next_pk = pk;
         next_sk = sk;
     };
 
-    let current_key_pref = Basic::Ed25519.derive(Rc::clone(&cur_pk));
-    let next_key_prefix = Basic::Ed25519.derive(Rc::clone(&next_pk));
+    let current_key_pref = Basic::Ed25519.derive(cur_pk.clone());
+    let next_key_prefix = Basic::Ed25519.derive(next_pk.clone());
     let next_dig = nxt_commitment(1, &[next_key_prefix.clone()], &SelfAddressing::Blake3_256);
 
     // Build event msg of given type.
@@ -76,8 +75,8 @@ fn test_update_identifier_state(
 
     let attached_sig = {
         // Sign.
-        let signer: Rc<dyn KeriSignerKey> = sk_try_from_secret(Rc::clone(&cur_sk))?;
-        let sig = signer.sign(&sed)?;
+        let signer = cur_sk.clone();
+        let sig = signer.sign_ed(&sed)?;
         AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig, 0)
     };
 
@@ -129,8 +128,8 @@ fn test_update_identifier_state(
         keys_history: new_history,
         prev_event_hash,
         sn: next_sn,
-        current_keypair: (Rc::clone(&cur_pk), Rc::clone(&cur_sk)),
-        new_keypair: (Rc::clone(&next_pk), Rc::clone(&next_sk)),
+        current_keypair: (cur_pk, cur_sk),
+        new_keypair: (next_pk, next_sk),
     })
 }
 

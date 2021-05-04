@@ -219,7 +219,6 @@ pub fn verify_identifier_binding(icp_event: &EventMessage) -> Result<bool, Error
 #[cfg(test)]
 mod tests {
     mod test_utils;
-    use std::rc::Rc;
 
     use self::{event_msg_builder::EventType, test_utils::test_mock_event_sequence};
     use super::*;
@@ -227,9 +226,9 @@ mod tests {
             event_data::{inception::InceptionEvent, EventData},
             sections::InceptionWitnessConfig,
             sections::KeyConfig,
-        }, keys::{KeriSecretKey, KeriSignerKey, sk_try_from_secret}, prefix::{AttachedSignaturePrefix, IdentifierPrefix}};
-    use k256::elliptic_curve::rand_core::OsRng;
+        }, keys::Key, prefix::{AttachedSignaturePrefix, IdentifierPrefix}};
     use ed25519_dalek::Keypair;
+    use rand::rngs::OsRng;
 
     #[test]
     fn basic_create() -> Result<(), Error> {
@@ -238,9 +237,10 @@ mod tests {
         let kp1 = Keypair::generate(&mut OsRng);
 
         // get two ed25519 keypairs
-        let pub_key0 = Rc::new(kp0.public);
-        let priv_key0: Rc<dyn KeriSignerKey> = Rc::new(kp0.secret);
-        let (pub_key1, _priv_key1) = (Rc::new(kp1.public), Rc::new(kp1.secret));
+        let pub_key0 = Key::new(kp0.public.to_bytes().to_vec());
+        let priv_key0 = Key::new(kp0.secret.to_bytes().to_vec());
+        let (pub_key1, _priv_key1) = (Key::new(kp1.public.to_bytes().to_vec()),
+            Key::new(kp1.secret.to_bytes().to_vec()));
 
         // initial signing key prefix
         let pref0 = Basic::Ed25519.derive(pub_key0);
@@ -266,7 +266,7 @@ mod tests {
         let ser = icp_m.serialize()?;
 
         // sign
-        let sig = priv_key0.sign(&ser)?;
+        let sig = priv_key0.sign_ed(&ser)?;
         let attached_sig = AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig, 0);
 
         assert!(pref0.verify(&ser, &attached_sig.signature)?);
@@ -301,16 +301,19 @@ mod tests {
         let kp2 = Keypair::generate(&mut OsRng);
 
         // get two ed25519 keypairs
-        let pub_key0 = Rc::new(kp0.public);
-        let priv_key0: Rc<dyn KeriSecretKey> = Rc::new(kp0.secret);
-        let (pub_key1, sig_key_1) = (Rc::new(kp1.public), Rc::new(kp1.secret));
+        let pub_key0 = Key::new(kp0.public.to_bytes().to_vec());
+        let priv_key0 = Key::new(kp0.secret.to_bytes().to_vec());
+        let (pub_key1, sig_key_1) = (Key::new(kp1.public.to_bytes().to_vec()),
+            Key::new(kp1.secret.to_bytes().to_vec()));
 
         // hi X!
         // let x = XChaCha20Poly1305::new((&priv_key0.into_bytes()[..]).into());
 
         // get two X25519 keypairs
-        let (enc_key_0, _enc_priv_0) = (Rc::new(kp2.public), Rc::clone(&sig_key_1));
-        let (enc_key_1, _enc_priv_1) = (Rc::new(kp2.public), Rc::new(kp2.secret));
+        let (enc_key_0, _enc_priv_0) = (Key::new(kp2.public.to_bytes().to_vec()),
+            sig_key_1);
+        let (enc_key_1, _enc_priv_1) = (Key::new(kp2.public.to_bytes().to_vec()),
+            Key::new(kp2.secret.to_bytes().to_vec()));
 
         // initial key set
         let sig_pref_0 = Basic::Ed25519.derive(pub_key0);
@@ -342,8 +345,8 @@ mod tests {
         let serialized = icp.serialize()?;
 
         // sign
-        let sk: Rc<dyn KeriSignerKey> = sk_try_from_secret(priv_key0)?;
-        let sig = sk.sign(&serialized)?;
+        let sk = priv_key0;
+        let sig = sk.sign_ed(&serialized)?;
         let attached_sig = AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig, 0);
 
         assert!(sig_pref_0.verify(&serialized, &attached_sig.signature)?);

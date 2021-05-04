@@ -1,6 +1,6 @@
-use std::{rc::Rc, str::FromStr};
+use std::str::FromStr;
 use ed25519_dalek::Keypair;
-use k256::elliptic_curve::rand_core::OsRng;
+use rand::rngs::OsRng;
 use crate::{
     derivation::{basic::Basic, self_addressing::SelfAddressing},
     error::Error,
@@ -22,7 +22,7 @@ use crate::{
         Event, EventMessage,
     },
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
-    keys::KeriPublicKey,
+    keys::Key,
 };
 
 pub struct EventMsgBuilder {
@@ -62,10 +62,11 @@ impl EventType {
 
 impl EventMsgBuilder {
     pub fn new(event_type: EventType) -> Result<Self, Error> {
-        let kp = Keypair::generate(&mut OsRng);
-        let nkp = Keypair::generate(&mut OsRng);
-        let pk: Rc<dyn KeriPublicKey> = Rc::new(kp.public);
-        let npk: Rc<dyn KeriPublicKey> = Rc::new(nkp.public);
+        let mut rng = OsRng {};
+        let kp = Keypair::generate(&mut rng);
+        let nkp = Keypair::generate(&mut rng);
+        let pk = Key::new(kp.public.to_bytes().to_vec());
+        let npk = Key::new(nkp.public.to_bytes().to_vec());
         let basic_pref = Basic::Ed25519.derive(pk);
         let dummy_loc_seal = LocationSeal {
             prefix: IdentifierPrefix::from_str("EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM")?,

@@ -1,19 +1,17 @@
-use std::rc::Rc;
-use crate::{error::Error, keys::{KeriPublicKey, KeriSignerKey, pk_into_vk, vk_into_pk}, prefix::SeedPrefix};
+use crate::{error::Error, keys::Key, prefix::SeedPrefix};
 use ed25519_dalek::{PublicKey, SecretKey, Keypair};
-use k256::elliptic_curve::rand_core::OsRng;
-
+use rand::rngs::OsRng;
 pub trait KeyManager {
     fn sign(&self, msg: &Vec<u8>) -> Result<Vec<u8>, Error>;
-    fn public_key(&self) -> Rc<dyn KeriPublicKey>;
-    fn next_public_key(&self) -> Rc<dyn KeriPublicKey>;
+    fn public_key(&self) -> Key;
+    fn next_public_key(&self) -> Key;
     fn rotate(&mut self) -> Result<(), Error>;
 }
 
 pub struct CryptoBox {
     signer: Signer,
-    next_priv_key: Rc<dyn KeriSignerKey>,
-    pub next_pub_key: Rc<dyn KeriPublicKey>,
+    next_priv_key: Key,
+    pub next_pub_key: Key,
     seeds: Vec<String>,
 }
 
@@ -22,12 +20,12 @@ impl KeyManager for CryptoBox {
         self.signer.sign(msg)
     }
 
-    fn public_key(&self) -> Rc<dyn KeriPublicKey> {
-        Rc::clone(&self.signer.pub_key)
+    fn public_key(&self) -> Key {
+        self.signer.pub_key.clone()
     }
 
-    fn next_public_key(&self) -> Rc<dyn KeriPublicKey> {
-        Rc::clone(&self.next_pub_key)
+    fn next_public_key(&self) -> Key {
+        self.next_pub_key.clone()
     }
 
     fn rotate(&mut self) -> Result<(), Error> {
@@ -38,18 +36,18 @@ impl KeyManager for CryptoBox {
                 next_secret.derive_key_pair()?
             } else {
                 let kp = Keypair::generate(&mut OsRng{});
-                let vk: Rc<dyn KeriPublicKey> = Rc::new(kp.public);
-                let sk: Rc<dyn KeriSignerKey> = Rc::new(kp.secret);
-                (pk_into_vk(vk), sk)
+                let vk = Key::new(kp.public.as_bytes().to_vec());
+                let sk = Key::new(kp.secret.as_bytes().to_vec());
+                (vk, sk)
             };
 
         let new_signer = Signer {
-            priv_key: Rc::clone(&self.next_priv_key),
-            pub_key: Rc::clone(&self.next_pub_key),
+            priv_key: self.next_priv_key.clone(),
+            pub_key: self.next_pub_key.clone(),
         };
         self.signer = new_signer;
         self.next_priv_key = next_priv_key;
-        self.next_pub_key = vk_into_pk(next_pub_key);
+        self.next_pub_key = next_pub_key;
 
         Ok(())
     }
@@ -59,11 +57,11 @@ impl CryptoBox {
     pub fn new() -> Result<Self, Error> {
         let signer = Signer::new()?;
         let kp = Keypair::generate(&mut OsRng{});
-        let (next_pub_key, next_priv_key) = (kp.public, kp.secret);
+        let (next_pub_key, next_priv_key) = (Key::new(kp.public.as_bytes().to_vec()), Key::new(kp.secret.as_bytes().to_vec()));
         Ok(CryptoBox {
             signer,
-            next_pub_key: Rc::new(next_pub_key),
-            next_priv_key: Rc::new(next_priv_key),
+            next_pub_key,
+            next_priv_key,
             seeds: vec![],
         })
     }
@@ -88,9 +86,9 @@ impl CryptoBox {
             }
             None => {
                 let (vk, sk) = ed_new_public_private();
-                let vk: Rc<dyn KeriPublicKey> = Rc::new(vk);
-                let sk: Rc<dyn KeriSignerKey> = Rc::new(sk);
-                (pk_into_vk(vk), sk)
+                let vk  = Key::new(vk.to_bytes().to_vec());
+                let sk = Key::new(sk.to_bytes().to_vec());
+                (vk, sk)
             }
         };
 
@@ -102,8 +100,11 @@ impl CryptoBox {
             .collect();
 
         Ok(CryptoBox {
-            signer: Signer { pub_key: Rc::new(pub_key), priv_key: Rc::new(priv_key) },
-            next_pub_key: vk_into_pk(next_pub_key),
+            signer: Signer { 
+                pub_key: Key::new(pub_key.to_bytes().to_vec()),
+                priv_key: Key::new(priv_key.to_bytes().to_vec())
+            },
+            next_pub_key,
             next_priv_key,
             seeds,
         })
@@ -111,21 +112,21 @@ impl CryptoBox {
 }
 
 struct Signer {
-    priv_key: Rc<dyn KeriSignerKey>,
-    pub pub_key: Rc<dyn KeriPublicKey>,
+    priv_key: Key,
+    pub pub_key: Key,
 }
 
 impl Signer {
     pub fn new() -> Result<Self, Error> {
         let ed = Keypair::generate(&mut OsRng);
-        let pub_key: Rc<dyn KeriPublicKey> = Rc::new(ed.public);
-        let priv_key: Rc<dyn KeriSignerKey> = Rc::new(ed.secret);
+        let pub_key  = Key::new(ed.public.to_bytes().to_vec());
+        let priv_key = Key::new(ed.secret.to_bytes().to_vec());
 
         Ok(Signer { pub_key, priv_key })
     }
 
     pub fn sign(&self, msg: &Vec<u8>) -> Result<Vec<u8>, Error> {
-        self.priv_key.sign(msg)
+        self.priv_key.sign_ed(msg)
     }
 }
 
