@@ -1,6 +1,6 @@
 [package]
 name = "keri"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["Decentralized Identity Foundation", "Charles Cunningham <charles@jolocom.io>"]
 edition = "2018"
 description = "Core library for the Key Event Receipt Infrastructure "
@@ -16,8 +16,8 @@ lmdb = ["rkv", "bincode"]
 default = ["lmdb"]
 
 [dependencies]
-ed25519-dalek = { version = "1.0.1", features = ["serde"] }
-k256 = { version = "0.8.0", features = ["ecdsa", "sha256", "zeroize", "jwk"] }
+ed25519-dalek = "1.0.1"
+k256 = { version = "0.8.0", features = ["ecdsa", "sha256", "zeroize"] }
 blake2 = "0.9.1"
 sha2 = "0.9.3"
 sha3 = "0.9.1"
