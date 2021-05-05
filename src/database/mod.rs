@@ -207,6 +207,7 @@ pub trait EventDatabase {
     ) -> Result<bool, Self::Error>;
 }
 
+#[cfg(test)]
 pub(crate) fn test_db<D: EventDatabase>(db: D) -> Result<(), D::Error> {
     use crate::{
         derivation::self_addressing::SelfAddressing,
