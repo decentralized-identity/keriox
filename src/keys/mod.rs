@@ -15,6 +15,7 @@ use ed25519_dalek::{
     ExpandedSecretKey,
     Signature
 };
+use zeroize::Zeroize;
 use crate::error::Error;
 use serde::{Serialize, Deserialize};
 
@@ -77,5 +78,11 @@ impl Key {
 
     pub fn key(&self) -> Vec<u8> {
         self.key.clone()
+    }
+}
+
+impl Drop for Key {
+    fn drop(&mut self) {
+        self.key.zeroize()
     }
 }
