@@ -15,6 +15,7 @@ use ed25519_dalek::{
     ExpandedSecretKey,
     Signature
 };
+use rand::rngs::OsRng;
 use zeroize::Zeroize;
 use crate::error::Error;
 use serde::{Serialize, Deserialize};
@@ -85,4 +86,31 @@ impl Drop for Key {
     fn drop(&mut self) {
         self.key.zeroize()
     }
+}
+
+#[test]
+fn libsodium_to_ed25519_dalek_compat() {
+    let kp = ed25519_dalek::Keypair::generate(&mut OsRng);
+
+    let msg = b"are libsodium and dalek compatible?";
+
+    let dalek_sig = kp.sign(msg);
+
+    use sodiumoxide::crypto::sign;
+
+    let sodium_pk = sign::ed25519::PublicKey::from_slice(&kp.public.to_bytes());
+    assert!(sodium_pk.is_some());
+    let sodium_pk = sodium_pk.unwrap();
+    let mut sodium_sk_concat = kp.secret.to_bytes().to_vec();
+    sodium_sk_concat.append(&mut kp.public.to_bytes().to_vec().clone());
+    let sodium_sk = sign::ed25519::SecretKey::from_slice(&sodium_sk_concat);
+    assert!(sodium_sk.is_some());
+    let sodium_sk = sodium_sk.unwrap();
+
+    let sodium_sig = sign::sign(msg, &sodium_sk);
+
+    assert!(sign::verify_detached(&sign::ed25519::Signature::from_slice(&dalek_sig.to_bytes()).unwrap(), msg, &sodium_pk));
+
+    assert!(kp.verify(msg, &Signature::new(arrayref::array_ref!(sodium_sig, 0, 64).to_owned())).is_ok());
+
 }
