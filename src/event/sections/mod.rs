@@ -75,7 +75,7 @@ impl KeyConfig {
     /// to in the threshold_key_digest of this KeyConfig
     pub fn verify_next(&self, next: &KeyConfig) -> bool {
         match &self.threshold_key_digest {
-            Some(n) => n == &next.commit(n.derivation),
+            Some(n) => n == &next.commit(&n.derivation),
             None => false,
         }
     }
@@ -84,7 +84,7 @@ impl KeyConfig {
     ///
     /// Serializes the KeyConfig for creation or verification of a threshold
     /// key digest commitment
-    pub fn commit(&self, derivation: SelfAddressing) -> SelfAddressingPrefix {
+    pub fn commit(&self, derivation: &SelfAddressing) -> SelfAddressingPrefix {
         nxt_commitment(self.threshold, &self.public_keys, derivation)
     }
 }
@@ -96,13 +96,13 @@ impl KeyConfig {
 pub fn nxt_commitment(
     threshold: u64,
     keys: &[BasicPrefix],
-    derivation: SelfAddressing,
+    derivation: &SelfAddressing,
 ) -> SelfAddressingPrefix {
     keys.iter().fold(
         derivation.derive(format!("{:x}", threshold).as_bytes()),
         |acc, pk| {
             SelfAddressingPrefix::new(
-                derivation,
+                derivation.to_owned(),
                 acc.derivative()
                     .iter()
                     .zip(derivation.derive(pk.to_str().as_bytes()).derivative())
@@ -175,7 +175,7 @@ fn threshold() {
     .map(|k| k.parse().unwrap())
     .collect();
 
-    let nxt = nxt_commitment(sith, &keys, SelfAddressing::Blake3_256);
+    let nxt = nxt_commitment(sith, &keys, &SelfAddressing::Blake3_256);
 
     assert_eq!(
         &nxt.to_str(),

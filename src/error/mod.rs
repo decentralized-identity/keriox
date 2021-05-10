@@ -3,8 +3,8 @@ use core::num::ParseIntError;
 use rmp_serde as serde_mgpk;
 use serde_cbor;
 use serde_json;
+use ed25519_dalek;
 use thiserror::Error;
-use ursa::CryptoError;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -47,9 +47,6 @@ pub enum Error {
     #[error("Not enough signatures while verifing")]
     NotEnoughSigsError,
 
-    #[error("validation error")]
-    CryptoError(CryptoError),
-
     #[error("Deserialization error")]
     DeserializationError,
 
@@ -64,4 +61,7 @@ pub enum Error {
 
     #[error("Storage error")]
     StorageError,
+
+    #[error(transparent)]
+    Ed25519DalekSignatureError(#[from] ed25519_dalek::SignatureError),
 }

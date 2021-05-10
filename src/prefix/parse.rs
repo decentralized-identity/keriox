@@ -1,16 +1,12 @@
-use crate::{
-    derivation::{
-        attached_signature_code::{b64_to_num, AttachedSignatureCode},
+use crate::{derivation::{
+        attached_signature_code::b64_to_num,
         basic::Basic,
         self_signing::SelfSigning,
         DerivationCode,
-    },
-    prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix},
-};
+    }, keys::Key, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}};
 use nom::{
-    branch::*, bytes::complete::take, combinator::*, error::ErrorKind, multi::*, sequence::*,
+    bytes::complete::take, error::ErrorKind,
 };
-use ursa::keys::PublicKey;
 
 // TODO this could be a lot nicer, but is currently written to be careful and "easy" to follow
 pub fn attached_signature(s: &[u8]) -> nom::IResult<&[u8], AttachedSignaturePrefix> {
@@ -95,8 +91,8 @@ pub fn basic_prefix(s: &[u8]) -> nom::IResult<&[u8], BasicPrefix> {
         .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
 
     let (extra, b) = take(code.derivative_b64_len())(rest)?;
-
-    Ok((extra, code.derive(PublicKey(b.to_vec()))))
+    let pk = Key::new(b.to_vec());
+    Ok((extra, code.derive(pk)))
 }
 
 pub fn self_signing_prefix(s: &[u8]) -> nom::IResult<&[u8], SelfSigningPrefix> {

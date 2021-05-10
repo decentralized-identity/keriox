@@ -1,42 +1,28 @@
-use ursa::{
-    keys::{PrivateKey, PublicKey},
-    signatures::{ed25519, SignatureScheme},
-};
-
-use crate::{
-    derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
-    error::Error,
-    event::sections::nxt_commitment,
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
-    state::IdentifierState,
-};
-
+use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning}, error::Error, event::sections::nxt_commitment, keys::Key, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix}, state::IdentifierState};
+use ed25519_dalek::Keypair;
 use super::event_msg_builder::{EventMsgBuilder, EventType};
+use rand::rngs::OsRng;
 
 /// Collects data for testing `IdentifierState` update. `prev_event_hash`, `sn`,
 /// `current_keypair` and `new_keypair` are used to generate mock event message
 /// of given type, `keys_history` is used to check if any keypair used earlier
 /// in event message sequence can verify current message.
-#[derive(Debug)]
 pub struct TestStateData {
     state: IdentifierState,
     prefix: IdentifierPrefix,
     keys_history: Vec<BasicPrefix>,
     prev_event_hash: SelfAddressingPrefix,
     sn: u64,
-    current_keypair: (PublicKey, PrivateKey),
-    new_keypair: (PublicKey, PrivateKey),
+    current_keypair: (Key, Key),
+    new_keypair: (Key, Key),
 }
 
 /// Create initial `TestStateData`, before application of any Event.
 /// Provides only keypair for next event.
 fn get_initial_test_data() -> Result<TestStateData, Error> {
-    let ed = ed25519::Ed25519Sha512::new();
-
-    // Get initial ed25519 keypair.
-    let keypair = ed
-        .keypair(Option::None)
-        .map_err(|e| Error::CryptoError(e))?;
+    let keypair = Keypair::generate(&mut OsRng);
+    let pk = Key::new(keypair.public.as_bytes().to_vec());
+    let sk = Key::new(keypair.secret.as_bytes().to_vec());
 
     Ok(TestStateData {
         state: IdentifierState::default(),
@@ -44,8 +30,8 @@ fn get_initial_test_data() -> Result<TestStateData, Error> {
         keys_history: vec![],
         prev_event_hash: SelfAddressingPrefix::default(),
         sn: 0,
-        current_keypair: keypair.clone(),
-        new_keypair: keypair.clone(),
+        current_keypair: (pk.clone(), sk.clone()),
+        new_keypair: (pk, sk),
     })
 }
 
@@ -60,20 +46,19 @@ fn test_update_identifier_state(
     let (mut next_pk, mut next_sk) = state_data.new_keypair;
 
     // If event is establishment event, rotate keypair.
-    let ed = ed25519::Ed25519Sha512::new();
     if event_type.is_establishment_event() {
-        cur_pk = next_pk.clone();
-        cur_sk = next_sk.clone();
-        let next_keypair = ed
-            .keypair(Option::None)
-            .map_err(|e| Error::CryptoError(e))?;
-        next_pk = next_keypair.0;
-        next_sk = next_keypair.1;
+        cur_pk = next_pk;
+        cur_sk = next_sk;
+        let keypair = Keypair::generate(&mut OsRng);
+        let pk = Key::new(keypair.public.as_bytes().to_vec());
+        let sk = Key::new(keypair.secret.as_bytes().to_vec());
+        next_pk = pk;
+        next_sk = sk;
     };
 
     let current_key_pref = Basic::Ed25519.derive(cur_pk.clone());
     let next_key_prefix = Basic::Ed25519.derive(next_pk.clone());
-    let next_dig = nxt_commitment(1, &[next_key_prefix.clone()], SelfAddressing::Blake3_256);
+    let next_dig = nxt_commitment(1, &[next_key_prefix.clone()], &SelfAddressing::Blake3_256);
 
     // Build event msg of given type.
     let event_msg = EventMsgBuilder::new(event_type.clone())?
@@ -90,7 +75,8 @@ fn test_update_identifier_state(
 
     let attached_sig = {
         // Sign.
-        let sig = ed.sign(&sed, &cur_sk).map_err(|e| Error::CryptoError(e))?;
+        let signer = cur_sk.clone();
+        let sig = signer.sign_ed(&sed)?;
         AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig, 0)
     };
 
@@ -109,7 +95,8 @@ fn test_update_identifier_state(
     // keys can verify message and signature.
     if event_type.is_establishment_event() {
         for old_key in state_data.keys_history.clone() {
-            assert!(old_key.verify(&sed, &attached_sig.signature).is_err())
+            let ver = old_key.verify(&sed, &attached_sig.signature);
+            assert!(ver.is_err() || !ver.unwrap())
         }
     };
 

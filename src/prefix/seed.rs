@@ -1,8 +1,9 @@
 use super::Prefix;
-use crate::error::Error;
-use base64::decode_config;
+use crate::{error::Error, keys::Key, prefix::BasicPrefix};
+use base64::{decode_config, URL_SAFE};
 use core::str::FromStr;
-use ursa::{keys::*, signatures::prelude::*};
+use ed25519_dalek::{PublicKey, SecretKey};
+use k256::ecdsa::{SigningKey, VerifyingKey};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum SeedPrefix {
@@ -13,14 +14,21 @@ pub enum SeedPrefix {
 }
 
 impl SeedPrefix {
-    pub fn derive_key_pair(&self) -> Result<(PublicKey, PrivateKey), Error> {
+    pub fn derive_key_pair(&self) -> Result<(Key, Key), Error> {
         match self {
             Self::RandomSeed256Ed25519(seed) => {
-                Ed25519Sha512::expand_keypair(&seed.clone()).map_err(|e| Error::CryptoError(e))
+                let secret = SecretKey::from_bytes(seed)?;
+                let vk = Key::new(PublicKey::from(&secret).as_bytes().to_vec());
+                let sk = Key::new(secret.as_bytes().to_vec());
+                Ok((vk, sk))
             }
-            Self::RandomSeed256ECDSAsecp256k1(seed) => EcdsaSecp256k1Sha256::new()
-                .keypair(Some(KeyGenOption::UseSeed(seed.clone())))
-                .map_err(|e| Error::CryptoError(e)),
+            Self::RandomSeed256ECDSAsecp256k1(seed) => {
+                let sk = SigningKey::from_bytes(&seed)?;
+                Ok((
+                    Key::new(VerifyingKey::from(&sk).to_bytes().to_vec()),
+                    Key::new(sk.to_bytes().to_vec()),
+                ))
+            }
             _ => Err(Error::ImproperPrefixType),
         }
     }
@@ -56,12 +64,12 @@ impl FromStr for SeedPrefix {
 }
 
 impl Prefix for SeedPrefix {
-    fn derivative(&self) -> &[u8] {
+    fn derivative(&self) -> Vec<u8> {
         match self {
-            Self::RandomSeed256Ed25519(seed) => &seed,
-            Self::RandomSeed256ECDSAsecp256k1(seed) => &seed,
-            Self::RandomSeed448(seed) => &seed,
-            Self::RandomSeed128(seed) => &seed,
+            Self::RandomSeed256Ed25519(seed) => seed.to_owned(),
+            Self::RandomSeed256ECDSAsecp256k1(seed) => seed.to_owned(),
+            Self::RandomSeed448(seed) => seed.to_owned(),
+            Self::RandomSeed128(seed) => seed.to_owned(),
         }
     }
     fn derivation_code(&self) -> String {
@@ -72,4 +80,39 @@ impl Prefix for SeedPrefix {
             Self::RandomSeed128(_) => "0A".to_string(),
         }
     }
+}
+
+#[test]
+fn test_derive_keypair() -> Result<(), Error> {
+    // taken from KERIPY: tests/core/test_eventing.py#1512
+    let seeds = vec![
+        "ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc",
+        "A6zz7M08-HQSFq92sJ8KJOT2cZ47x7pXFQLPB0pckB3Q",
+        "AcwFTk-wgk3ZT2buPRIbK-zxgPx-TKbaegQvPEivN90Y",
+        "Alntkt3u6dDgiQxTATr01dy8M72uuaZEf9eTdM-70Gk8",
+        "A1-QxDkso9-MR1A8rZz_Naw6fgaAtayda8hrbkRVVu1E",
+        "AKuYMe09COczwf2nIoD5AE119n7GLFOVFlNLxZcKuswc",
+        "AxFfJTcSuEE11FINfXMqWttkZGnUZ8KaREhrnyAXTsjw",
+        "ALq-w1UKkdrppwZzGTtz4PWYEeWm0-sDHzOv5sq96xJY",
+    ];
+
+    let expected_pubkeys = vec![
+        "SuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA=",
+        "VcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI=",
+        "T1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8=",
+        "KPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ=",
+        "1kcBE7h0ImWW6_Sp7MQxGYSshZZz6XM7OiUE5DXm0dU=",
+        "4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM=",
+        "VjWcaNX2gCkHOjk6rkmqPBCxkRCqwIJ-3OjdYmMwxf4=",
+        "T1nEDepd6CSAMCE7NY_jlLdG6_mKUlKS_mW-2HJY1hg=",
+    ];
+
+    for (seed_str, expected_pk) in seeds.iter().zip(expected_pubkeys.iter()) {
+        let seed: SeedPrefix = seed_str.parse()?;
+        let (pub_key, _priv_key) = seed.derive_key_pair()?;
+        let b64_pubkey = base64::encode_config(pub_key.key(), URL_SAFE);
+        assert_eq!(&b64_pubkey, expected_pk);
+    }
+
+    Ok(())
 }

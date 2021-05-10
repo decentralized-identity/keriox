@@ -8,7 +8,6 @@ use crate::{
     derivation::{self_addressing::SelfAddressing, DerivationCode},
     error::Error,
     event_message::serialization_info::{SerializationFormats, SerializationInfo},
-    prefix::IdentifierPrefix,
     state::{EventSemantics, IdentifierState},
 };
 use serde::{Deserialize, Serialize};
@@ -69,7 +68,7 @@ pub(crate) struct DummyEvent {
 impl DummyEvent {
     pub fn derive_inception_data(
         icp: InceptionEvent,
-        derivation: SelfAddressing,
+        derivation: &SelfAddressing,
         format: SerializationFormats,
     ) -> Result<Vec<u8>, Error> {
         Self::derive_data(EventData::Icp(icp), derivation, format)
@@ -77,7 +76,7 @@ impl DummyEvent {
 
     pub fn derive_delegated_inception_data(
         dip: DelegatedInceptionEvent,
-        derivation: SelfAddressing,
+        derivation: &SelfAddressing,
         format: SerializationFormats,
     ) -> Result<Vec<u8>, Error> {
         Self::derive_data(EventData::Dip(dip), derivation, format)
@@ -85,7 +84,7 @@ impl DummyEvent {
 
     fn derive_data(
         data: EventData,
-        derivation: SelfAddressing,
+        derivation: &SelfAddressing,
         format: SerializationFormats,
     ) -> Result<Vec<u8>, Error> {
         Ok(Self {
@@ -111,7 +110,7 @@ impl DummyEvent {
         self.serialization_info.kind.encode(&self)
     }
 
-    fn dummy_prefix(derivation: SelfAddressing) -> String {
+    fn dummy_prefix(derivation: &SelfAddressing) -> String {
         std::iter::repeat("#")
             .take(derivation.code_len() + derivation.derivative_b64_len())
             .collect::<String>()

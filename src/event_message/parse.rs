@@ -3,7 +3,6 @@ use super::{
 };
 use crate::{
     derivation::attached_signature_code::b64_to_num,
-    error::Error,
     event::event_data::EventData,
     prefix::{
         parse::{attached_signature, basic_prefix, self_signing_prefix},
@@ -13,7 +12,7 @@ use crate::{
 };
 use nom::{branch::*, combinator::*, error::ErrorKind, multi::*, sequence::*};
 use rmp_serde as serde_mgpk;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::Deserialize;
 use std::io::Cursor;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -50,7 +49,7 @@ fn json_message(s: &[u8]) -> nom::IResult<&[u8], DeserializedEvent> {
         Some(Ok(event)) => Ok((
             &s[stream.byte_offset()..],
             DeserializedEvent {
-                event: event,
+                event,
                 raw: &s[..stream.byte_offset()],
             },
         )),
@@ -64,7 +63,7 @@ fn cbor_message(s: &[u8]) -> nom::IResult<&[u8], DeserializedEvent> {
         Some(Ok(event)) => Ok((
             &s[stream.byte_offset()..],
             DeserializedEvent {
-                event: event,
+                event,
                 raw: &s[..stream.byte_offset()],
             },
         )),
@@ -78,7 +77,7 @@ fn mgpk_message(s: &[u8]) -> nom::IResult<&[u8], DeserializedEvent> {
         Ok(event) => Ok((
             &s[deser.get_ref().position() as usize..],
             DeserializedEvent {
-                event: event,
+                event,
                 raw: &s[..deser.get_ref().position() as usize],
             },
         )),
