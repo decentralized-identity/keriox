@@ -9,6 +9,8 @@ use crate::{
 #[cfg(feature = "lmdb")]
 pub mod lmdb;
 
+#[cfg(feature = "sled-db")]
+pub mod sled;
 /// Event Database
 ///
 /// An Abstract model of state for Key Events,
