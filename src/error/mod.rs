@@ -64,4 +64,7 @@ pub enum Error {
 
     #[error(transparent)]
     Ed25519DalekSignatureError(#[from] ed25519_dalek::SignatureError),
+
+    #[error(transparent)]
+    SledError(#[from] sled::Error),
 }
