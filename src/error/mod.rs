@@ -50,6 +50,12 @@ pub enum Error {
     #[error("Deserialization error")]
     DeserializationError,
 
+    #[error("Identifier is not indexed into the DB")]
+    NotIndexedError,
+
+    #[error("Identifier ID is already present in the DB")]
+    IdentifierPresentError,
+
     #[error("Base64 Decoding error")]
     Base64DecodingError {
         #[from]
