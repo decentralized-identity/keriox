@@ -1,7 +1,7 @@
 mod tables;
 
 use arrayref::array_ref;
-use tables::{IdentifierId, SledEventTree, SledEventTreeVec};
+use tables::{SledEventTree, SledEventTreeVec};
 use std::path::Path;
 use chrono::{DateTime, Local};
 use serde::Serialize;
@@ -114,6 +114,7 @@ impl EventDatabase for SledEventDatabase {
     fn get_kerl(&self, id: &IdentifierPrefix)
         -> Result<Option<Vec<u8>>, Self::Error> {
             let key = self.identifiers.designated_key(id);
+            // FIXME 1: everything is again json -> bytes serialized
             if let Some(kels) = self.key_event_logs.get(key)? {
                 let mut accum: Vec<u8> = Vec::new();
                 kels.iter()
@@ -128,7 +129,7 @@ impl EventDatabase for SledEventDatabase {
                             .map(|s| accum.extend(serde_json::to_string(s)
                             .unwrap_or_default().as_bytes())).for_each(drop);
                     }
-                    // FIXME: add seals too
+                    // FIXME 2: add seals too
                 }
                 Ok(Some(accum))
             } else {
