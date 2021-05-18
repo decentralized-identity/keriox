@@ -1,8 +1,10 @@
 mod tables;
 
+use arrayref::array_ref;
 use tables::{IdentifierId, SledEventTree, SledEventTreeVec};
 use std::path::Path;
 use chrono::{DateTime, Local};
+use fixed::traits::ToFixed;
 use sled::Db;
 use crate::{
     error::Error,
@@ -18,7 +20,7 @@ use super::EventDatabase;
 pub struct SledEventDatabase {
     // "iids" tree
     // this thing is expensive, but everything else is cheeeeeep
-    identifiers: SledEventTree<IdentifierId>,
+    identifiers: SledEventTree<IdentifierPrefix>,
     // "evts" tree
     events: SledEventTreeVec<Event>,
     // "dtss" tree
@@ -68,29 +70,17 @@ impl SledEventDatabase {
         })
     }
 
-    fn get_identifier_id(&self, prefix: &IdentifierPrefix) -> Result<u64, Error> {
-        match self.identifiers.get(prefix.to_str().as_bytes())? {
-            Some(id) => Ok(serde_cbor::from_slice(&id)?),
-            None => Err(Error::NotIndexedError)
-        }
+    fn get_identifier_id(&self, prefix: &IdentifierPrefix) -> Result<Option<u64>, Error> {
+        self.identifiers.get_key_by_value(prefix)
     }
 
     fn set_idendifier_id(&self, prefix: &IdentifierPrefix) -> Result<(), Error> {
-        let key = prefix.to_str().as_bytes();
-        let tree = self.db.open_tree(b"iids")?;
-        if tree.contains_key(key)? { return Err(Error::IdentifierPresentError); }
-
-        let next_id = match tree.last()? {
-            Some((max, _)) => {
-                let c_max: u64 = serde_cbor::from_slice(&max)?;
-                c_max + 1u64
-            },
-            None => 0u64
-        };
-
-        match tree.insert(key, serde_cbor::to_vec(&next_id)?)? {
-            Some(_) => Ok(()),
-            None => Err(Error::IdentifierPresentError)
+        let value = prefix.to_str().as_bytes();
+        if self.identifiers.contains_value(prefix) {
+            Ok(())
+        } else {
+            let key = self.identifiers.get_next_key();
+            self.identifiers.insert(key, prefix)
         }
     }
 }

@@ -1,12 +1,11 @@
 use std::marker::PhantomData;
-
 use serde::{Serialize, de::DeserializeOwned};
-
+use arrayref::array_ref;
 use crate::{error::Error, prefix::IdentifierPrefix};
 
 pub(crate) struct IdentifierId {
-    prefix: IdentifierPrefix,
     id: u64,
+    prefix: IdentifierPrefix,
 }
 
 // Imitates table per key
@@ -51,24 +50,16 @@ where
         }
     }
 
-    pub fn get_other_than_u64(&self, key: impl AsRef<[u8]>) -> Result<Option<T>, Error> {
-        match self.tree.get(key)? {
-            Some(v) => Ok(Some(serde_cbor::from_slice(&v)?)),
-            None => Ok(None)
-        }
-    }
-
     pub fn contains_key(&self, id: u64) -> Result<bool, Error> {
         Ok(self.tree.contains_key(key_bytes(id))?)
     }
 
-    pub fn insert(&self, id: u64, value: T) -> Result<(), Error> {
-        self.tree.insert(key_bytes(id), serde_cbor::to_vec(&value)?)?;
-        Ok(())
+    pub fn contains_value(&self, value: &T) -> bool where T: PartialEq {
+        self.tree.iter().flatten().find(|(_, v)| serde_cbor::from_slice::<T>(&v).unwrap().eq(value)).is_some()
     }
 
-    pub fn insert_other_than_u64(&self, key: impl AsRef<[u8]>, value: T) -> Result<(), Error> {
-        self.tree.insert(key, serde_cbor::to_vec(&value)?)?;
+    pub fn insert(&self, id: u64, value: &T) -> Result<(), Error> {
+        self.tree.insert(key_bytes(id), serde_cbor::to_vec(value)?)?;
         Ok(())
     }
 
@@ -76,6 +67,24 @@ where
         self.tree.iter().flatten().flat_map(|(_, v)| serde_cbor::from_slice(&v))
     }
 
+    pub fn get_next_key(&self) -> u64 {
+        if let Ok(Some((k, _v))) = self.tree.last() {
+            u64::from_be_bytes(array_ref!(k, 0, 8).to_owned())
+        } else {
+            0
+        }
+    }
+
+    pub fn get_key_by_value(&self, value: &T) 
+        -> Result<Option<u64>, Error> 
+    where T: PartialEq + Default {
+        if let Some((key, _)) = self.tree.iter().flatten()
+            .find(|(k, v)| serde_cbor::from_slice::<T>(v).unwrap_or_default().eq(value)) {
+                Ok(Some(u64::from_be_bytes(array_ref!(key, 0, 8).to_owned())))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 fn key_bytes(key: u64) -> [u8; 8] {
