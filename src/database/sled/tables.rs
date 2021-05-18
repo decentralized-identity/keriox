@@ -23,6 +23,51 @@ impl<T> SledEventTreeVec<T> {
     }
 }
 
+impl<T> SledEventTreeVec<T>
+where
+    T: Serialize + DeserializeOwned {
+        /// Gets all elements for given `key` as Vec<T>
+        ///
+        pub fn get(&self, key: u64) -> Result<Option<Vec<T>>, Error> {
+            if let Ok(Some(v)) = self.tree.get(key_bytes(key)) {
+                let set: Vec<T> = serde_cbor::from_slice(&v)?;
+                Ok(Some(set))
+            } else {
+                Ok(None)
+            }
+        }
+
+        /// Overwrites or adds new key<->value into the tree
+        ///
+        pub fn put(&self, key: u64, value: Vec<T>) -> Result<(), Error> {
+            self.tree.insert(key_bytes(key), serde_cbor::to_vec(&value)?)?;
+            Ok(())
+        }
+
+        /// Pushes element to existing set of T
+        /// or creates new one with single element
+        ///
+        pub fn push(&self, key: u64, value: T) -> Result<(), Error> {
+            if let Ok(Some(mut set)) = self.get(key) {
+                set.push(value);
+                self.put(key, set)
+            } else {
+                self.put(key, vec!(value))
+            }
+        }
+
+        /// Appends one `Vec<T>` into DB present one
+        /// or `put()`s it if not present as is.
+        ///
+        pub fn append(&self, key: u64, value: Vec<T>) -> Result<(), Error> {
+            if let Ok(Some(mut set)) = self.get(key) {
+                Ok(set.append(&mut value))
+            } else {
+                self.put(key, value)
+            }
+        }
+    }
+
 // Direct singular key-value of T
 pub(crate) struct SledEventTree<T> {
     tree: sled::Tree,
@@ -70,9 +115,7 @@ where
     pub fn get_next_key(&self) -> u64 {
         if let Ok(Some((k, _v))) = self.tree.last() {
             u64::from_be_bytes(array_ref!(k, 0, 8).to_owned())
-        } else {
-            0
-        }
+        } else { 0 }
     }
 
     pub fn get_key_by_value(&self, value: &T) 
@@ -83,6 +126,15 @@ where
                 Ok(Some(u64::from_be_bytes(array_ref!(key, 0, 8).to_owned())))
         } else {
             Ok(None)
+        }
+    }
+
+    pub fn designated_key(&self, identifier: &T)
+        -> u64 where T: PartialEq + Default {
+        if let Ok(Some(key)) = self.get_key_by_value(identifier) {
+            key
+        } else {
+            self.get_next_key()
         }
     }
 }

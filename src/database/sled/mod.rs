@@ -4,8 +4,7 @@ use arrayref::array_ref;
 use tables::{IdentifierId, SledEventTree, SledEventTreeVec};
 use std::path::Path;
 use chrono::{DateTime, Local};
-use fixed::traits::ToFixed;
-use sled::Db;
+use serde::Serialize;
 use crate::{
     error::Error,
     derivation::attached_signature_code::get_sig_count,
@@ -95,21 +94,20 @@ impl EventDatabase for SledEventDatabase {
         pref: &IdentifierPrefix,
         sn: u64) 
             -> Result<Option<Vec<u8>>, Self::Error> {
-        // open kels tree
-        let kels = self.db.open_tree(b"kels")?;
-        let id = self.get_identifier_id(pref)?;
-        // get entry with `sn` key
-        match kels.get(key_bytes(id))? { todo!();
-            Some(value) => {
-                let sap: SelfAddressingPrefix = serde_cbor::from_slice(&value)?;
-                let dig_index = format!("{}.{}", pref.to_str(), &sap).as_bytes();
-                let events = self.db.open_tree(b"evts")?;
-                match events.get(&dig_index)? {
-                    Some(event) => Ok(Some(serde_cbor::from_slice(&event)?)),
-                    None => Ok(None)
+        if let Some(key) = self.identifiers.get_key_by_value(pref)? {
+            if let Some(events) = self.events.get(key)? {
+                if let Some(event) = events.iter().find(|e| e.sn.eq(&sn)) {
+                    // FIXME 1: this again serializes into json - opposite to `log_event()`
+                    // FIXME 2: will this be last event?
+                    Ok(Some(serde_json::to_string(&event)?.as_bytes().to_vec()))
+                } else {
+                    Ok(None)
                 }
-            },
-            None => Ok(None)
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
         }
     }
 
@@ -124,11 +122,10 @@ impl EventDatabase for SledEventDatabase {
         raw: &[u8],
         sigs: &[AttachedSignaturePrefix],
     ) -> Result<(), Self::Error> {
-        let key = key_bytes(self.get_identifier_id(prefix)?);
-        let dts = self.db.open_tree(b"dtss")?;
-        dts.insert(key, Local::now().to_rfc3339().as_bytes())?;
-        let sdb = self.db.open_tree(b"sigs")?;
-        sigs.iter().map(|sig| sdb.insert(key, sig))
+        let key = self.identifiers.designated_key(prefix);
+        self.signatures.append(key, sigs.to_vec())?;
+        // FIXME: this will work only in case `raw` is json serialized
+        self.events.push(key, serde_json::from_slice(raw)?)
     }
 
     fn finalise_event(
