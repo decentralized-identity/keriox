@@ -59,9 +59,10 @@ where
         /// Appends one `Vec<T>` into DB present one
         /// or `put()`s it if not present as is.
         ///
-        pub fn append(&self, key: u64, value: Vec<T>) -> Result<(), Error> {
+        pub fn append(&self, key: u64, value: Vec<T>)
+            -> Result<(), Error> where T: ToOwned + Clone {
             if let Ok(Some(mut set)) = self.get(key) {
-                Ok(set.append(&mut value))
+                Ok(set.append(&mut value.to_owned()))
             } else {
                 self.put(key, value)
             }

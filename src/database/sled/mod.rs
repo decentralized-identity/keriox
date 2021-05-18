@@ -27,23 +27,23 @@ pub struct SledEventDatabase {
     // "sigs" tree
     signatures: SledEventTreeVec<AttachedSignaturePrefix>,
     // "rcts" tree
-    receipts_nt: SledEventTreeVec<???>,
+    receipts_nt: SledEventTreeVec<String>,
     // "ures" tree
-    escrowed_receipts_nt: SledEventTreeVec<>,
+    escrowed_receipts_nt: SledEventTreeVec<String>,
     // "vrcs" tree
-    receipts_t: SledEventTreeVec<>,
+    receipts_t: SledEventTreeVec<String>,
     // "vres" tree
-    escrowed_receipts_t: SledEventTreeVec<>,
+    escrowed_receipts_t: SledEventTreeVec<String>,
     // "kels" tree
     key_event_logs: SledEventTreeVec<SelfAddressingPrefix>,
     // "pses" tree
-    partially_signed_events: SledEventTreeVec<???>,
+    partially_signed_events: SledEventTreeVec<Event>,
     // "ooes" tree
-    out_of_order_events: SledEventTreeVec<>,
+    out_of_order_events: SledEventTreeVec<Event>,
     // "ldes" tree
-    likely_duplicious_events: SledEventTreeVec<>,
+    likely_duplicious_events: SledEventTreeVec<Event>,
     // "dels" tree
-    diplicitous_events: SledEventTreeVec<>,
+    diplicitous_events: SledEventTreeVec<Event>,
 }
 
 
@@ -111,21 +111,44 @@ impl EventDatabase for SledEventDatabase {
         }
     }
 
-    fn get_kerl(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Self::Error> {
-        todo!()
+    fn get_kerl(&self, id: &IdentifierPrefix)
+        -> Result<Option<Vec<u8>>, Self::Error> {
+            let key = self.identifiers.designated_key(id);
+            if let Some(kels) = self.key_event_logs.get(key)? {
+                let mut accum: Vec<u8> = Vec::new();
+                kels.iter()
+                    .map(|k| accum.extend(serde_json::to_string(k)
+                    .unwrap_or_default().as_bytes())).for_each(drop);
+                if let Some(events) = self.events.get(key)? {
+                    events.iter()
+                        .map(|e| accum.extend(serde_json::to_string(e)
+                        .unwrap_or_default().as_bytes())).for_each(drop);
+                    if let Some(signatures) = self.signatures.get(key)? {
+                        signatures.iter()
+                            .map(|s| accum.extend(serde_json::to_string(s)
+                            .unwrap_or_default().as_bytes())).for_each(drop);
+                    }
+                    // FIXME: add seals too
+                }
+                Ok(Some(accum))
+            } else {
+                Ok(None)
+            }
     }
 
     fn log_event(
         &self,
         prefix: &IdentifierPrefix,
-        dig: &SelfAddressingPrefix,
+        _dig: &SelfAddressingPrefix,
         raw: &[u8],
         sigs: &[AttachedSignaturePrefix],
     ) -> Result<(), Self::Error> {
         let key = self.identifiers.designated_key(prefix);
         self.signatures.append(key, sigs.to_vec())?;
-        // FIXME: this will work only in case `raw` is json serialized
+        // FIXME 1: this will work only in case `raw` is json serialized
         self.events.push(key, serde_json::from_slice(raw)?)
+        // FIXME 2: does timestamps included into sigs/event
+        //      or need to be pushed seperately + linked?
     }
 
     fn finalise_event(
