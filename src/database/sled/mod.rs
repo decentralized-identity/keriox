@@ -5,15 +5,10 @@ use tables::{SledEventTree, SledEventTreeVec};
 use std::path::Path;
 use chrono::{DateTime, Local};
 use serde::Serialize;
-use crate::{
-    error::Error,
-    derivation::attached_signature_code::get_sig_count,
-    event::Event,
-    prefix::{
+use crate::{derivation::attached_signature_code::get_sig_count, error::Error, event::{Event, event_data::{ReceiptNonTransferable, ReceiptTransferable}}, prefix::{
         AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
         SelfSigningPrefix,
-    },
-};
+    }};
 use super::EventDatabase;
 
 pub struct SledEventDatabase {
@@ -27,13 +22,13 @@ pub struct SledEventDatabase {
     // "sigs" tree
     signatures: SledEventTreeVec<AttachedSignaturePrefix>,
     // "rcts" tree
-    receipts_nt: SledEventTreeVec<String>,
+    receipts_nt: SledEventTreeVec<ReceiptNonTransferable>,
     // "ures" tree
-    escrowed_receipts_nt: SledEventTreeVec<String>,
+    escrowed_receipts_nt: SledEventTreeVec<ReceiptNonTransferable>,
     // "vrcs" tree
-    receipts_t: SledEventTreeVec<String>,
+    receipts_t: SledEventTreeVec<ReceiptTransferable>,
     // "vres" tree
-    escrowed_receipts_t: SledEventTreeVec<String>,
+    escrowed_receipts_t: SledEventTreeVec<ReceiptTransferable>,
     // "kels" tree
     key_event_logs: SledEventTreeVec<SelfAddressingPrefix>,
     // "pses" tree
@@ -68,20 +63,6 @@ impl SledEventDatabase {
             diplicitous_events: SledEventTreeVec::new(db.open_tree(b"dels")?)
         })
     }
-
-    fn get_identifier_id(&self, prefix: &IdentifierPrefix) -> Result<Option<u64>, Error> {
-        self.identifiers.get_key_by_value(prefix)
-    }
-
-    fn set_idendifier_id(&self, prefix: &IdentifierPrefix) -> Result<(), Error> {
-        let value = prefix.to_str().as_bytes();
-        if self.identifiers.contains_value(prefix) {
-            Ok(())
-        } else {
-            let key = self.identifiers.get_next_key();
-            self.identifiers.insert(key, prefix)
-        }
-    }
 }
 
 
@@ -111,9 +92,8 @@ impl EventDatabase for SledEventDatabase {
         }
     }
 
-    fn get_kerl(&self, id: &IdentifierPrefix)
-        -> Result<Option<Vec<u8>>, Self::Error> {
-            let key = self.identifiers.designated_key(id);
+    fn get_kerl(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Self::Error> {
+        if let Some(key) = self.identifiers.get_key_by_value(id)? {
             // FIXME 1: everything is again json -> bytes serialized
             if let Some(kels) = self.key_event_logs.get(key)? {
                 let mut accum: Vec<u8> = Vec::new();
@@ -135,6 +115,9 @@ impl EventDatabase for SledEventDatabase {
             } else {
                 Ok(None)
             }
+        } else {
+            Ok(None)
+        }
     }
 
     fn log_event(
@@ -240,9 +223,22 @@ impl EventDatabase for SledEventDatabase {
     fn has_receipt(
         &self,
         pref: &IdentifierPrefix,
+        // FIXME: whe sn is here?
         sn: u64,
         validator: &IdentifierPrefix,
     ) -> Result<bool, Self::Error> {
-        todo!()
+        if let Some(validator_key) = self.identifiers.get_key_by_value(validator)? {
+            if let Some(receipts) = self.receipts_t.get(validator_key)? {
+                // logic for receipt -> pref validation
+                match pref {
+                    IdentifierPrefix::SelfAddressing(p) =>
+                        Ok(receipts.iter()
+                        .find(|v| 
+                            v.receipted_event_digest.eq(p))
+                            .is_some()),
+                    _ => Ok(false)
+                }
+            } else { Ok(false) }
+        } else { Ok(false) }
     }
 }

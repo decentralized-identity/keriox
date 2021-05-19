@@ -142,7 +142,7 @@ where
         -> Result<Option<u64>, Error> 
     where T: PartialEq + Default {
         if let Some((key, _)) = self.tree.iter().flatten()
-            .find(|(k, v)| serde_cbor::from_slice::<T>(v).unwrap_or_default().eq(value)) {
+            .find(|(_k, v)| serde_cbor::from_slice::<T>(v).unwrap_or_default().eq(value)) {
                 Ok(Some(u64::from_be_bytes(array_ref!(key, 0, 8).to_owned())))
         } else {
             Ok(None)
