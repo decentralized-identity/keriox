@@ -5,7 +5,7 @@ use tables::{SledEventTree, SledEventTreeVec};
 use std::path::Path;
 use chrono::{DateTime, Local};
 use serde::Serialize;
-use crate::{derivation::attached_signature_code::get_sig_count, error::Error, event::{Event, event_data::{ReceiptNonTransferable, ReceiptTransferable}}, prefix::{
+use crate::{derivation::attached_signature_code::get_sig_count, error::Error, event::{Event, event_data::{ReceiptNonTransferable, ReceiptTransferable}, sections::seal::EventSeal}, prefix::{
         AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
         SelfSigningPrefix,
     }};
@@ -65,7 +65,19 @@ impl SledEventDatabase {
     }
 }
 
+impl SledEventDatabase {
+    fn escrow_t_receipt(&self, receipt: ReceiptTransferable, id: &IdentifierPrefix)
+        -> Result<(), Error> {
+            self.escrowed_receipts_t
+                .push(self.identifiers.designated_key(id), receipt)
+        }
 
+    fn escrow_nt_receipt(&self, receipt: ReceiptNonTransferable, id: &IdentifierPrefix)
+        -> Result<(), Error> {
+            self.escrowed_receipts_nt
+                .push(self.identifiers.designated_key(id), receipt)
+        }
+}
 
 impl EventDatabase for SledEventDatabase {
     type Error = Error;
