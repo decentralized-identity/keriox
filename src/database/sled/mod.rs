@@ -1,14 +1,25 @@
 mod tables;
 
-use arrayref::array_ref;
 use tables::{SledEventTree, SledEventTreeVec};
 use std::path::Path;
-use chrono::{DateTime, Local};
-use serde::Serialize;
-use crate::{derivation::attached_signature_code::get_sig_count, error::Error, event::{Event, event_data::{ReceiptNonTransferable, ReceiptTransferable}, sections::seal::EventSeal}, prefix::{
-        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
+use crate::{
+    error::Error,
+    event::{
+        Event,
+        TimestampedEvent,
+        sections::seal::EventSeal,
+        event_data::{
+            ReceiptNonTransferable,
+            ReceiptTransferable
+        },
+    }, prefix::{
+        BasicPrefix,
+        IdentifierPrefix,
         SelfSigningPrefix,
-    }};
+        SelfAddressingPrefix,
+        AttachedSignaturePrefix,
+    }
+};
 use super::EventDatabase;
 
 pub struct SledEventDatabase {
@@ -16,9 +27,7 @@ pub struct SledEventDatabase {
     // this thing is expensive, but everything else is cheeeeeep
     identifiers: SledEventTree<IdentifierPrefix>,
     // "evts" tree
-    events: SledEventTreeVec<Event>,
-    // "dtss" tree
-    datetime_stamps: SledEventTreeVec<DateTime<Local>>,
+    events: SledEventTreeVec<TimestampedEvent>,
     // "sigs" tree
     signatures: SledEventTreeVec<AttachedSignaturePrefix>,
     // "rcts" tree
@@ -32,13 +41,13 @@ pub struct SledEventDatabase {
     // "kels" tree
     key_event_logs: SledEventTreeVec<SelfAddressingPrefix>,
     // "pses" tree
-    partially_signed_events: SledEventTreeVec<Event>,
+    partially_signed_events: SledEventTreeVec<TimestampedEvent>,
     // "ooes" tree
-    out_of_order_events: SledEventTreeVec<Event>,
+    out_of_order_events: SledEventTreeVec<TimestampedEvent>,
     // "ldes" tree
-    likely_duplicious_events: SledEventTreeVec<Event>,
+    likely_duplicious_events: SledEventTreeVec<TimestampedEvent>,
     // "dels" tree
-    diplicitous_events: SledEventTreeVec<Event>,
+    diplicitous_events: SledEventTreeVec<TimestampedEvent>,
 }
 
 
@@ -50,7 +59,6 @@ impl SledEventDatabase {
         Ok(Self {
             identifiers: SledEventTree::new(db.open_tree(b"iids")?),
             events: SledEventTreeVec::new(db.open_tree(b"evts")?),
-            datetime_stamps: SledEventTreeVec::new(db.open_tree(b"dtss")?),
             signatures: SledEventTreeVec::new(db.open_tree(b"sigs")?),
             receipts_nt: SledEventTreeVec::new(db.open_tree(b"rcts")?),
             escrowed_receipts_nt: SledEventTreeVec::new(db.open_tree(b"ures")?),
@@ -77,6 +85,10 @@ impl SledEventDatabase {
             self.escrowed_receipts_nt
                 .push(self.identifiers.designated_key(id), receipt)
         }
+
+    fn add_outoforder_event(&self, id: &IdentifierPrefix, event: Event) -> Result<(), Error> {
+        self.out_of_order_events.push(self.identifiers.designated_key(id), TimestampedEvent::new(event))
+    }
 }
 
 impl EventDatabase for SledEventDatabase {
@@ -89,7 +101,7 @@ impl EventDatabase for SledEventDatabase {
             -> Result<Option<Vec<u8>>, Self::Error> {
         if let Some(key) = self.identifiers.get_key_by_value(pref)? {
             if let Some(events) = self.events.get(key)? {
-                if let Some(event) = events.iter().find(|e| e.sn.eq(&sn)) {
+                if let Some(event) = events.iter().find(|e| e.event.sn.eq(&sn)) {
                     // FIXME 1: this again serializes into json - opposite to `log_event()`
                     // FIXME 2: will this be last event?
                     Ok(Some(serde_json::to_string(&event)?.as_bytes().to_vec()))

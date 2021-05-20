@@ -8,6 +8,7 @@ use self::event_data::EventData;
 use crate::error::Error;
 use crate::state::EventSemantics;
 use serde_hex::{Compact, SerHex};
+use chrono::{DateTime, Local};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Event {
@@ -66,6 +67,35 @@ impl EventSemantics for Event {
         })
     }
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct TimestampedEvent {
+    pub timestamp: DateTime<Local>,
+    pub event: Event,
+}
+
+impl TimestampedEvent {
+    pub fn new(event: Event) -> Self {
+        Self {
+            timestamp: Local::now(),
+            event,
+        }
+    }
+}
+
+impl From<TimestampedEvent> for Event {
+    fn from(event: TimestampedEvent) -> Event {
+        event.event
+    }
+}
+
+/// WARNING: timestamp will change on conversion to current time
+impl From<Event> for TimestampedEvent {
+    fn from(event: Event) -> TimestampedEvent {
+        TimestampedEvent::new(event)
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
