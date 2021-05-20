@@ -83,6 +83,12 @@ impl TimestampedEvent {
     }
 }
 
+impl PartialEq<Event> for TimestampedEvent {
+    fn eq(&self, other: &Event) -> bool {
+        self.event.eq(other)
+    }
+}
+
 impl From<TimestampedEvent> for Event {
     fn from(event: TimestampedEvent) -> Event {
         event.event
@@ -95,7 +101,6 @@ impl From<Event> for TimestampedEvent {
         TimestampedEvent::new(event)
     }
 }
-
 
 #[cfg(test)]
 mod tests {

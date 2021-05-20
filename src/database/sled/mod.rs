@@ -7,20 +7,16 @@ use crate::{
     event::{
         Event,
         TimestampedEvent,
-        sections::seal::EventSeal,
         event_data::{
             ReceiptNonTransferable,
             ReceiptTransferable
         },
     }, prefix::{
-        BasicPrefix,
         IdentifierPrefix,
-        SelfSigningPrefix,
         SelfAddressingPrefix,
         AttachedSignaturePrefix,
     }
 };
-use super::EventDatabase;
 
 pub struct SledEventDatabase {
     // "iids" tree
@@ -28,8 +24,6 @@ pub struct SledEventDatabase {
     identifiers: SledEventTree<IdentifierPrefix>,
     // "evts" tree
     events: SledEventTreeVec<TimestampedEvent>,
-    // "sigs" tree
-    signatures: SledEventTreeVec<AttachedSignaturePrefix>,
     // "rcts" tree
     receipts_nt: SledEventTreeVec<ReceiptNonTransferable>,
     // "ures" tree
@@ -47,7 +41,7 @@ pub struct SledEventDatabase {
     // "ldes" tree
     likely_duplicious_events: SledEventTreeVec<TimestampedEvent>,
     // "dels" tree
-    diplicitous_events: SledEventTreeVec<TimestampedEvent>,
+    duplicitous_events: SledEventTreeVec<TimestampedEvent>,
 }
 
 
@@ -59,7 +53,6 @@ impl SledEventDatabase {
         Ok(Self {
             identifiers: SledEventTree::new(db.open_tree(b"iids")?),
             events: SledEventTreeVec::new(db.open_tree(b"evts")?),
-            signatures: SledEventTreeVec::new(db.open_tree(b"sigs")?),
             receipts_nt: SledEventTreeVec::new(db.open_tree(b"rcts")?),
             escrowed_receipts_nt: SledEventTreeVec::new(db.open_tree(b"ures")?),
             receipts_t: SledEventTreeVec::new(db.open_tree(b"vrcs")?),
@@ -68,29 +61,78 @@ impl SledEventDatabase {
             partially_signed_events: SledEventTreeVec::new(db.open_tree(b"pses")?),
             out_of_order_events: SledEventTreeVec::new(db.open_tree(b"ooes")?),
             likely_duplicious_events: SledEventTreeVec::new(db.open_tree(b"ldes")?),
-            diplicitous_events: SledEventTreeVec::new(db.open_tree(b"dels")?)
+            duplicitous_events: SledEventTreeVec::new(db.open_tree(b"dels")?)
         })
     }
-}
 
-impl SledEventDatabase {
-    fn escrow_t_receipt(&self, receipt: ReceiptTransferable, id: &IdentifierPrefix)
+    pub fn add_new_event(&self, event: Event, id: &IdentifierPrefix) -> Result<(), Error> {
+        self.events.push(self.identifiers.designated_key(id), event.into())
+    }
+
+    pub fn get_events(&self, id: &IdentifierPrefix) -> Option<impl DoubleEndedIterator<Item = TimestampedEvent>> {
+        self.events.iter_values(self.identifiers.designated_key(id))
+    }
+
+    pub fn add_escrow_t_receipt(&self, receipt: ReceiptTransferable, id: &IdentifierPrefix)
         -> Result<(), Error> {
             self.escrowed_receipts_t
                 .push(self.identifiers.designated_key(id), receipt)
         }
 
-    fn escrow_nt_receipt(&self, receipt: ReceiptNonTransferable, id: &IdentifierPrefix)
+    pub fn get_escrow_t_receipts(&self, id: &IdentifierPrefix)
+        -> Option<impl DoubleEndedIterator<Item = ReceiptTransferable>> {
+            self.escrowed_receipts_t.iter_values(self.identifiers.designated_key(id))
+        }
+
+    pub fn add_escrow_nt_receipt(&self, receipt: ReceiptNonTransferable, id: &IdentifierPrefix)
         -> Result<(), Error> {
             self.escrowed_receipts_nt
                 .push(self.identifiers.designated_key(id), receipt)
         }
 
-    fn add_outoforder_event(&self, id: &IdentifierPrefix, event: Event) -> Result<(), Error> {
-        self.out_of_order_events.push(self.identifiers.designated_key(id), TimestampedEvent::new(event))
+    pub fn get_escrow_nt_receipts(&self, id: &IdentifierPrefix)
+        -> Option<impl DoubleEndedIterator<Item = ReceiptNonTransferable>> {
+            self.escrowed_receipts_nt.iter_values(self.identifiers.designated_key(id))
+        }
+
+    pub fn add_outoforder_event(&self, event: Event, id: &IdentifierPrefix) -> Result<(), Error> {
+        self.out_of_order_events.push(self.identifiers.designated_key(id), event.into())
     }
+
+    pub fn get_outoforder_events(&self, id: &IdentifierPrefix)
+        -> Option<impl DoubleEndedIterator<Item = TimestampedEvent>> {
+            self.out_of_order_events.iter_values(self.identifiers.designated_key(id))
+        }
+
+    pub fn add_partially_signed_event(&self, event: Event, id: &IdentifierPrefix) -> Result<(), Error> {
+        self.partially_signed_events.push(self.identifiers.designated_key(id), event.into())
+    }
+
+    pub fn get_partially_signed_events(&self, id: &IdentifierPrefix)
+        -> Option<impl DoubleEndedIterator<Item = TimestampedEvent>> {
+            self.partially_signed_events.iter_values(self.identifiers.designated_key(id))
+        }
+
+    pub fn add_likely_duplicious_event(&self, event: Event, id: &IdentifierPrefix) -> Result<(), Error> {
+        self.likely_duplicious_events.push(self.identifiers.designated_key(id), event.into())
+    }
+
+    pub fn get_likely_duplicitous_events(&self, id: &IdentifierPrefix)
+        -> Option<impl DoubleEndedIterator<Item = TimestampedEvent>> {
+            self.likely_duplicious_events.iter_values(self.identifiers.designated_key(id))
+        }
+
+    pub fn add_duplicious_event(&self, event: Event, id: &IdentifierPrefix) -> Result<(), Error> {
+        self.duplicitous_events.push(self.identifiers.designated_key(id), event.into())
+    }
+
+    pub fn get_duplicious_events(&self, id: &IdentifierPrefix)
+        -> Option<impl DoubleEndedIterator<Item = TimestampedEvent>> {
+            self.duplicitous_events.iter_values(self.identifiers.designated_key(id))
+        }
 }
 
+/*  DEPRECATED: since 0.7
 impl EventDatabase for SledEventDatabase {
     type Error = Error;
 
@@ -266,3 +308,4 @@ impl EventDatabase for SledEventDatabase {
         } else { Ok(false) }
     }
 }
+*/

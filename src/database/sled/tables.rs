@@ -67,6 +67,23 @@ where
                 self.put(key, value)
             }
         }
+
+        /// check if `T` is present in `Vec<T>` in the DB
+        pub fn contains_value(&self, value: &T) -> bool
+            where T: PartialEq {
+                self.tree.iter().flatten()
+                    .any(|(_k, v)| 
+                    serde_cbor::from_slice::<Vec<T>>(&v).unwrap().contains(value))
+        }
+
+        pub fn iter_values(&self, key: u64) -> Option<impl DoubleEndedIterator<Item = T>> {
+            if let Ok(Some(values)) = self.tree.get(key_bytes(key)) {
+                Some(serde_cbor::from_slice::<Vec<T>>(&values)
+                    .unwrap().into_iter())
+            } else {
+                None
+            }
+        }
     }
 
 /// Direct singular key-value of T table
