@@ -39,7 +39,7 @@ impl EventSemantics for Event {
                     return Err(Error::SemanticError("SN is not correct".to_string()));
                 }
             }
-            EventData::Vrc(_) | EventData::Rct(_) => {
+            EventData::Rct(_) => {
                 if self.prefix != state.prefix {
                     return Err(Error::SemanticError(
                         "Invalid Identifier Prefix Binding".into(),

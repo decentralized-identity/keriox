@@ -37,8 +37,6 @@ impl From<DeserializedSignedEvent<'_>> for SignedEventMessage {
 pub enum Deserialized<'a> {
     // Event verification requires raw bytes, so use DesrializedSignedEvent
     Event(DeserializedSignedEvent<'a>),
-    // Vrc's dont need raw bytes and have a normal structure, use SignedEventMessage
-    Vrc(SignedEventMessage),
     // Rct's have an alternative appended signature structure, use SignedNontransferableReceipt
     Rct(SignedNontransferableReceipt),
 }
@@ -131,16 +129,6 @@ pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], Deserialized> {
                 Deserialized::Rct(SignedNontransferableReceipt {
                     body: e.event,
                     couplets,
-                }),
-            ))
-        }
-        EventData::Vrc(_) => {
-            let (extra, signatures) = signatures(rest)?;
-            Ok((
-                extra,
-                Deserialized::Vrc(SignedEventMessage {
-                    event_message: e.event,
-                    signatures,
                 }),
             ))
         }
