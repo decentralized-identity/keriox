@@ -148,60 +148,51 @@ impl EventProcessor {
     /// is based on delegating location seal and delegated event raw.
     fn validate_seal(&self, seal: LocationSeal, raw: &[u8]) -> Result<(), Error> {
         // Check if event of seal's prefix and sn is in db.
-        match self
-            .db
-            .last_event_at_sn(&seal.prefix, seal.sn)
-            .map_err(|_| Error::StorageError)?
-        {
-            None => {
-                // No event found.
-                return Err(Error::EventOutOfOrderError);
+        if let Some(events) = self.db.get_events(&seal.prefix) {
+            match events.find(|event| event.event.event.sn == seal.sn) {
+                Some(event) => {
+                    // Extract prior_digest and data field from delegating event.
+                    let (prior_dig, data) = match event.event.event.event_data {
+                        EventData::Rot(rot) => (rot.previous_event_hash, rot.data),
+                        EventData::Ixn(ixn) => (ixn.previous_event_hash, ixn.data),
+                        EventData::Drt(drt) => (
+                            drt.rotation_data.previous_event_hash,
+                            drt.rotation_data.data,
+                        ),
+                        _ => return Err(Error::SemanticError("Improper event type".to_string())),
+                    };
+
+                    // Check if prior event digest matches prior event digest from
+                    // the seal.
+                    if prior_dig.derivation == seal.prior_digest.derivation {
+                        Ok(prior_dig == seal.prior_digest)
+                    } else {
+                        // get previous event from db
+                        match events.find(|previous_event| previous_event.event.event.sn == seal.sn -1) {
+                            Some(previous_event) => {
+                                match previous_event.event.event.prefix {
+                                    IdentifierPrefix::SelfAddressing(prefix) => 
+                                        Ok(prefix.digest == seal.prior_digest.digest),
+                                    _ => Err(Error::SemanticError("No event in db".into()))
+                                }
+                            },
+                            None => return Err(Error::SemanticError("No event in db".into()))
+                        }
+                    }?;
+                    // Check if event seal list contains delegating event seal.
+                    if !data.iter().any(|s| match s {
+                        Seal::Event(es) => es.event_digest.verify_binding(raw),
+                        _ => false,
+                    }) {
+                        return Err(Error::SemanticError(
+                            "Data field doesn't contain delegating event seal.".to_string(),
+                        ));
+                    };
+                },
+                None => return Err(Error::EventOutOfOrderError)
             }
-            Some(del_event) => {
-                // Deserialize event.
-                let deserialized_event = message(&del_event)
-                    .map_err(|_err| Error::SemanticError("Can't parse event".to_string()))?
-                    .1;
-
-                // Extract prior_digest and data field from delegating event.
-                let (prior_dig, data) = match deserialized_event.event.event.event_data {
-                    EventData::Rot(rot) => (rot.previous_event_hash, rot.data),
-                    EventData::Ixn(ixn) => (ixn.previous_event_hash, ixn.data),
-                    EventData::Drt(drt) => (
-                        drt.rotation_data.previous_event_hash,
-                        drt.rotation_data.data,
-                    ),
-                    _ => return Err(Error::SemanticError("Improper event type".to_string())),
-                };
-
-                // Check if prior event digest matches prior event digest from
-                // the seal.
-                if prior_dig.derivation == seal.prior_digest.derivation {
-                    Ok(prior_dig == seal.prior_digest)
-                } else {
-                    // get previous event from db
-                    self.db.last_event_at_sn(&seal.prefix, seal.sn - 1).map_or(
-                        Err(Error::StorageError),
-                        |event| {
-                            event.map_or(
-                                Err(Error::SemanticError("No event in db".into())),
-                                // recompute hash and compare
-                                |ev| Ok(seal.prior_digest.verify_binding(&ev)),
-                            )
-                        },
-                    )
-                }?;
-
-                // Check if event seal list contains delegating event seal.
-                if !data.iter().any(|s| match s {
-                    Seal::Event(es) => es.event_digest.verify_binding(raw),
-                    _ => false,
-                }) {
-                    return Err(Error::SemanticError(
-                        "Data field doesn't contain delegating event seal.".to_string(),
-                    ));
-                };
-            }
+        } else {
+            return Err(Error::EventOutOfOrderError);
         }
         Ok(())
     }
