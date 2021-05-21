@@ -17,7 +17,7 @@ pub use self::{
     delegated::{DelegatedInceptionEvent, DelegatedRotationEvent},
     inception::InceptionEvent,
     interaction::InteractionEvent,
-    receipt::{Receipt},
+    receipt::Receipt,
     rotation::RotationEvent,
 };
 

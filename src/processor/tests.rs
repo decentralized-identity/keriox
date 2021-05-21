@@ -134,13 +134,13 @@ fn test_process_receipt() -> Result<(), Error> {
     // Events and sigs are from keripy `test_direct_mode` test.
     // (keripy/tests/core/test_eventing.py#1855)
     // Parse and process controller's inception event.
-    let icp_raw = br#"{"v":"KERI10JSON0000ed_","i":"EQf1hzB6s5saaQPdDAsEzSMEFoQx_WLsq93bjPu5wuqA","s":"0","t":"icp","kt":"1","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"n":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","bt":"0","b":[],"c":[],"a":[]}"#;
+    let icp_raw = br#"{"v":"KERI10JSON0000ed_","i":"E7WIS0e4Tx1PcQW5Um5s3Mb8uPSzsyPODhByXzgvmAdQ","s":"0","t":"icp","kt":"1","k":["Dpt7mGZ3y5UmhT1NLExb1IW8vMJ8ylQW3K44LfkTgAqE"],"n":"Erpltchg7BUv21Qz3ZXhOhVu63m7S7YbPb21lSeGYd90","bt":"0","b":[],"c":[],"a":[]}-AABAAkECx2H9zzH7pA--aApslpWfkvNWKXSUwpgx_RW3ylg137lF_SuTn7__L09D1joNh2I39o675n4fuOccCyATiBA"#;
     let icp = parse::signed_message(icp_raw).unwrap().1;
 
     let controller_id_state = event_processor.process(icp)?;
 
     // Parse receipt of controller's inception event.
-    let vrc_raw = br#"{"v":"KERI10JSON000091_","i":"EQf1hzB6s5saaQPdDAsEzSMEFoQx_WLsq93bjPu5wuqA","s":"0","t":"rct","d":"EXeKMHPw0ql8vHiBOpo72AOrOsWZ3bRDL-DKkYHo4v6w"}-FABED9EB3sA5u2vCPOEmX3d7bEyHiSh7Xi8fjew2KMl3FQM0AAAAAAAAAAAAAAAAAAAAAAAEeGqW24EnxUgO_wfuFo6GR_vii-RNv5iGo8ibUrhe6Z0-AABAAocy9m9ToxeeZk-FkgjFh1x839Ims4peTy2C5MdawIwoa9wlIDbD-wGmiGO4QdrQ1lSntqUAUMkcGAzB0Q6SsAA"#;
+    let vrc_raw = br#"{"v":"KERI10JSON000091_","i":"E7WIS0e4Tx1PcQW5Um5s3Mb8uPSzsyPODhByXzgvmAdQ","s":"0","t":"rct","d":"ErDNDBG7x2xYAH2i4AOnhVe44RS3lC1mRRdkyolFFHJk"}-FABENlofRlu2VPul-tjDObk6bTia2deG6NMqeFmsXhAgFvA0AAAAAAAAAAAAAAAAAAAAAAAE_MT0wsz-_ju_DVK_SaMaZT9ZE7pP4auQYeo2PDaw9FI-AABAA0Q7bqPvenjWXo_YIikMBKOg-pghLKwBi1Plm0PEqdv67L1_c6dq9bll7OFnoLp0a74Nw1cBGdjIPcu-yAllHAw"#;
     let rcp = parse::signed_message(vrc_raw).unwrap().1;
 
     let id_state = event_processor.process(rcp.clone());
@@ -148,7 +148,7 @@ fn test_process_receipt() -> Result<(), Error> {
     assert!(id_state.is_err());
 
     // Parse and process validator's inception event.
-    let val_icp_raw = br#"{"v":"KERI10JSON0000ed_","i":"ED9EB3sA5u2vCPOEmX3d7bEyHiSh7Xi8fjew2KMl3FQM","s":"0","t":"icp","kt":"1","k":["D8KY1sKmgyjAiUDdUBPNPyrSz_ad_Qf9yzhDNZlEKiMc"],"n":"EOWDAJvex5dZzDxeHBANyaIoUG3F4-ic81G6GwtnC4f4","bt":"0","b":[],"c":[],"a":[]}-AABAArFZxr-FnvQVZFX8WSipIxCGVCJjT6fj6qkZ-ei9UAGshPsqdX7scy0zNIB4_AfIjdSLLRWgL33AJmC2neaxuDg"#;
+    let val_icp_raw = br#"{"v":"KERI10JSON0000ed_","i":"ENlofRlu2VPul-tjDObk6bTia2deG6NMqeFmsXhAgFvA","s":"0","t":"icp","kt":"1","k":["DLSBUmklGu6eLqnA5DAgj41jetAJYkyn34crqejwXxVw"],"n":"EwmUJaS6DSPRQprlGp_3CIg8BZwmaJlKPlE4LHcx0Zms","bt":"0","b":[],"c":[],"a":[]}-AABAAZnEWOsjV4rnGgwTCPm2TWc1RG1fTPDCLW1Yz5d6iTClu4uhhfs1FdHOBNREbqwvNLedShn7AJssJFq9w2jQABw"#;
     let val_icp = parse::signed_message(val_icp_raw).unwrap().1;
 
     event_processor.process(val_icp)?;
@@ -322,8 +322,7 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
         .1
         .into_iter()
         .for_each(|event| {
-            event_processor
-                .process(event.clone()).unwrap();
+            event_processor.process(event.clone()).unwrap();
         });
 
     let event_seal = EventSeal {

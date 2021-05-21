@@ -1,8 +1,9 @@
 use crate::{
-    derivation::{attached_signature_code::get_sig_count},
+    derivation::attached_signature_code::get_sig_count,
     error::Error,
     event::{
         event_data::{DummyEvent, EventData},
+        sections::seal::EventSeal,
         Event,
     },
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
@@ -41,6 +42,12 @@ pub struct SignedEventMessage {
 pub struct SignedNontransferableReceipt {
     pub body: EventMessage,
     pub couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
+}
+#[derive(Debug, Clone)]
+pub struct SignedTransferableReceipt {
+    pub body: EventMessage,
+    pub event_seal: EventSeal,
+    pub signatures: Vec<AttachedSignaturePrefix>,
 }
 
 impl EventMessage {
@@ -222,11 +229,16 @@ mod tests {
 
     use self::{event_msg_builder::EventType, test_utils::test_mock_event_sequence};
     use super::*;
-    use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning}, event::{
+    use crate::{
+        derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
+        event::{
             event_data::{inception::InceptionEvent, EventData},
             sections::InceptionWitnessConfig,
             sections::KeyConfig,
-        }, keys::Key, prefix::{AttachedSignaturePrefix, IdentifierPrefix}};
+        },
+        keys::Key,
+        prefix::{AttachedSignaturePrefix, IdentifierPrefix},
+    };
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
 
@@ -239,8 +251,10 @@ mod tests {
         // get two ed25519 keypairs
         let pub_key0 = Key::new(kp0.public.to_bytes().to_vec());
         let priv_key0 = Key::new(kp0.secret.to_bytes().to_vec());
-        let (pub_key1, _priv_key1) = (Key::new(kp1.public.to_bytes().to_vec()),
-            Key::new(kp1.secret.to_bytes().to_vec()));
+        let (pub_key1, _priv_key1) = (
+            Key::new(kp1.public.to_bytes().to_vec()),
+            Key::new(kp1.secret.to_bytes().to_vec()),
+        );
 
         // initial signing key prefix
         let pref0 = Basic::Ed25519.derive(pub_key0);
@@ -303,17 +317,20 @@ mod tests {
         // get two ed25519 keypairs
         let pub_key0 = Key::new(kp0.public.to_bytes().to_vec());
         let priv_key0 = Key::new(kp0.secret.to_bytes().to_vec());
-        let (pub_key1, sig_key_1) = (Key::new(kp1.public.to_bytes().to_vec()),
-            Key::new(kp1.secret.to_bytes().to_vec()));
+        let (pub_key1, sig_key_1) = (
+            Key::new(kp1.public.to_bytes().to_vec()),
+            Key::new(kp1.secret.to_bytes().to_vec()),
+        );
 
         // hi X!
         // let x = XChaCha20Poly1305::new((&priv_key0.into_bytes()[..]).into());
 
         // get two X25519 keypairs
-        let (enc_key_0, _enc_priv_0) = (Key::new(kp2.public.to_bytes().to_vec()),
-            sig_key_1);
-        let (enc_key_1, _enc_priv_1) = (Key::new(kp2.public.to_bytes().to_vec()),
-            Key::new(kp2.secret.to_bytes().to_vec()));
+        let (enc_key_0, _enc_priv_0) = (Key::new(kp2.public.to_bytes().to_vec()), sig_key_1);
+        let (enc_key_1, _enc_priv_1) = (
+            Key::new(kp2.public.to_bytes().to_vec()),
+            Key::new(kp2.secret.to_bytes().to_vec()),
+        );
 
         // initial key set
         let sig_pref_0 = Basic::Ed25519.derive(pub_key0);

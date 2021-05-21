@@ -1,46 +1,33 @@
-use k256::{
-    ecdsa::{    
-        SigningKey,
-        VerifyingKey,
-        Signature as EcdsaSignature,
-        signature::{
-            Verifier as EcdsaVerifier,
-            Signer as EcdsaSigner,
-        },
-    },
-};
-use ed25519_dalek::{
-    PublicKey,
-    SecretKey,
-    ExpandedSecretKey,
-    Signature
+use crate::error::Error;
+use ed25519_dalek::{ExpandedSecretKey, PublicKey, SecretKey, Signature};
+use k256::ecdsa::{
+    signature::{Signer as EcdsaSigner, Verifier as EcdsaVerifier},
+    Signature as EcdsaSignature, SigningKey, VerifyingKey,
 };
 use rand::rngs::OsRng;
+use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
-use crate::error::Error;
-use serde::{Serialize, Deserialize};
-
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Key {
-    key: Vec<u8>
+    key: Vec<u8>,
 }
 
 impl Key {
     pub fn new(key: Vec<u8>) -> Self {
-        Self {
-            key
-        }
+        Self { key }
     }
 
     pub fn verify_ed(&self, msg: &[u8], sig: &[u8]) -> bool {
         if let Ok(key) = PublicKey::from_bytes(&self.key) {
             use arrayref::array_ref;
-            if sig.len() != 64 { return false; }
+            if sig.len() != 64 {
+                return false;
+            }
             let sig = Signature::from(array_ref!(sig, 0, 64).to_owned());
             match key.verify(msg, &sig) {
                 Ok(()) => true,
-                Err(_) => false
+                Err(_) => false,
             }
         } else {
             false
@@ -52,16 +39,16 @@ impl Key {
             Ok(k) => {
                 use k256::ecdsa::Signature;
                 use std::convert::TryFrom;
-                if let Ok(sig)  = Signature::try_from(sig) {
+                if let Ok(sig) = Signature::try_from(sig) {
                     match k.verify(msg, &sig) {
                         Ok(()) => true,
-                        Err(_) => false
+                        Err(_) => false,
                     }
                 } else {
                     false
                 }
             }
-            Err(_) => false
+            Err(_) => false,
         }
     }
 
@@ -74,7 +61,9 @@ impl Key {
         let sk = SecretKey::from_bytes(&self.key)?;
         let pk = PublicKey::from(&sk);
         Ok(ExpandedSecretKey::from(&sk)
-            .sign(msg, &pk).as_ref().to_vec())
+            .sign(msg, &pk)
+            .as_ref()
+            .to_vec())
     }
 
     pub fn key(&self) -> Vec<u8> {
@@ -109,8 +98,16 @@ fn libsodium_to_ed25519_dalek_compat() {
 
     let sodium_sig = sign::sign(msg, &sodium_sk);
 
-    assert!(sign::verify_detached(&sign::ed25519::Signature::from_slice(&dalek_sig.to_bytes()).unwrap(), msg, &sodium_pk));
+    assert!(sign::verify_detached(
+        &sign::ed25519::Signature::from_slice(&dalek_sig.to_bytes()).unwrap(),
+        msg,
+        &sodium_pk
+    ));
 
-    assert!(kp.verify(msg, &Signature::new(arrayref::array_ref!(sodium_sig, 0, 64).to_owned())).is_ok());
-
+    assert!(kp
+        .verify(
+            msg,
+            &Signature::new(arrayref::array_ref!(sodium_sig, 0, 64).to_owned())
+        )
+        .is_ok());
 }

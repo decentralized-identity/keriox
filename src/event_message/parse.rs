@@ -1,16 +1,25 @@
 use super::{
     AttachedSignaturePrefix, EventMessage, SignedEventMessage, SignedNontransferableReceipt,
+    SignedTransferableReceipt,
 };
 use crate::{
     derivation::attached_signature_code::b64_to_num,
-    event::event_data::EventData,
+    error::Error,
+    event::{event_data::EventData, sections::seal::EventSeal},
     prefix::{
-        parse::{attached_signature, basic_prefix, self_signing_prefix},
+        parse::{attached_signature, basic_prefix, event_seal, self_signing_prefix},
         BasicPrefix, SelfSigningPrefix,
     },
     state::IdentifierState,
 };
-use nom::{branch::*, combinator::*, error::ErrorKind, multi::*, sequence::*};
+use nom::{
+    branch::*,
+    bytes::complete::tag,
+    combinator::*,
+    error::{ErrorKind, ParseError},
+    multi::*,
+    sequence::*,
+};
 use rmp_serde as serde_mgpk;
 use serde::Deserialize;
 use std::io::Cursor;
@@ -37,8 +46,10 @@ impl From<DeserializedSignedEvent<'_>> for SignedEventMessage {
 pub enum Deserialized<'a> {
     // Event verification requires raw bytes, so use DesrializedSignedEvent
     Event(DeserializedSignedEvent<'a>),
-    // Rct's have an alternative appended signature structure, use SignedNontransferableReceipt
-    Rct(SignedNontransferableReceipt),
+    // Rct's have an alternative appended signature structure,
+    // use SignedNontransferableReceipt and SignedTransferableReceipt
+    NontransferableRct(SignedNontransferableReceipt),
+    TransferableRct(SignedTransferableReceipt),
 }
 
 fn json_message(s: &[u8]) -> nom::IResult<&[u8], DeserializedEvent> {
@@ -119,18 +130,34 @@ fn couplets(s: &[u8]) -> nom::IResult<&[u8], Vec<(BasicPrefix, SelfSigningPrefix
     )(rest)
 }
 
+fn transferable_receipt_attachement(s: &[u8]) -> nom::IResult<&[u8], (EventSeal, Vec<AttachedSignaturePrefix>)> {
+    tuple((event_seal, signatures))(s)
+}
+
 pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], Deserialized> {
     let (rest, e) = message(s)?;
     match e.event.event.event_data {
         EventData::Rct(_) => {
-            let (extra, couplets) = couplets(rest)?;
-            Ok((
-                extra,
-                Deserialized::Rct(SignedNontransferableReceipt {
-                    body: e.event,
-                    couplets,
-                }),
-            ))
+            if let Ok((rest, couplets)) = couplets(rest) {
+                Ok((
+                    rest,
+                    Deserialized::NontransferableRct(SignedNontransferableReceipt {
+                        body: e.event,
+                        couplets,
+                    }),
+                ))
+            } else {
+                transferable_receipt_attachement(&rest[1..]).map(|(rest, attachement)| {
+                    (
+                        rest,
+                        Deserialized::TransferableRct(SignedTransferableReceipt {
+                            body: e.event,
+                            event_seal: attachement.0,
+                            signatures: attachement.1,
+                        }),
+                    )
+                })
+            }
         }
         _ => {
             let (extra, signatures) = signatures(rest)?;
@@ -191,6 +218,9 @@ fn test_sigs() {
         Ok(("".as_bytes(), vec![AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, vec![0u8; 64], 0)]))
     );
 
+    assert!(signatures("-AABAA0Q7bqPvenjWXo_YIikMBKOg-pghLKwBi1Plm0PEqdv67L1_c6dq9bll7OFnoLp0a74Nw1cBGdjIPcu-yAllHAw".as_bytes()).is_ok());
+    // -AABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+
     assert_eq!(
         signatures("-AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAextra data".as_bytes()),
         Ok(("extra data".as_bytes(), vec![
@@ -210,6 +240,11 @@ fn test_sigs() {
 
 #[test]
 fn test_event() {
+    let stream = br#"{"v":"KERI10JSON0000ed_","i":"E7WIS0e4Tx1PcQW5Um5s3Mb8uPSzsyPODhByXzgvmAdQ","s":"0","t":"icp","kt":"1","k":["Dpt7mGZ3y5UmhT1NLExb1IW8vMJ8ylQW3K44LfkTgAqE"],"n":"Erpltchg7BUv21Qz3ZXhOhVu63m7S7YbPb21lSeGYd90","wt":"0","w":[],"c":[]}"#;
+    let event = message(stream);
+    assert!(event.is_ok());
+    assert_eq!(event.unwrap().1.event.serialize().unwrap(), stream);
+
     // Inception event.
     let stream = r#"{"v":"KERI10JSON00011c_","i":"EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM","s":"0","t":"icp","kt":"1","k":["DaU6JR2nmwyZ-i0d8JZAoTNZH3ULvYAfSVPzhzS6b5CM"],"n":"EZ-i0d8JZAoTNZH3ULvaU6JR2nmwyYAfSVPzhzS6b5CM","wt":"1","w":["DTNZH3ULvaU6JR2nmwyYAfSVPzhzS6bZ-i0d8JZAo5CM"],"c":["EO"]}"#.as_bytes();
     let event = message(stream);
@@ -275,6 +310,13 @@ fn test_stream2() {
 
     assert!(signed_message(stream).is_ok());
     assert!(signed_event_stream_validate(stream).is_ok())
+}
+
+#[test]
+fn test_signed_message() {
+    let trans_receipt_event = r#"{"v":"KERI10JSON000091_","i":"E7WIS0e4Tx1PcQW5Um5s3Mb8uPSzsyPODhByXzgvmAdQ","s":"0","t":"rct","d":"ErDNDBG7x2xYAH2i4AOnhVe44RS3lC1mRRdkyolFFHJk"}-FABENlofRlu2VPul-tjDObk6bTia2deG6NMqeFmsXhAgFvA0AAAAAAAAAAAAAAAAAAAAAAAE_MT0wsz-_ju_DVK_SaMaZT9ZE7pP4auQYeo2PDaw9FI-AABAA0Q7bqPvenjWXo_YIikMBKOg-pghLKwBi1Plm0PEqdv67L1_c6dq9bll7OFnoLp0a74Nw1cBGdjIPcu-yAllHAw"#;
+    let msg = signed_message(trans_receipt_event.as_bytes());
+    assert!(msg.is_ok())
 }
 
 #[test]

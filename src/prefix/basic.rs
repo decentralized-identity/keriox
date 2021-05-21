@@ -1,5 +1,9 @@
 use super::{verify, Prefix, SelfSigningPrefix};
-use crate::{derivation::{DerivationCode, basic::Basic}, error::Error, keys::Key};
+use crate::{
+    derivation::{basic::Basic, DerivationCode},
+    error::Error,
+    keys::Key,
+};
 use base64::decode_config;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -25,8 +29,7 @@ impl BasicPrefix {
 
 impl PartialEq for BasicPrefix {
     fn eq(&self, other: &Self) -> bool {
-        self.derivation == other.derivation &&
-        self.public_key == other.public_key
+        self.derivation == other.derivation && self.public_key == other.public_key
     }
 }
 
@@ -37,15 +40,9 @@ impl FromStr for BasicPrefix {
         let code = Basic::from_str(s)?;
 
         if s.len() == code.prefix_b64_len() {
-            let k_vec= decode_config(
-                    &s[code.code_len()..code.prefix_b64_len()],
-                    base64::URL_SAFE,
-                )?;
-            Ok(Self::new(
-                code,
-                Key::new(k_vec)
-                ),
-            )
+            let k_vec =
+                decode_config(&s[code.code_len()..code.prefix_b64_len()], base64::URL_SAFE)?;
+            Ok(Self::new(code, Key::new(k_vec)))
         } else {
             Err(Error::SemanticError(format!(
                 "Incorrect Prefix Length: {}",
@@ -88,14 +85,14 @@ impl<'de> Deserialize<'de> for BasicPrefix {
 
 #[test]
 fn serialize_deserialize() {
-    use rand::rngs::OsRng;
     use ed25519_dalek::Keypair;
+    use rand::rngs::OsRng;
 
     let kp = Keypair::generate(&mut OsRng);
 
     let bp = BasicPrefix {
         derivation: Basic::Ed25519,
-        public_key: Key::new(kp.public.to_bytes().to_vec())
+        public_key: Key::new(kp.public.to_bytes().to_vec()),
     };
 
     let serialized = serde_json::to_string(&bp);
@@ -109,20 +106,22 @@ fn serialize_deserialize() {
 
 #[test]
 fn to_from_string() {
-    use rand::rngs::OsRng;
     use ed25519_dalek::Keypair;
+    use rand::rngs::OsRng;
 
     let kp = Keypair::generate(&mut OsRng);
 
     let signer = Key::new(kp.secret.to_bytes().to_vec());
 
     let message = b"hello there";
-    let sig = SelfSigningPrefix::new(crate::derivation::self_signing::SelfSigning::Ed25519Sha512, 
-        signer.sign_ed(message).unwrap());
+    let sig = SelfSigningPrefix::new(
+        crate::derivation::self_signing::SelfSigning::Ed25519Sha512,
+        signer.sign_ed(message).unwrap(),
+    );
 
     let bp = BasicPrefix {
         derivation: Basic::Ed25519,
-        public_key: Key::new(kp.public.to_bytes().to_vec())
+        public_key: Key::new(kp.public.to_bytes().to_vec()),
     };
 
     assert!(bp.verify(message, &sig).unwrap());
@@ -130,7 +129,7 @@ fn to_from_string() {
     let string = bp.to_str();
 
     let from_str = BasicPrefix::from_str(&string);
-    
+
     assert!(from_str.is_ok());
     let deser = from_str.unwrap();
     assert_eq!(bp, deser);

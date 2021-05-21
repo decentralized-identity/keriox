@@ -1,9 +1,6 @@
 #[cfg(test)]
 use crate::{
-    database::lmdb::LmdbEventDatabase,
-    error::Error,
-    keri::Keri,
-    prefix::IdentifierPrefix,
+    database::lmdb::LmdbEventDatabase, error::Error, keri::Keri, prefix::IdentifierPrefix,
     signer::CryptoBox,
 };
 
