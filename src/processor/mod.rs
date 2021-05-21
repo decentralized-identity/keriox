@@ -1,30 +1,19 @@
-use crate::{
-    database::sled::SledEventDatabase,
-    derivation::self_addressing::SelfAddressing,
-    error::Error,
-    event::{
+use crate::{database::sled::SledEventDatabase, derivation::self_addressing::SelfAddressing, error::Error, event::{
         event_data::EventData,
         sections::{
             seal::{EventSeal, LocationSeal, Seal},
             KeyConfig,
         },
-    },
-    event_message::{
-        parse::{message, Deserialized, DeserializedSignedEvent},
-        EventMessage, SignedEventMessage, SignedNontransferableReceipt,
-    },
-    prefix::{IdentifierPrefix, SelfAddressingPrefix},
-    state::{EventSemantics, IdentifierState},
-};
+    }, event_message::{EventMessage, SignedEventMessage, SignedNontransferableReceipt, TimestampedEventMessage, parse::{message, Deserialized, DeserializedSignedEvent}}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
 
 #[cfg(test)]
 mod tests;
 
-pub struct EventProcessor<SledEventDatabase> {
+pub struct EventProcessor {
     db: SledEventDatabase,
 }
 
-impl<SledEventDatabase> EventProcessor<SledEventDatabase> {
+impl EventProcessor {
     pub fn new(db: SledEventDatabase) -> Self {
         Self { db }
     }
@@ -36,38 +25,22 @@ impl<SledEventDatabase> EventProcessor<SledEventDatabase> {
     pub fn compute_state(&self, id: &IdentifierPrefix) -> Result<Option<IdentifierState>, Error> {
         // start with empty state
         let mut state = IdentifierState::default();
-
-        // starting from inception
-        for sn in 0.. {
-            // read the latest raw event
-            let raw = match self
-                .db
-                .last_event_at_sn(id, sn)
-                .map_err(|_| Error::StorageError)?
-            {
-                Some(r) => r,
-                None => {
-                    if sn == 0 {
-                        // no inception event, no state
-                        return Ok(None);
-                    } else {
-                        // end of KEL, stop looping
-                        break;
-                    }
-                }
-            };
-            // parse event
-            let parsed = message(&raw).map_err(|_| Error::DeserializationError)?.1;
-            // apply it to the state
-            // TODO avoid .clone()
-            state = match state.clone().apply(&parsed.event) {
-                Ok(s) => s,
-                // will happen when a recovery has overridden some part of the KEL,
-                // stop processing here
-                Err(_) => break,
+        if let Some(events) = self.db.get_events(id) {
+            // we sort here to get inception first
+            let mut sorted_events = events.collect::<Vec<TimestampedEventMessage>>();
+            sorted_events.sort();
+            for event in sorted_events {
+                state = match state.apply(&event.event) {
+                    Ok(s) => s,
+                    // will happen when a recovery has overridden some part of the KEL,
+                    // stop processing here
+                    Err(_) => break
+                };
             }
+        } else {
+            // no inception event, no state
+            return Ok(None);
         }
-
         Ok(Some(state))
     }
 
@@ -81,19 +54,14 @@ impl<SledEventDatabase> EventProcessor<SledEventDatabase> {
         sn: u64,
     ) -> Result<Option<IdentifierState>, Error> {
         let mut state = IdentifierState::default();
-        for sn in 0..sn + 1 {
-            let raw = match self
-                .db
-                .last_event_at_sn(id, sn)
-                .map_err(|_| Error::StorageError)?
-            {
-                Some(r) => r,
-                // There is no event for sn
-                None => return Ok(None),
-            };
-            // update state
-            let parsed = message(&raw).map_err(|_| Error::DeserializationError)?.1;
-            state = state.clone().apply(&parsed.event)?;
+        if let Some(events) = self.db.get_events(id) {
+            // TODO: testing approach if events come out sorted already (as they should coz of put sequence)
+            for event in events
+                .filter(|e| e.event.event.sn <= sn) {
+                    state = state.apply(&event.event.event)?;
+                }
+        } else {
+            return Ok(None);
         }
         Ok(Some(state))
     }

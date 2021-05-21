@@ -23,7 +23,7 @@ mod test;
 pub struct Keri<K: KeyManager> {
     prefix: IdentifierPrefix,
     key_manager: K,
-    processor: EventProcessor<SledEventDatabase>,
+    processor: EventProcessor,
 }
 
 impl<K: KeyManager> Keri<K> {

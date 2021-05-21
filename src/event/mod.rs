@@ -1,5 +1,5 @@
 pub use crate::event_message::{serialization_info::SerializationFormats, EventMessage};
-use crate::{event_message::SignedEventMessage, prefix::IdentifierPrefix};
+use crate::prefix::IdentifierPrefix;
 use crate::state::IdentifierState;
 use serde::{Deserialize, Serialize};
 pub mod event_data;
@@ -8,7 +8,7 @@ use self::event_data::EventData;
 use crate::error::Error;
 use crate::state::EventSemantics;
 use serde_hex::{Compact, SerHex};
-use chrono::{DateTime, Local};
+
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Event {
@@ -65,67 +65,6 @@ impl EventSemantics for Event {
             prefix: self.prefix.clone(),
             ..self.event_data.apply_to(state)?
         })
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct TimestampedSignedEventMessage {
-    pub timestamp: DateTime<Local>,
-    pub event: SignedEventMessage,
-}
-
-impl TimestampedSignedEventMessage {
-    pub fn new(event: SignedEventMessage) -> Self {
-        Self {
-            timestamp: Local::now(),
-            event
-        }
-    }
-}
-
-impl From<TimestampedSignedEventMessage> for SignedEventMessage {
-    fn from(event: TimestampedSignedEventMessage) -> SignedEventMessage {
-        event.event
-    }
-}
-
-impl From<SignedEventMessage> for TimestampedSignedEventMessage {
-    fn from(event: SignedEventMessage) -> TimestampedSignedEventMessage {
-        TimestampedSignedEventMessage::new(event)
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct TimestampedEvent {
-    pub timestamp: DateTime<Local>,
-    pub event: Event,
-}
-
-impl TimestampedEvent {
-    pub fn new(event: Event) -> Self {
-        Self {
-            timestamp: Local::now(),
-            event,
-        }
-    }
-}
-
-impl PartialEq<Event> for TimestampedEvent {
-    fn eq(&self, other: &Event) -> bool {
-        self.event.eq(other)
-    }
-}
-
-impl From<TimestampedEvent> for Event {
-    fn from(event: TimestampedEvent) -> Event {
-        event.event
-    }
-}
-
-/// WARNING: timestamp will change on conversion to current time
-impl From<Event> for TimestampedEvent {
-    fn from(event: Event) -> TimestampedEvent {
-        TimestampedEvent::new(event)
     }
 }
 

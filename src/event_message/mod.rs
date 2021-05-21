@@ -1,3 +1,9 @@
+pub mod event_msg_builder;
+pub mod serialization_info;
+pub mod parse;
+
+use std::cmp::Ordering;
+
 use crate::{
     derivation::{attached_signature_code::get_sig_count},
     error::Error,
@@ -8,11 +14,9 @@ use crate::{
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
     state::{EventSemantics, IdentifierState},
 };
-pub mod event_msg_builder;
-pub mod serialization_info;
+use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use serialization_info::*;
-pub mod parse;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct EventMessage {
@@ -31,10 +35,90 @@ pub struct EventMessage {
     // pub extra: HashMap<String, Value>,
 }
 
+#[derive(Serialize, Deserialize, PartialEq)]
+pub struct TimestampedEventMessage {
+    pub timestamp: DateTime<Local>,
+    pub event: EventMessage,
+}
+
+impl TimestampedEventMessage {
+    pub fn new(event: EventMessage) -> Self {
+        Self {
+            timestamp: Local::now(),
+            event,
+        }
+    }
+}
+
+impl PartialOrd for TimestampedEventMessage {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(match self.event.event.sn == other.event.event.sn {
+            true => Ordering::Equal,
+            false => match self.event.event.sn > other.event.event.sn {
+                true => Ordering::Greater,
+                false => Ordering::Less,
+            }
+        })
+   }
+}
+
+impl Ord for TimestampedEventMessage {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.event.event.sn == other.event.event.sn {
+            true => Ordering::Equal,
+            false => match self.event.event.sn > other.event.event.sn {
+                true => Ordering::Greater,
+                false => Ordering::Less,
+            }
+        }
+    }
+}
+
+impl Eq for TimestampedEventMessage {}
+
+impl From<TimestampedEventMessage> for EventMessage {
+    fn from(event: TimestampedEventMessage) -> EventMessage {
+        event.event
+    }
+}
+
+/// WARNING: timestamp will change on conversion to current time
+impl From<EventMessage> for TimestampedEventMessage {
+    fn from(event: EventMessage) -> TimestampedEventMessage {
+        TimestampedEventMessage::new(event)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignedEventMessage {
     pub event_message: EventMessage,
     pub signatures: Vec<AttachedSignaturePrefix>,
+}
+#[derive(Serialize, Deserialize)]
+pub struct TimestampedSignedEventMessage {
+    pub timestamp: DateTime<Local>,
+    pub event: SignedEventMessage,
+}
+
+impl TimestampedSignedEventMessage {
+    pub fn new(event: SignedEventMessage) -> Self {
+        Self {
+            timestamp: Local::now(),
+            event
+        }
+    }
+}
+
+impl From<TimestampedSignedEventMessage> for SignedEventMessage {
+    fn from(event: TimestampedSignedEventMessage) -> SignedEventMessage {
+        event.event
+    }
+}
+
+impl From<SignedEventMessage> for TimestampedSignedEventMessage {
+    fn from(event: SignedEventMessage) -> TimestampedSignedEventMessage {
+        TimestampedSignedEventMessage::new(event)
+    }
 }
 
 #[derive(Debug, Clone)]
