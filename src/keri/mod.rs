@@ -1,5 +1,5 @@
 use crate::{
-    database::EventDatabase,
+    database::sled::SledEventDatabase,
     derivation::basic::Basic,
     derivation::self_addressing::SelfAddressing,
     derivation::self_signing::SelfSigning,
@@ -20,15 +20,15 @@ use crate::{
     state::IdentifierState,
 };
 mod test;
-pub struct Keri<D: EventDatabase, K: KeyManager> {
+pub struct Keri<K: KeyManager> {
     prefix: IdentifierPrefix,
     key_manager: K,
-    processor: EventProcessor<D>,
+    processor: EventProcessor<SledEventDatabase>,
 }
 
-impl<D: EventDatabase, K: KeyManager> Keri<D, K> {
+impl<K: KeyManager> Keri<K> {
     // incept a state and keys
-    pub fn new(db: D, key_manager: K, prefix: IdentifierPrefix) -> Result<Keri<D, K>, Error> {
+    pub fn new(db: SledEventDatabase, key_manager: K, prefix: IdentifierPrefix) -> Result<Keri<K>, Error> {
         Ok(Keri {
             prefix,
             key_manager,

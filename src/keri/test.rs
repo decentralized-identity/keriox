@@ -1,6 +1,7 @@
 #[cfg(test)]
 use crate::{
-    database::lmdb::LmdbEventDatabase,
+    // database::lmdb::LmdbEventDatabase,
+    database::sled::SledEventDatabase,
     error::Error,
     keri::Keri,
     prefix::IdentifierPrefix,
@@ -12,11 +13,9 @@ fn test_direct_mode() -> Result<(), Error> {
     use tempfile::Builder;
 
     // Create test db and event processor.
-    let alices_root = Builder::new().prefix("test-db").tempdir().unwrap();
-    let bobs_root = Builder::new().prefix("test-db2").tempdir().unwrap();
-    std::fs::create_dir_all(alices_root.path()).unwrap();
-    let alices_db = LmdbEventDatabase::new(alices_root.path()).unwrap();
-    let bobs_db = LmdbEventDatabase::new(bobs_root.path()).unwrap();
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    std::fs::create_dir_all(root.path()).unwrap();
+    let db = SledEventDatabase::new(root.path()).unwrap();
 
     // Init alice.
     let mut alice = Keri::new(alices_db, CryptoBox::new()?, IdentifierPrefix::default())?;

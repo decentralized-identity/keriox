@@ -1,6 +1,6 @@
 [package]
 name = "keri"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["Decentralized Identity Foundation", "Charles Cunningham <charles@jolocom.io>"]
 edition = "2018"
 description = "Core library for the Key Event Receipt Infrastructure "
@@ -12,7 +12,7 @@ license = "Apache-2.0"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-lmdb = ["rkv", "bincode"]
+# lmdb = ["rkv", "bincode"] # deprecated since 0.7
 sled-db = ["sled", "fixed"]
 default = ["sled-db"]
 

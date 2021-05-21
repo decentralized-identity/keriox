@@ -1,5 +1,5 @@
 pub use crate::event_message::{serialization_info::SerializationFormats, EventMessage};
-use crate::prefix::IdentifierPrefix;
+use crate::{event_message::SignedEventMessage, prefix::IdentifierPrefix};
 use crate::state::IdentifierState;
 use serde::{Deserialize, Serialize};
 pub mod event_data;
@@ -65,6 +65,33 @@ impl EventSemantics for Event {
             prefix: self.prefix.clone(),
             ..self.event_data.apply_to(state)?
         })
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct TimestampedSignedEventMessage {
+    pub timestamp: DateTime<Local>,
+    pub event: SignedEventMessage,
+}
+
+impl TimestampedSignedEventMessage {
+    pub fn new(event: SignedEventMessage) -> Self {
+        Self {
+            timestamp: Local::now(),
+            event
+        }
+    }
+}
+
+impl From<TimestampedSignedEventMessage> for SignedEventMessage {
+    fn from(event: TimestampedSignedEventMessage) -> SignedEventMessage {
+        event.event
+    }
+}
+
+impl From<SignedEventMessage> for TimestampedSignedEventMessage {
+    fn from(event: SignedEventMessage) -> TimestampedSignedEventMessage {
+        TimestampedSignedEventMessage::new(event)
     }
 }
 

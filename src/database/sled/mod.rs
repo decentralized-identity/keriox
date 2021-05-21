@@ -7,6 +7,7 @@ use crate::{
     event::{
         Event,
         TimestampedEvent,
+        TimestampedSignedEventMessage,
         event_data::{
             ReceiptNonTransferable,
             ReceiptTransferable
@@ -14,8 +15,8 @@ use crate::{
     }, prefix::{
         IdentifierPrefix,
         SelfAddressingPrefix,
-        AttachedSignaturePrefix,
-    }
+    },
+    event_message::SignedEventMessage,
 };
 
 pub struct SledEventDatabase {
@@ -24,6 +25,8 @@ pub struct SledEventDatabase {
     identifiers: SledEventTree<IdentifierPrefix>,
     // "evts" tree
     events: SledEventTreeVec<TimestampedEvent>,
+    // "sevts" tree
+    signed_events: SledEventTreeVec<TimestampedSignedEventMessage>,
     // "rcts" tree
     receipts_nt: SledEventTreeVec<ReceiptNonTransferable>,
     // "ures" tree
@@ -53,6 +56,7 @@ impl SledEventDatabase {
         Ok(Self {
             identifiers: SledEventTree::new(db.open_tree(b"iids")?),
             events: SledEventTreeVec::new(db.open_tree(b"evts")?),
+            signed_events: SledEventTreeVec::new(db.open_tree(b"sevets")?),
             receipts_nt: SledEventTreeVec::new(db.open_tree(b"rcts")?),
             escrowed_receipts_nt: SledEventTreeVec::new(db.open_tree(b"ures")?),
             receipts_t: SledEventTreeVec::new(db.open_tree(b"vrcs")?),
@@ -72,6 +76,16 @@ impl SledEventDatabase {
     pub fn get_events(&self, id: &IdentifierPrefix) -> Option<impl DoubleEndedIterator<Item = TimestampedEvent>> {
         self.events.iter_values(self.identifiers.designated_key(id))
     }
+
+    pub fn add_new_signed_event_message(&self, event: SignedEventMessage, id: &IdentifierPrefix)
+        -> Result<(), Error> {
+            self.signed_events.push(self.identifiers.designated_key(id), event.into())
+        }
+
+    pub fn get_signed_event_messages(&self, id: &IdentifierPrefix)
+        -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
+            self.signed_events.iter_values(self.identifiers.designated_key(id))
+        }
 
     pub fn add_escrow_t_receipt(&self, receipt: ReceiptTransferable, id: &IdentifierPrefix)
         -> Result<(), Error> {

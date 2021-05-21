@@ -69,6 +69,7 @@ where
         }
 
         /// check if `T` is present in `Vec<T>` in the DB
+        ///
         pub fn contains_value(&self, value: &T) -> bool
             where T: PartialEq {
                 self.tree.iter().flatten()
@@ -76,6 +77,8 @@ where
                     serde_cbor::from_slice::<Vec<T>>(&v).unwrap().contains(value))
         }
 
+        /// iterate inner collection under same key
+        ///
         pub fn iter_values(&self, key: u64) -> Option<impl DoubleEndedIterator<Item = T>> {
             if let Ok(Some(values)) = self.tree.get(key_bytes(key)) {
                 Some(serde_cbor::from_slice::<Vec<T>>(&values)
