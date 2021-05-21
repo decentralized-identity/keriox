@@ -76,27 +76,18 @@ impl EventProcessor {
     ) -> Result<Option<EventSeal>, Error> {
         let mut state = IdentifierState::default();
         let mut last_est = None;
-        for sn in 0.. {
-            let raw = match self
-                .db
-                .last_event_at_sn(id, sn)
-                .map_err(|_| Error::StorageError)?
-            {
-                Some(raw) => raw,
-                None => {
-                    // end of kel
-                    break;
+        if let Some(events) = self.db.get_events(id) {
+            for event in events {
+                state = state.apply(&event.event.event)?;
+                // TODO: is this event.event.event stuff too ugly? =)
+                last_est = match event.event.event.event_data {
+                    EventData::Icp(_) => Some(event.event),
+                    EventData::Rot(_) => Some(event.event),
+                    _ => last_est,
                 }
-            };
-            // parse event
-            let parsed = message(&raw).map_err(|_| Error::DeserializationError)?.1;
-            state = state.clone().apply(&parsed.event)?;
-
-            last_est = match parsed.event.event.event_data {
-                EventData::Icp(_) => Some(parsed.event),
-                EventData::Rot(_) => Some(parsed.event),
-                _ => last_est,
             }
+        } else {
+            return Ok(None);
         }
         let seal = last_est.and_then(|event| {
             let event_digest = SelfAddressing::Blake3_256.derive(&event.serialize().unwrap());
@@ -127,31 +118,27 @@ impl EventProcessor {
         sn: u64,
         event_digest: &SelfAddressingPrefix,
     ) -> Result<Option<KeyConfig>, Error> {
-        let raw = match self
-            .db
-            .last_event_at_sn(id, sn)
-            .map_err(|_| Error::StorageError)?
-        {
-            Some(r) => r,
-            None => return Ok(None),
-        };
-
-        // if it's the event we're looking for
-        if event_digest.verify_binding(&raw) {
-            // parse event
-            let parsed = message(&raw).map_err(|_| Error::DeserializationError)?.1;
-
-            // return the config or error if it's not an establishment event
-            return Ok(Some(match parsed.event.event.event_data {
-                EventData::Icp(icp) => icp.key_config,
-                EventData::Rot(rot) => rot.key_config,
-                EventData::Dip(dip) => dip.inception_data.key_config,
-                EventData::Drt(drt) => drt.rotation_data.key_config,
-                // the receipt has a binding but it's NOT an establishment event
-                _ => Err(Error::SemanticError("Receipt binding incorrect".into()))?,
-            }));
+        if let Some(events) = self.db.get_events(id) {
+            if let Some(event) = events.find(|e| e.event.event.sn == sn) {
+                match event.event.event.prefix {
+                    IdentifierPrefix::SelfAddressing(p) => {
+                        // if it's the event we're looking for
+                        if event_digest.digest == p.digest {
+                            // return the config or error if it's not an establishment event
+                            return Ok(Some(match event.event.event.event_data {
+                                EventData::Icp(icp) => icp.key_config,
+                                EventData::Rot(rot) => rot.key_config,
+                                EventData::Dip(dip) => dip.inception_data.key_config,
+                                EventData::Drt(drt) => drt.rotation_data.key_config,
+                                // the receipt has a binding but it's NOT an establishment event
+                                _ => Err(Error::SemanticError("Receipt binding incorrect".into()))?,
+                            }));
+                        }
+                    },
+                    _ => ()
+                }
+            }
         }
-
         Ok(None)
     }
 
