@@ -190,11 +190,7 @@ impl<D: EventDatabase, K: KeyManager> Keri<D, K> {
             signature,
             0,
         )];
-        let signed_rcp = SignedTransferableReceipt {
-            body: rcp,
-            event_seal: validator_event_seal,
-            signatures,
-        };
+        let signed_rcp = SignedTransferableReceipt::new(&rcp, validator_event_seal, signatures);
 
         self.processor
             .process(signed_message(&signed_rcp.serialize()?).unwrap().1)?;

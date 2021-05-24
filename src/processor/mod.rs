@@ -11,7 +11,7 @@ use crate::{
     },
     event_message::{
         parse::{message, Deserialized, DeserializedSignedEvent},
-        EventMessage, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
+        EventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
     },
     prefix::{IdentifierPrefix, SelfAddressingPrefix},
     state::{EventSemantics, IdentifierState},
@@ -359,10 +359,10 @@ impl<D: EventDatabase> EventProcessor<D> {
     ) -> Result<Option<IdentifierState>, Error> {
         match &vrc.body.event.event_data {
             EventData::Rct(r) => {
-                let seal = vrc.event_seal;
+                let seal = vrc.validator_seal.event_seal;
                 match self
                     .db
-                    .last_event_at_sn(&seal.prefix, seal.sn)
+                    .last_event_at_sn(&vrc.body.event.prefix, vrc.body.event.sn)
                     .map_err(|_| Error::StorageError)?
                 {
                     // No event found, escrow the receipt
@@ -377,6 +377,7 @@ impl<D: EventDatabase> EventProcessor<D> {
                                 )
                                 .map_err(|_| Error::StorageError)?
                         }
+                        return Err(Error::SemanticError("Receipt escrowed".into()));
                     }
                     // Event found, verify receipt and store
                     Some(event) => {

@@ -1,34 +1,49 @@
-use std::{convert::TryInto, str::FromStr};
+use std::str::FromStr;
 
-use keri::{derivation::{DerivationCode, attached_signature_code::b64_to_num, self_addressing::SelfAddressing}, event::sections::seal::EventSeal, prefix::{IdentifierPrefix, Prefix, SelfAddressingPrefix, parse::basic_prefix}};
-use nom::{bytes::complete::take, combinator::map_parser, error::ErrorKind, sequence::tuple};
+use base64::URL_SAFE;
 
-use crate::error::Error;
+use crate::{error::Error, event::sections::seal::EventSeal};
 
-pub struct AttachedSeal {
-    event_seal: EventSeal,
+use super::Prefix;
+
+#[derive(Debug, Clone)]
+pub struct AttachedEventSeal {
+    pub event_seal: EventSeal,
 }
 
-impl Prefix for AttachedSeal {
-    fn derivative(&self) -> Vec<u8> {
-        todo!()
+impl AttachedEventSeal {
+    pub fn new(seal: EventSeal) -> Self {
+        Self { event_seal: seal }
     }
 
-    fn derivation_code(&self) -> String {
-        "FAB".to_string()    
+    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
+        Ok([
+            "-FAB".as_bytes().to_vec(),
+            self.event_seal.prefix.to_str().as_bytes().to_vec(),
+            "0A".as_bytes().to_vec(),
+            num_to_base_64(self.event_seal.sn)?.as_bytes().to_vec(),
+            self.event_seal.event_digest.to_str().as_bytes().to_vec(),
+        ]
+        .concat())
     }
 }
 
-impl FromStr for AttachedSeal {
-    type Err = keri::error::Error;
+fn num_to_base_64(sn: u64) -> Result<String, Error> {
+    let mut tmp = vec![0, 0, 0, 0, 0, 0, 0, 0];
+    tmp.extend(u64::to_be_bytes(sn).to_vec());
+    Ok((&base64::encode_config(tmp, URL_SAFE)[..22]).to_string())
+}
+
+impl FromStr for AttachedEventSeal {
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match &s[0..3] {
-            "FAB" =>  {
+            "FAB" => {
                 let event_seal = EventSeal::default();
-                Ok(AttachedSeal {event_seal})
+                Ok(AttachedEventSeal { event_seal })
             }
-            _ => {Err(keri::error::Error::SemanticError("Can't parse event seal".into()))}
+            _ => Err(Error::SemanticError("Can't parse event seal".into())),
         }
     }
 }

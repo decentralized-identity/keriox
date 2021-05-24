@@ -93,7 +93,8 @@ mod tests {
     \"DHON1vWl6FEQt27fThWoNZsa88VrTkep6H-4HA8tr54s\",
     \"DThWoNZsa88VrTkeQt27fp6H-4HA8tr54sHON1vWl6FE\"
   ],
-  \"c\": []
+  \"c\": [],
+  \"a\": []
 }";
 
         let event: Event = serde_json::from_str(event_str)?;

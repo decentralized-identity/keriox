@@ -6,6 +6,7 @@ use base64::encode_config;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+pub mod attached_seal;
 pub mod attached_signature;
 pub mod basic;
 pub mod parse;

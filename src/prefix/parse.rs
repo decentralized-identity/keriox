@@ -144,7 +144,7 @@ pub fn self_signing_prefix(s: &[u8]) -> nom::IResult<&[u8], SelfSigningPrefix> {
     Ok((extra, code.derive(sig)))
 }
 
-pub fn attached_sn(s: &[u8]) -> nom::IResult<&[u8], u64> {
+fn attached_sn(s: &[u8]) -> nom::IResult<&[u8], u64> {
     let (more, type_c) = take(2u8)(s)?;
 
     const a: &'static [u8] = "0A".as_bytes();

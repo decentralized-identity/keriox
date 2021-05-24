@@ -6,7 +6,10 @@ use crate::{
         sections::seal::EventSeal,
         Event,
     },
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
+    prefix::{
+        attached_seal::AttachedEventSeal, AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix,
+        Prefix, SelfSigningPrefix,
+    },
     state::{EventSemantics, IdentifierState},
 };
 pub mod event_msg_builder;
@@ -39,15 +42,28 @@ pub struct SignedEventMessage {
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
 
+/// Signed Non-Transferrable Receipt
+///
+/// A receipt created by an Identifier of a non-transferrable type.
+/// Mostly intended for use by Witnesses.
+/// NOTE: This receipt has a unique structure to it's appended
+/// signatures
 #[derive(Debug, Clone)]
 pub struct SignedNontransferableReceipt {
     pub body: EventMessage,
     pub couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
 }
+
+/// Signed Transferrable Receipt
+///
+/// Event Receipt which is suitable for creation by Transferable
+/// Identifiers. Provides both the signatures and a commitment to
+/// the latest establishment event of the receipt creator.
+/// Mostly intended for use by Validators
 #[derive(Debug, Clone)]
 pub struct SignedTransferableReceipt {
     pub body: EventMessage,
-    pub event_seal: EventSeal,
+    pub validator_seal: AttachedEventSeal,
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
 
@@ -116,7 +132,7 @@ impl SignedTransferableReceipt {
     ) -> Self {
         Self {
             body: message.clone(),
-            event_seal,
+            validator_seal: AttachedEventSeal::new(event_seal),
             signatures: sigs,
         }
     }
@@ -124,11 +140,7 @@ impl SignedTransferableReceipt {
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         Ok([
             self.body.serialize()?,
-            "-FAB".as_bytes().to_vec(),
-            self.event_seal.prefix.to_str().as_bytes().to_vec(),
-            "0A".as_bytes().to_vec(),
-            num_to_base_64(self.event_seal.sn)?.as_bytes().to_vec(),
-            self.event_seal.event_digest.to_str().as_bytes().to_vec(),
+            self.validator_seal.serialize()?,
             get_sig_count(self.signatures.len() as u16)
                 .as_bytes()
                 .to_vec(),
@@ -139,12 +151,6 @@ impl SignedTransferableReceipt {
         ]
         .concat())
     }
-}
-
-fn num_to_base_64(sn: u64) -> Result<String, Error> {
-    let mut tmp = vec![0, 0, 0, 0, 0, 0, 0, 0];
-    tmp.extend(u64::to_be_bytes(sn).to_vec());
-    Ok((&base64::encode_config(tmp, URL_SAFE)[..22]).to_string())
 }
 
 impl EventSemantics for EventMessage {
@@ -311,6 +317,7 @@ mod tests {
                 key_config: KeyConfig::new(vec![pref0.clone()], Some(nxt.clone()), Some(1)),
                 witness_config: InceptionWitnessConfig::default(),
                 inception_configuration: vec![],
+                data: vec![],
             }),
         };
 

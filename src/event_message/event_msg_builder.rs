@@ -138,6 +138,7 @@ impl EventMsgBuilder {
                     key_config: key_config,
                     witness_config: InceptionWitnessConfig::default(),
                     inception_configuration: vec![],
+                    data: vec![],
                 };
 
                 match prefix {
@@ -179,6 +180,7 @@ impl EventMsgBuilder {
                     key_config: key_config,
                     witness_config: InceptionWitnessConfig::default(),
                     inception_configuration: vec![],
+                    data: vec![],
                 };
                 DelegatedInceptionEvent {
                     inception_data: icp_data,
