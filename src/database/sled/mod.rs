@@ -16,10 +16,7 @@ use crate::{
         TimestampedEventMessage,
         TimestampedSignedEventMessage,
     },
-    prefix::{
-        IdentifierPrefix,
-        SelfAddressingPrefix,
-    }
+    prefix::IdentifierPrefix,
 };
 
 pub struct SledEventDatabase {
@@ -39,15 +36,15 @@ pub struct SledEventDatabase {
     // "vres" tree
     escrowed_receipts_t: SledEventTreeVec<ReceiptTransferable>,
     // "kels" tree
-    key_event_logs: SledEventTreeVec<SelfAddressingPrefix>,
+    key_event_logs: SledEventTreeVec<SignedEventMessage>,
     // "pses" tree
-    partially_signed_events: SledEventTreeVec<TimestampedEventMessage>,
+    partially_signed_events: SledEventTreeVec<SignedEventMessage>,
     // "ooes" tree
-    out_of_order_events: SledEventTreeVec<TimestampedEventMessage>,
+    out_of_order_events: SledEventTreeVec<SignedEventMessage>,
     // "ldes" tree
     likely_duplicious_events: SledEventTreeVec<TimestampedEventMessage>,
     // "dels" tree
-    duplicitous_events: SledEventTreeVec<TimestampedEventMessage>,
+    duplicitous_events: SledEventTreeVec<SignedEventMessage>,
 }
 
 
@@ -90,6 +87,16 @@ impl SledEventDatabase {
             self.signed_events.iter_values(self.identifiers.designated_key(id))
         }
 
+    pub fn add_kel_finalized_event(&self, event: SignedEventMessage, id: &IdentifierPrefix)
+        -> Result<(), Error> {
+            self.key_event_logs.push(self.identifiers.designated_key(id), event)
+        }
+    
+    pub fn get_kel_finalized_events(&self, id: &IdentifierPrefix)
+        -> Option<impl DoubleEndedIterator<Item = SignedEventMessage>> {
+            self.key_event_logs.iter_values(self.identifiers.designated_key(id))
+        }
+
     pub fn add_escrow_t_receipt(&self, receipt: ReceiptTransferable, id: &IdentifierPrefix)
         -> Result<(), Error> {
             self.escrowed_receipts_t
@@ -112,21 +119,21 @@ impl SledEventDatabase {
             self.escrowed_receipts_nt.iter_values(self.identifiers.designated_key(id))
         }
 
-    pub fn add_outoforder_event(&self, event: EventMessage, id: &IdentifierPrefix) -> Result<(), Error> {
-        self.out_of_order_events.push(self.identifiers.designated_key(id), event.into())
+    pub fn add_outoforder_event(&self, event: SignedEventMessage, id: &IdentifierPrefix) -> Result<(), Error> {
+        self.out_of_order_events.push(self.identifiers.designated_key(id), event)
     }
 
     pub fn get_outoforder_events(&self, id: &IdentifierPrefix)
-        -> Option<impl DoubleEndedIterator<Item = TimestampedEventMessage>> {
+        -> Option<impl DoubleEndedIterator<Item = SignedEventMessage>> {
             self.out_of_order_events.iter_values(self.identifiers.designated_key(id))
         }
 
-    pub fn add_partially_signed_event(&self, event: EventMessage, id: &IdentifierPrefix) -> Result<(), Error> {
-        self.partially_signed_events.push(self.identifiers.designated_key(id), event.into())
+    pub fn add_partially_signed_event(&self, event: SignedEventMessage, id: &IdentifierPrefix) -> Result<(), Error> {
+        self.partially_signed_events.push(self.identifiers.designated_key(id), event)
     }
 
     pub fn get_partially_signed_events(&self, id: &IdentifierPrefix)
-        -> Option<impl DoubleEndedIterator<Item = TimestampedEventMessage>> {
+        -> Option<impl DoubleEndedIterator<Item = SignedEventMessage>> {
             self.partially_signed_events.iter_values(self.identifiers.designated_key(id))
         }
 
@@ -139,12 +146,12 @@ impl SledEventDatabase {
             self.likely_duplicious_events.iter_values(self.identifiers.designated_key(id))
         }
 
-    pub fn add_duplicious_event(&self, event: EventMessage, id: &IdentifierPrefix) -> Result<(), Error> {
-        self.duplicitous_events.push(self.identifiers.designated_key(id), event.into())
+    pub fn add_duplicious_event(&self, event: SignedEventMessage, id: &IdentifierPrefix) -> Result<(), Error> {
+        self.duplicitous_events.push(self.identifiers.designated_key(id), event)
     }
 
     pub fn get_duplicious_events(&self, id: &IdentifierPrefix)
-        -> Option<impl DoubleEndedIterator<Item = TimestampedEventMessage>> {
+        -> Option<impl DoubleEndedIterator<Item = SignedEventMessage>> {
             self.duplicitous_events.iter_values(self.identifiers.designated_key(id))
         }
 }

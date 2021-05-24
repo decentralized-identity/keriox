@@ -4,7 +4,7 @@ use crate::{database::sled::SledEventDatabase, derivation::self_addressing::Self
             seal::{EventSeal, LocationSeal, Seal},
             KeyConfig,
         },
-    }, event_message::{EventMessage, SignedEventMessage, SignedNontransferableReceipt, TimestampedEventMessage, parse::{message, Deserialized, DeserializedSignedEvent}}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
+    }, event_message::{EventMessage, SignedEventMessage, SignedNontransferableReceipt, TimestampedEventMessage, parse::{Deserialized, DeserializedSignedEvent}}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
 
 #[cfg(test)]
 mod tests;
@@ -145,8 +145,8 @@ impl EventProcessor {
     /// Validate delegating event seal.
     ///
     /// Validates binding between delegated and delegating events. The validation
-    /// is based on delegating location seal and delegated event raw.
-    fn validate_seal(&self, seal: LocationSeal, raw: &[u8]) -> Result<(), Error> {
+    /// is based on delegating location seal and delegated event.
+    fn validate_seal(&self, seal: LocationSeal, delegated_event: &[u8]) -> Result<(), Error> {
         // Check if event of seal's prefix and sn is in db.
         if let Some(events) = self.db.get_events(&seal.prefix) {
             match events.find(|event| event.event.event.sn == seal.sn) {
@@ -181,7 +181,7 @@ impl EventProcessor {
                     }?;
                     // Check if event seal list contains delegating event seal.
                     if !data.iter().any(|s| match s {
-                        Seal::Event(es) => es.event_digest.verify_binding(raw),
+                        Seal::Event(es) => es.event_digest.verify_binding(delegated_event),
                         _ => false,
                     }) {
                         return Err(Error::SemanticError(
@@ -225,34 +225,27 @@ impl EventProcessor {
     /// of the Identifier and applies it to update the state
     /// returns the updated state
     /// TODO improve checking and handling of errors!
-    pub fn process_event<'a>(
+    /// FIXME: refactor to remove multiple event recourse wrappers
+    pub fn process_event(
         &self,
-        event: DeserializedSignedEvent<'a>,
+        event: DeserializedSignedEvent,
     ) -> Result<Option<IdentifierState>, Error> {
-        // extract some useful info from the event for readability
-        let dig = SelfAddressing::Blake3_256.derive(event.event.raw);
-        let pref = &event.event.event.event.prefix.clone();
-        let sn = event.event.event.event.sn;
-        let ilk = event.event.event.event.event_data.clone();
-        let raw = &event.event.raw;
-        let sigs = event.signatures;
-
         // Log event.
-        self.db
-            .log_event(&pref, &dig, raw, &sigs)
-            .map_err(|_| Error::StorageError)?;
-
+        let signed_event = SignedEventMessage::new(
+                &event.event.event, event.signatures);
+        self.db.add_new_signed_event_message(signed_event, &event.event.event.event.prefix)?;
         // If delegated event, check its delegator seal.
-        match ilk {
-            EventData::Dip(dip) => self.validate_seal(dip.seal, &raw),
-            EventData::Drt(drt) => self.validate_seal(drt.seal, &raw),
+        match event.event.event.event.event_data {
+            EventData::Dip(dip) =>
+                self.validate_seal(dip.seal, &event.event.raw),
+            EventData::Drt(drt) =>
+                self.validate_seal(drt.seal, &event.event.raw),
             _ => Ok(()),
         }
         .or_else(|e| {
             if let Error::EventOutOfOrderError = e {
-                self.db
-                    .escrow_out_of_order_event(pref, sn, &dig)
-                    .map_err(|_| Error::StorageError)?;
+                // FIXME: should this be signed event instead?
+                self.db.add_outoforder_event(signed_event, &event.event.event.event.prefix)?
             };
             Err(e)
         })?;
@@ -262,31 +255,25 @@ impl EventProcessor {
                 // match on verification result
                 new_state
                     .current
-                    .verify(raw, &sigs)
+                    .verify(&event.event.raw, &event.signatures)
                     .and_then(|_result| {
                         // TODO should check if there are enough receipts and probably escrow
-                        self.db
-                            .finalise_event(pref, sn, &dig)
-                            .map_err(|_| Error::StorageError)?;
+                        self.db.add_kel_finalized_event(signed_event, &event.event.event.event.prefix)?;
                         Ok(Some(new_state))
                     })
                     .map_err(|e| match e {
-                        Error::NotEnoughSigsError => {
-                            match self.db.escrow_partially_signed_event(pref, sn, &dig) {
-                                Ok(_) => e,
-                                Err(_) => Error::StorageError,
-                            }
-                        }
+                        Error::NotEnoughSigsError => 
+                            self.db.add_partially_signed_event(signed_event, &event.event.event.event.prefix),
                         _ => e,
                     })
             })
             .map_err(|e| {
                 match e {
                     // see why application failed and reject or escrow accordingly
-                    Error::EventOutOfOrderError => {
-                        self.db.escrow_out_of_order_event(pref, sn, &dig)
-                    }
-                    Error::EventDuplicateError => self.db.duplicitous_event(pref, sn, &dig),
+                    Error::EventOutOfOrderError =>
+                        self.db.add_outoforder_event(signed_event, &event.event.event.event.prefix),
+                    Error::EventDuplicateError =>
+                        self.db.add_duplicious_event(signed_event, &event.event.event.event.prefix),
                     _ => Ok(()),
                 };
                 e
