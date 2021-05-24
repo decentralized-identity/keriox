@@ -106,8 +106,8 @@ impl EventProcessor {
     pub fn get_kerl(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Error> {
        match self.db.get_kel_finalized_events(id) {
            Some(events) => 
-               Ok(Some(events.map(|event| serde_json::to_string(&event).unwrap_or_default())
-                .fold(vec!(), |mut accum, mut str_event| { accum.append(&mut str_event.as_bytes().to_vec()); accum }))),
+               Ok(Some(events.map(|event| &event.serialize().unwrap_or_default())
+                .fold(vec!(), |mut accum, serialized_event| { accum.extend(serialized_event); accum }))),
             None => Ok(None)
        }
     }
