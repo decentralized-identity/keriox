@@ -11,6 +11,7 @@ use crate::{
 };
 pub mod event_msg_builder;
 pub mod serialization_info;
+use base64::URL_SAFE;
 use serde::{Deserialize, Serialize};
 use serialization_info::*;
 pub mod parse;
@@ -105,6 +106,45 @@ impl SignedEventMessage {
         ]
         .concat())
     }
+}
+
+impl SignedTransferableReceipt {
+    pub fn new(
+        message: &EventMessage,
+        event_seal: EventSeal,
+        sigs: Vec<AttachedSignaturePrefix>,
+    ) -> Self {
+        Self {
+            body: message.clone(),
+            event_seal,
+            signatures: sigs,
+        }
+    }
+
+    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
+        Ok([
+            self.body.serialize()?,
+            "-FAB".as_bytes().to_vec(),
+            self.event_seal.prefix.to_str().as_bytes().to_vec(),
+            "0A".as_bytes().to_vec(),
+            num_to_base_64(self.event_seal.sn)?.as_bytes().to_vec(),
+            self.event_seal.event_digest.to_str().as_bytes().to_vec(),
+            get_sig_count(self.signatures.len() as u16)
+                .as_bytes()
+                .to_vec(),
+            self.signatures
+                .iter()
+                .map(|sig| sig.to_str().as_bytes().to_vec())
+                .fold(vec![], |acc, next| [acc, next].concat()),
+        ]
+        .concat())
+    }
+}
+
+fn num_to_base_64(sn: u64) -> Result<String, Error> {
+    let mut tmp = vec![0, 0, 0, 0, 0, 0, 0, 0];
+    tmp.extend(u64::to_be_bytes(sn).to_vec());
+    Ok((&base64::encode_config(tmp, URL_SAFE)[..22]).to_string())
 }
 
 impl EventSemantics for EventMessage {

@@ -3,6 +3,7 @@ use crate::{
         attached_signature_code::b64_to_num, basic::Basic, self_addressing::SelfAddressing,
         self_signing::SelfSigning, DerivationCode,
     },
+    error::Error,
     event::sections::seal::EventSeal,
     keys::Key,
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
@@ -143,7 +144,7 @@ pub fn self_signing_prefix(s: &[u8]) -> nom::IResult<&[u8], SelfSigningPrefix> {
     Ok((extra, code.derive(sig)))
 }
 
-pub fn attached_sn(s: &[u8]) -> nom::IResult<&[u8], u16> {
+pub fn attached_sn(s: &[u8]) -> nom::IResult<&[u8], u64> {
     let (more, type_c) = take(2u8)(s)?;
 
     const a: &'static [u8] = "0A".as_bytes();
@@ -152,15 +153,20 @@ pub fn attached_sn(s: &[u8]) -> nom::IResult<&[u8], u16> {
         a => {
             let (rest, parsed_sn) = take(22u8)(more)?;
 
-            let parse =
-                // returns the u16 from the lowest 2 bytes of the b64 string
-                // currently only works for strings 4 chars or less
-                b64_to_num(parsed_sn).map_err(|_| nom::Err::Error((parsed_sn, ErrorKind::IsNot)))?;
+            let sn =
+                base64_to_num(parsed_sn).map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
 
-            Ok((rest, parse))
+            Ok((rest, sn))
         }
         _ => Err(nom::Err::Error((type_c, ErrorKind::IsNot))),
     }
+}
+
+fn base64_to_num(b64: &[u8]) -> Result<u64, Error> {
+    let b64decode = base64::decode_config(b64, URL_SAFE)?;
+    let mut sn_array: [u8; 8] = [0; 8];
+    sn_array.copy_from_slice(&b64decode[8..]);
+    Ok(u64::from_be_bytes(sn_array))
 }
 
 /// extracts the Event seal
@@ -191,7 +197,6 @@ pub fn event_seal(s: &[u8]) -> nom::IResult<&[u8], EventSeal> {
         _ => Err(nom::Err::Error((type_c, ErrorKind::IsNot))),
     }
 }
-
 
 #[test]
 fn test() {

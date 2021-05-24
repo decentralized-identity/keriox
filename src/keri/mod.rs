@@ -1,7 +1,24 @@
-use crate::{database::EventDatabase, derivation::basic::Basic, derivation::self_addressing::SelfAddressing, derivation::self_signing::SelfSigning, error::Error, event::sections::seal::{DigestSeal, Seal}, event::{event_data::EventData, Event, EventMessage, SerializationFormats}, event::{event_data::Receipt, sections::seal::EventSeal}, event_message::{SignedEventMessage, SignedTransferableReceipt}, event_message::parse::signed_message, event_message::{
+use crate::{
+    database::EventDatabase,
+    derivation::basic::Basic,
+    derivation::self_addressing::SelfAddressing,
+    derivation::self_signing::SelfSigning,
+    error::Error,
+    event::sections::seal::{DigestSeal, Seal},
+    event::{event_data::EventData, Event, EventMessage, SerializationFormats},
+    event::{event_data::Receipt, sections::seal::EventSeal},
+    event_message::parse::signed_message,
+    event_message::{
         event_msg_builder::{EventMsgBuilder, EventType},
         parse::{signed_event_stream, Deserialized},
-    }, prefix::AttachedSignaturePrefix, prefix::IdentifierPrefix, processor::EventProcessor, signer::KeyManager, state::IdentifierState};
+    },
+    event_message::{SignedEventMessage, SignedTransferableReceipt},
+    prefix::AttachedSignaturePrefix,
+    prefix::IdentifierPrefix,
+    processor::EventProcessor,
+    signer::KeyManager,
+    state::IdentifierState,
+};
 mod test;
 pub struct Keri<D: EventDatabase, K: KeyManager> {
     prefix: IdentifierPrefix,
@@ -165,17 +182,22 @@ impl<D: EventDatabase, K: KeyManager> Keri<D, K> {
             event_data: EventData::Rct(Receipt {
                 receipted_event_digest: SelfAddressing::Blake3_256.derive(&ser),
             }),
-        }.to_message(SerializationFormats::JSON)?;
+        }
+        .to_message(SerializationFormats::JSON)?;
 
         let signatures = vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
             signature,
             0,
         )];
-        let signed_rcp = SignedTransferableReceipt { body: rcp, event_seal: validator_event_seal, signatures };
+        let signed_rcp = SignedTransferableReceipt {
+            body: rcp,
+            event_seal: validator_event_seal,
+            signatures,
+        };
 
         self.processor
-            .process(signed_message(&rcp.serialize()?).unwrap().1)?;
+            .process(signed_message(&signed_rcp.serialize()?).unwrap().1)?;
 
         Ok(signed_rcp)
     }

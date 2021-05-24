@@ -130,7 +130,9 @@ fn couplets(s: &[u8]) -> nom::IResult<&[u8], Vec<(BasicPrefix, SelfSigningPrefix
     )(rest)
 }
 
-fn transferable_receipt_attachement(s: &[u8]) -> nom::IResult<&[u8], (EventSeal, Vec<AttachedSignaturePrefix>)> {
+fn transferable_receipt_attachement(
+    s: &[u8],
+) -> nom::IResult<&[u8], (EventSeal, Vec<AttachedSignaturePrefix>)> {
     tuple((event_seal, signatures))(s)
 }
 

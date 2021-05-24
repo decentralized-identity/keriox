@@ -1,10 +1,21 @@
-use crate::{database::EventDatabase, derivation::self_addressing::SelfAddressing, error::Error, event::{
+use crate::{
+    database::EventDatabase,
+    derivation::self_addressing::SelfAddressing,
+    error::Error,
+    event::{
         event_data::EventData,
         sections::{
             seal::{EventSeal, LocationSeal, Seal},
             KeyConfig,
         },
-    }, event_message::{EventMessage, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, parse::{message, Deserialized, DeserializedSignedEvent}}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
+    },
+    event_message::{
+        parse::{message, Deserialized, DeserializedSignedEvent},
+        EventMessage, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
+    },
+    prefix::{IdentifierPrefix, SelfAddressingPrefix},
+    state::{EventSemantics, IdentifierState},
+};
 
 #[cfg(test)]
 mod tests;
@@ -370,11 +381,7 @@ impl<D: EventDatabase> EventProcessor<D> {
                     // Event found, verify receipt and store
                     Some(event) => {
                         let keys = self
-                            .get_keys_at_event(
-                                &seal.prefix,
-                                seal.sn,
-                                &seal.event_digest,
-                            )?
+                            .get_keys_at_event(&seal.prefix, seal.sn, &seal.event_digest)?
                             .ok_or(Error::SemanticError("No establishment Event found".into()))?;
                         if keys.verify(&event, &vrc.signatures)? {
                             for sig in vrc.signatures {
