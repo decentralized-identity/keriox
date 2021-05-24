@@ -86,8 +86,8 @@ mod tests {
     \"BVrTkep6HHA8tr54sHON1Qt27fThWoNZsa88-4vWl6FE\"
   ],
   \"n\": \"FWoNZsa88VrTkep6HQt27fTh-4HA8tr54sHON1vWl6FE\",
-  \"wt\": \"2\",
-  \"w\":
+  \"bt\": \"2\",
+  \"b\":
   [
     \"DVrTkep6H-Qt27fThWoNZsa884HA8tr54sHON1vWl6FE\",
     \"DHON1vWl6FEQt27fThWoNZsa88VrTkep6H-4HA8tr54s\",
