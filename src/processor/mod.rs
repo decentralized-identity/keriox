@@ -104,7 +104,12 @@ impl EventProcessor {
     ///
     /// Returns the current validated KEL for a given Prefix
     pub fn get_kerl(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Error> {
-        self.db.get_kerl(id).map_err(|_| Error::StorageError)
+       match self.db.get_kel_finalized_events(id) {
+           Some(events) => 
+               Ok(Some(events.map(|event| serde_json::to_string(&event).unwrap_or_default())
+                .fold(vec!(), |mut accum, mut str_event| { accum.append(&mut str_event.as_bytes().to_vec()); accum }))),
+            None => Ok(None)
+       }
     }
 
     /// Get keys from Establishment Event
