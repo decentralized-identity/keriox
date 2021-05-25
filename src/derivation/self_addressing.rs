@@ -1,8 +1,8 @@
 use super::DerivationCode;
 use crate::{error::Error, prefix::SelfAddressingPrefix};
+use blake2::{Blake2b, Digest, VarBlake2b, VarBlake2s};
 use blake3;
 use core::str::FromStr;
-use blake2::{Blake2b, Digest, VarBlake2b, VarBlake2s};
 use sha2::{Sha256, Sha512};
 use sha3::{Sha3_256, Sha3_512};
 
@@ -93,8 +93,8 @@ impl FromStr for SelfAddressing {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match &s[..1] {
             "E" => Ok(Self::Blake3_256),
-            "F" => Ok(Self::Blake2B256(vec!())),
-            "G" => Ok(Self::Blake2S256(vec!())),
+            "F" => Ok(Self::Blake2B256(vec![])),
+            "G" => Ok(Self::Blake2S256(vec![])),
             "H" => Ok(Self::SHA3_256),
             "I" => Ok(Self::SHA2_256),
             "0" => match &s[1..2] {

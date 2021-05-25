@@ -217,7 +217,7 @@ pub(crate) fn test_db<D: EventDatabase>(db: D) -> Result<(), D::Error> {
     };
 
     // NOTE this is not actually a valid kel (sig indexes and prefix are wrong), just has the correct form
-    let signed = br#"{"v":"KERI10JSON000144_","i":"E005TfcIFvrzhJFxoGqebPHvtanxEwcfJOAYcUtCmhk8","s":"0","t":"icp","kt":"1","k":["D5UzOMC5Knhi5eA-Cr8ASuD8lUcZMcLtAhIZ33W5Z4hs","DEbposribdTgsnCSQgmVN6VKoc4Vpc-hs9rbskXQ2O2M","D46n6npISQETk7eGYnwe5Jq7USmEsckHeJRu2YoTCXhU"],"n":"E2zBfVYkE2uaGR5DmMVBbWsIdBIZVu5Ml6joenraD5Ho","wt":"0","w":[],"c":[]}-AADAAKfgMIEsKlrXqUxUyw1Qq7gFrg9mNWcDAkQAXUW6Hppvt4NBdEbU_2Wy7Re0zp5zVvLjjq4hjPE5aXSeIlHh7DgABIkKK8jI0l_tor7EaIM2B65aLn9e6Y3Igwa9OjDqbiyqXdL1yHxga7nhJY80Ct0zXGhm7hgLzgB6d86EqfXWLCQACBPCeqK_WXY64EZ8E91Y2trI6MfZT-f2NmtHCmmKhvt7AmehPcvQSvrcQbogdNEBr749AbVG7glVsV8WitVR2DQ"#;
+    let signed = br#"{"v":"KERI10JSON000144_","i":"E005TfcIFvrzhJFxoGqebPHvtanxEwcfJOAYcUtCmhk8","s":"0","t":"icp","kt":"1","k":["D5UzOMC5Knhi5eA-Cr8ASuD8lUcZMcLtAhIZ33W5Z4hs","DEbposribdTgsnCSQgmVN6VKoc4Vpc-hs9rbskXQ2O2M","D46n6npISQETk7eGYnwe5Jq7USmEsckHeJRu2YoTCXhU"],"n":"E2zBfVYkE2uaGR5DmMVBbWsIdBIZVu5Ml6joenraD5Ho","bt":"0","b":[],"c":[],"a":[]}-AADAAKfgMIEsKlrXqUxUyw1Qq7gFrg9mNWcDAkQAXUW6Hppvt4NBdEbU_2Wy7Re0zp5zVvLjjq4hjPE5aXSeIlHh7DgABIkKK8jI0l_tor7EaIM2B65aLn9e6Y3Igwa9OjDqbiyqXdL1yHxga7nhJY80Ct0zXGhm7hgLzgB6d86EqfXWLCQACBPCeqK_WXY64EZ8E91Y2trI6MfZT-f2NmtHCmmKhvt7AmehPcvQSvrcQbogdNEBr749AbVG7glVsV8WitVR2DQ"#;
     let deser = match signed_message(signed).unwrap().1 {
         Deserialized::Event(e) => e,
         _ => panic!(),

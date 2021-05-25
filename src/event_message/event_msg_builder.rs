@@ -1,6 +1,3 @@
-use std::str::FromStr;
-use ed25519_dalek::Keypair;
-use rand::rngs::OsRng;
 use crate::{
     derivation::{basic::Basic, self_addressing::SelfAddressing},
     error::Error,
@@ -21,9 +18,12 @@ use crate::{
         sections::KeyConfig,
         Event, EventMessage,
     },
-    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
     keys::Key,
+    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
 };
+use ed25519_dalek::Keypair;
+use rand::rngs::OsRng;
+use std::str::FromStr;
 
 pub struct EventMsgBuilder {
     event_type: EventType,
@@ -138,6 +138,7 @@ impl EventMsgBuilder {
                     key_config: key_config,
                     witness_config: InceptionWitnessConfig::default(),
                     inception_configuration: vec![],
+                    data: vec![],
                 };
 
                 match prefix {
@@ -179,6 +180,7 @@ impl EventMsgBuilder {
                     key_config: key_config,
                     witness_config: InceptionWitnessConfig::default(),
                     inception_configuration: vec![],
+                    data: vec![],
                 };
                 DelegatedInceptionEvent {
                     inception_data: icp_data,

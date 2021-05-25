@@ -6,6 +6,7 @@ use crate::{
     error::Error,
     event::{event_data::EventData, sections::seal::LocationSeal},
     event_message::parse::message,
+    prefix::SelfAddressingPrefix,
 };
 use crate::{
     event_message::{
@@ -29,7 +30,7 @@ fn test_process() -> Result<(), Error> {
     // Events and sigs are from keripy `test_multisig_digprefix` test.
     // (keripy/tests/core/test_eventing.py#1138)
 
-    let icp_raw = br#"{"v":"KERI10JSON000144_","i":"EJPRBUSEdUuZnh9kRGg8y7uBJDxTGZdp4YeUSqBv5sEk","s":"0","t":"icp","kt":"2","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"E9izzBkXX76sqt0N-tfLzJeRqj0W56p4pDQ_ZqNCDpyw","wt":"0","w":[],"c":[]}-AADAA74a3kHBjpaY2h3AzX8UursaGoW8kKU1rRLlMTYffMvKSTbhHHy96brGN2P6ehcmEW2nlUNZVuMf8zo6Qd8PkCgABIJfoSJejaDh1g-UZKkldxtTCwic7kB3s15EsDPKpm_6EhGcxVTt0AFXQUQMroKgKrGnxL0GP6gwEdmdu9dVRAgACtJFQBQiRX5iqWpJQntfAZTx6VIv_Ghydg1oB0QCq7s8D8LuKH5n1S5t8AbbQPXv6Paf7AVJRFv8lhCT5cdx3Bg"#;
+    let icp_raw = br#"{"v":"KERI10JSON00014b_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"0","t":"icp","kt":"2","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"E9izzBkXX76sqt0N-tfLzJeRqj0W56p4pDQ_ZqNCDpyw","bt":"0","b":[],"c":[],"a":[]}-AADAAhcaP-l0DkIKlJ87iIVcDx-m0iKPdSArEu63b-2cSEn9wXVGNpWw9nfwxodQ9G8J3q_Pm-AWfDwZGD9fobWuHBAAB6mz7zP0xFNBEBfSKG4mjpPbeOXktaIyX8mfsEa1A3Psf7eKxSrJ5Woj3iUB2AhhLg412-zkk795qxsK2xfdxBAACj5wdW-EyUJNgW0LHePQcSFNxW3ZyPregL4H2FoOrsPxLa3MZx6xYTh6i7YRMGY50ezEjV81hkI1Yce75M_bPCQ"#;
     let deserialized_icp = parse::signed_message(icp_raw).unwrap().1;
 
     let (id, raw_parsed) = match &deserialized_icp {
@@ -44,7 +45,7 @@ fn test_process() -> Result<(), Error> {
     let icp_from_db = event_processor.db.last_event_at_sn(&id, 0).unwrap();
     assert_eq!(icp_from_db, Some(raw_parsed));
 
-    let rot_raw = br#"{"v":"KERI10JSON000180_","i":"EJPRBUSEdUuZnh9kRGg8y7uBJDxTGZdp4YeUSqBv5sEk","s":"1","t":"rot","p":"EBI6frz8AI-glGeV60vAaSAiI5mxGFWUeyzADKYHzaPU","kt":"2","k":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ","D1kcBE7h0ImWW6_Sp7MQxGYSshZZz6XM7OiUE5DXm0dU","D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM"],"n":"EQpRYqbID2rW8X5lB6mOzDckJEIFae6NbJISXgJSN9qg","wt":"0","wr":[],"wa":[],"a":[]}-AADAAC-daSxzSMhp4Sptp_3RLfOjK04Gi7beE7luKrZmT1QoCdsMq6n2XZ5X_V8FoC7U16tLESDVY3wMrIkq8kzFnBwABSNp89up9bg97gmVgCx-Hkumjh8h9bOBlyoPk0pD2e0EuaKGdP9prsvsnD8UzFgqynlIjkvJY9CNX4Yta09CDBQACnU4KEpqLqSTuGyphlcgSCwBF-8tnKKyEt2_ROONJiD5Pod8nJVMfj-OvAqkyXGTu53YAXz-B984ndAnPWzrVAg"#;
+    let rot_raw = br#"{"v":"KERI10JSON000180_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"1","t":"rot","p":"ElIKmVhsgDtxLhFqsWPASdq9J2slLqG-Oiov0rEG4s-w","kt":"2","k":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ","D1kcBE7h0ImWW6_Sp7MQxGYSshZZz6XM7OiUE5DXm0dU","D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM"],"n":"EQpRYqbID2rW8X5lB6mOzDckJEIFae6NbJISXgJSN9qg","bt":"0","br":[],"ba":[],"a":[]}-AADAAOA7_2NfORAD7hnavnFDhIQ_1fX1zVjNzFLYLOqW4mLdmNlE4745-o75wtaPX1Reg27YP0lgrCFW_3Evz9ebNAQAB6CJhTEANFN8fAFEdxwbnllsUd3jBTZHeeR-KiYe0yjCdOhbEnTLKTpvwei9QsAP0z3xc6jKjUNJ6PoxNnmD7AQAC4YfEq1tZPteXlH2cLOMjOAxqygRgbDsFRvjEQCHQva1K4YsS3ErQjuKd5Z57Uac-aDaRjeH8KdSSDvtNshIyBw"#;
     let deserialized_rot = parse::signed_message(rot_raw).unwrap().1;
 
     let raw_parsed = match &deserialized_rot {
@@ -62,7 +63,7 @@ fn test_process() -> Result<(), Error> {
     assert!(id_state.is_err());
     assert!(matches!(id_state, Err(Error::EventDuplicateError)));
 
-    let ixn_raw = br#"{"v":"KERI10JSON000098_","i":"EJPRBUSEdUuZnh9kRGg8y7uBJDxTGZdp4YeUSqBv5sEk","s":"2","t":"ixn","p":"EH4SWmiiDBa9pN89Hg9EXXaccYkBYiTB_lnjo_bmVfjY","a":[]}-AADAAliN9WXT4t2bSliF19e1MN7sj3mU13c_DtHfumAunfo4u5_-X_7rFN4FZBMeb7QuXioWFki7qzf4VAr94hxN4BAABK2yFgdhLCiGaFjFjXEuwS6oSuRom3EXLQM1dNVwBbVYEoYlGK9FT8vXJ-nb_eo26xPoMAbvq364zT7HFP_PiCAACBc-Ck4fnPNi-JDNHE8TpPkutyRZ0bJ1cdadui3lbuw2-dgACtWwMH5viiR83djYdzKjCZtKpIz7o31hL39tmAw"#;
+    let ixn_raw = br#"{"v":"KERI10JSON000098_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"2","t":"ixn","p":"EFLtKYQZIoCFdSEjP7D5OgqElY2WwFB5vQD0Uvtp4RmI","a":[]}-AADAAip7QM2tvcyC4vbSX4A4avT03hHrJTTlkjQujOZRMroRL897wojcI4DIyxejOqsZcjrZHlU4S3RLYGmVbDEoPDgAB3NZj06_KCwxdTdIgCMETTHVJQa5AB8-dtqoD7ltaFIQxmC2K_ESp6DFLOrGQ2xTr97a-By1beM66YyBThjV8DQAC50owTQUxkyJ78vato0HuX9Edx-OxvBoepr61KknIfCjXKnlZrf-s_L0XFbz_0k8t3c9gmPkaI2vI-ZhzP31jBA"#;
     let deserialized_ixn = parse::signed_message(ixn_raw).unwrap().1;
 
     let raw_parsed = match &deserialized_ixn {
@@ -78,7 +79,7 @@ fn test_process() -> Result<(), Error> {
     assert_eq!(ixn_from_db, Some(raw_parsed));
 
     // Construct partially signed interaction event.
-    let ixn_raw_2 = br#"{"v":"KERI10JSON000098_","i":"EJPRBUSEdUuZnh9kRGg8y7uBJDxTGZdp4YeUSqBv5sEk","s":"3","t":"ixn","p":"EpAHPuE6SqPw_oodA7utfEUxFh2pL6iYJ7Uwy1UQqi08","a":[]}-AADAAsMWMYvI8ymFUmdwiOSBqS16nOSYT70xKMztFprjdpDQC4VGsOcChyd9XsCqu_UId0H2-gbesX-ql3skh-qf0DwABVVVWbOMbnO8gn4EOAiY9wrGP7Q1uh8a-WUyPYlaii3iQ2Qucu_kzznl7MgnKeH2c7m_3h7HfoebC5wngg5-SAQACiau2633rcR8zTlvCMq4tQL2BpPMV61FgAU-9RVvBsbSkEs00mxwoxN_Xz4nqUaCX9bR8t9Mx3mgABXemOeTMAQ"#;
+    let ixn_raw_2 = br#"{"v":"KERI10JSON000098_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"3","t":"ixn","p":"ElB_2LYB2i5wus2Dscnmc6e302HK-pgxLIe7iJhftzl0","a":[]}-AADAA18DLkJf2G--KOpRW2aD6ZAXR4koYdj0_OzEfDF5PFP3Y5vx8MSY3UwRBN97AT1pIkDVGqVbBg6nFi-0Bg5RTBQABZq5Kn6sML7NRTEyFKfyHez1YQJ4gzSqGsf1nyOxrXl5h0gwJllyNwTCzQhoyVT2fFAKtt9N_vaP9f90wB2ugCAACLsZcJWVrb1hL7EqL0wuzdtEJOSr-5-7EL0ae_nzvfCO6fw4q0PjgzCgFtoeDbAqUQbhzjfaybDwF9z9MVelWBg"#;
     let deserialized_ixn = parse::signed_message(ixn_raw_2).unwrap().1;
     // Make event partially signed.
     let partially_signed_deserialized_ixn = match deserialized_ixn {
@@ -98,8 +99,8 @@ fn test_process() -> Result<(), Error> {
     let ixn_from_db = event_processor.db.last_event_at_sn(&id, 3);
     assert!(matches!(ixn_from_db, Ok(None)));
 
-    // Out of order event.
-    let out_of_order_rot_raw = br#"{"v":"KERI10JSON000154_","i":"EJPRBUSEdUuZnh9kRGg8y7uBJDxTGZdp4YeUSqBv5sEk","s":"4","t":"rot","p":"E1-rI18gS9qOinFpkbhlLOjOh_V8Sy90qIU_xfd-OxWk","kt":"2","k":["D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM","DVjWcaNX2gCkHOjk6rkmqPBCxkRCqwIJ-3OjdYmMwxf4","DT1nEDepd6CSAMCE7NY_jlLdG6_mKUlKS_mW-2HJY1hg"],"n":"","wt":"0","wr":[],"wa":[],"a":[]}-AADAAt2REL9QiIbO71AiYh4R4tpuG5mDTViVmvOesmAxG29UIB_FZT-vMPUpM1k52CwU-yB_YI_zneruJuDdMzTUhDAABHZyt_gu_6pql52HnLVCmu6mCPzH3D8GkMW1cAykkUtve32A6Xz31cMrABl8AJMQTK_fCchp_qwsisbR-1Un1BAACGoJ1eRTTwyLzeoXegQgqseEv3JREFYWGEuiB-LVSlb0-L1aTegUIop6wos0uZltsAqmt3zNA-AMxIkXF8qhLDg"#;
+    // // Out of order event.
+    let out_of_order_rot_raw = br#"{"v":"KERI10JSON000154_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"4","t":"rot","p":"EacZ-dpgav8rilfpmIDsTvH4vWzc9Tm_3p7Vxjmb7iG0","kt":"2","k":["D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM","DVjWcaNX2gCkHOjk6rkmqPBCxkRCqwIJ-3OjdYmMwxf4","DT1nEDepd6CSAMCE7NY_jlLdG6_mKUlKS_mW-2HJY1hg"],"n":"","bt":"0","br":[],"ba":[],"a":[]}-AADAAt2KPgLzJvXorePSDjHLAStyJG9CakJuGau8QczgtdKPR3JHAOob5wPtTUJD2gHcZXH3wZ6ALM0mZSS6UdocsBwAB50HQHN2JHgj7dNfPQhqiDogbuT5WEx5Mi2Y5cefA6IHgrrQ3WSjZ3Bqai8t5vYfxg_xqcSRJTLkLRNSHZUzMCwACOMQNUmOXYHiHe9cxFie7Yr1y0lJ1tyQEbJnwa1Mr65LmnBIiVuGISDJXy74TZnv0PAnNCJF6TMtltX7nHf7LBw"#;
     let out_of_order_rot = parse::signed_message(out_of_order_rot_raw).unwrap().1;
 
     let id_state = event_processor.process(out_of_order_rot);
@@ -110,7 +111,7 @@ fn test_process() -> Result<(), Error> {
     let raw_from_db = event_processor.db.last_event_at_sn(&id, 4);
     assert!(matches!(raw_from_db, Ok(None)));
 
-    let id: IdentifierPrefix = "EJPRBUSEdUuZnh9kRGg8y7uBJDxTGZdp4YeUSqBv5sEk".parse()?;
+    let id: IdentifierPrefix = "EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8".parse()?;
     let mut kel = Vec::new();
     kel.extend(icp_raw);
     kel.extend(rot_raw);
@@ -134,13 +135,13 @@ fn test_process_receipt() -> Result<(), Error> {
     // Events and sigs are from keripy `test_direct_mode` test.
     // (keripy/tests/core/test_eventing.py#1855)
     // Parse and process controller's inception event.
-    let icp_raw = br#"{"v":"KERI10JSON0000e6_","i":"EH7Oq9oxCgYa-nnNLvwhp9sFZpALILlRYyB-6n4WDi7w","s":"0","t":"icp","kt":"1","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"n":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","wt":"0","w":[],"c":[]}-AABAAmDoPp9jDio1hznNDO-3T2KA_FUbY8f_qybT6_FqPAuf89e9AMDXP5wch6jvT4Ev4QRp8HqtTb9t2Y6_KJPYlBw"#;
+    let icp_raw = br#"{"v":"KERI10JSON0000ed_","i":"EQf1hzB6s5saaQPdDAsEzSMEFoQx_WLsq93bjPu5wuqA","s":"0","t":"icp","kt":"1","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"n":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","bt":"0","b":[],"c":[],"a":[]}-AABAAvA7i3r6vs3ckxEZ2zVO8AtbjnaLKE_gwu0XNtzwB9p0fLKnC05cA07FWVx-mqoLDUO8mF1RcnoQvXWkVv_dtBA"#;
     let icp = parse::signed_message(icp_raw).unwrap().1;
 
     let controller_id_state = event_processor.process(icp)?;
 
     // Parse receipt of controller's inception event.
-    let vrc_raw = br#"{"v":"KERI10JSON000105_","i":"EH7Oq9oxCgYa-nnNLvwhp9sFZpALILlRYyB-6n4WDi7w","s":"0","t":"vrc","d":"EEnwxEm5Bg5s5aTLsgQCNpubIYzwlvMwZIzdOM0Z3u7o","a":{"i":"EpDA1n-WiBA0A8YOqnKrB-wWQYYC49i5zY_qrIZIicQg","s":"0","d":"EGFSGYH2BjtKwX1osO0ZvLw98nuuo3lMkveRoPIJzupo"}}-AABAAb6S-RXeAqUKl8UuNwYpiaFARhMj-95elxmr7uNU8m7buVSPVLbTWcQYfI_04HoP_A_fvlU_b099fiEJyDSA2Cg"#;
+    let vrc_raw = br#"{"v":"KERI10JSON000091_","i":"EQf1hzB6s5saaQPdDAsEzSMEFoQx_WLsq93bjPu5wuqA","s":"0","t":"rct","d":"EXeKMHPw0ql8vHiBOpo72AOrOsWZ3bRDL-DKkYHo4v6w"}-FABED9EB3sA5u2vCPOEmX3d7bEyHiSh7Xi8fjew2KMl3FQM0AAAAAAAAAAAAAAAAAAAAAAAEeGqW24EnxUgO_wfuFo6GR_vii-RNv5iGo8ibUrhe6Z0-AABAAocy9m9ToxeeZk-FkgjFh1x839Ims4peTy2C5MdawIwoa9wlIDbD-wGmiGO4QdrQ1lSntqUAUMkcGAzB0Q6SsAA"#;
     let rcp = parse::signed_message(vrc_raw).unwrap().1;
 
     let id_state = event_processor.process(rcp.clone());
@@ -148,7 +149,7 @@ fn test_process_receipt() -> Result<(), Error> {
     assert!(id_state.is_err());
 
     // Parse and process validator's inception event.
-    let val_icp_raw = br#"{"v":"KERI10JSON0000e6_","i":"EpDA1n-WiBA0A8YOqnKrB-wWQYYC49i5zY_qrIZIicQg","s":"0","t":"icp","kt":"1","k":["D8KY1sKmgyjAiUDdUBPNPyrSz_ad_Qf9yzhDNZlEKiMc"],"n":"EOWDAJvex5dZzDxeHBANyaIoUG3F4-ic81G6GwtnC4f4","wt":"0","w":[],"c":[]}-AABAAll_W0_FsjUyJnYokSNPqq7xdwIBs0ebq2eUez6RKNB-UG_y6fD0e6fb_nANvmNCWjsoFjWv3XP3ApXUabMgyBA"#;
+    let val_icp_raw = br#"{"v":"KERI10JSON0000ed_","i":"ED9EB3sA5u2vCPOEmX3d7bEyHiSh7Xi8fjew2KMl3FQM","s":"0","t":"icp","kt":"1","k":["D8KY1sKmgyjAiUDdUBPNPyrSz_ad_Qf9yzhDNZlEKiMc"],"n":"EOWDAJvex5dZzDxeHBANyaIoUG3F4-ic81G6GwtnC4f4","bt":"0","b":[],"c":[],"a":[]}-AABAArFZxr-FnvQVZFX8WSipIxCGVCJjT6fj6qkZ-ei9UAGshPsqdX7scy0zNIB4_AfIjdSLLRWgL33AJmC2neaxuDg"#;
     let val_icp = parse::signed_message(val_icp_raw).unwrap().1;
 
     event_processor.process(val_icp)?;
@@ -182,12 +183,12 @@ fn test_process_delegated() -> Result<(), Error> {
     // (keripy/tests/core/test_delegating.py#62)
     let bobs_pref: IdentifierPrefix = "EiBlVttjqvySMbA4ShN19rSrz3D0ioNW-Uj92Ri7XnFE".parse()?;
 
-    let bobs_icp = br#"{"v":"KERI10JSON0000e6_","i":"EiBlVttjqvySMbA4ShN19rSrz3D0ioNW-Uj92Ri7XnFE","s":"0","t":"icp","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","wt":"0","w":[],"c":[]}-AABAAQPFdtnncXLz6dE6A-tXGYYK0BHu3I3Pj-G8DxlbzC3yx5MV8yucZILqAA5toZNODnHVHZtPIMkDknqldL4utBQ"#;
+    let bobs_icp = br#"{"v":"KERI10JSON0000ed_","i":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI","s":"0","t":"icp","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","bt":"0","b":[],"c":[],"a":[]}-AABAAp8S6RgfLwdCEiz0jL9cXaDwTJF6MLuKyXp7EfJtrp2myOikOJVUB-w9UGZc1Y8dnURxhXPSca-ZEUAV73XOaAw"#;
     let msg = signed_message(bobs_icp).unwrap().1;
     event_processor.process(msg)?;
 
     // Delegated inception event.
-    let dip_raw = br#"{"v":"KERI10JSON000165_","i":"ErLe2qWp4VCmDp7v_R01tC-ha13ZEZY0VGcgYtPRhqPs","s":"0","t":"dip","kt":"1","k":["DuK1x8ydpucu3480Jpd1XBfjnCwb3dZ3x5b1CJmuUphA"],"n":"EWWkjZkZDXF74O2bOQ4H5hu4nXDlKg2m4CBEBkUxibiU","wt":"0","w":[],"c":[],"da":{"i":"EiBlVttjqvySMbA4ShN19rSrz3D0ioNW-Uj92Ri7XnFE","s":"1","t":"ixn","p":"EvP2kWxEjTMI3auc6x64EpU-nMQZHiBeKeuavcGdRB24"}}-AABAADv-a3LeXEStuY1LHknepuJ7mBcTByugqQ1TNRMrIa0rctfjKsh-hkkkpwDj6M_OLLaFtLqBpmdNTUgBPANLzCQ"#;
+    let dip_raw = br#"{"v":"KERI10JSON000121_","i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"0","t":"dip","kt":"1","k":["DuK1x8ydpucu3480Jpd1XBfjnCwb3dZ3x5b1CJmuUphA"],"n":"EWWkjZkZDXF74O2bOQ4H5hu4nXDlKg2m4CBEBkUxibiU","bt":"0","b":[],"c":[],"a":[],"di":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI"}-AABAA2_8Guj0Gf2JoNTq7hOs4u6eOOWhENALJWDfLxkVcS2uLh753FjtyE80lpeS3to1C9yvENyMnyN4q96ehA4exDA-GAB0AAAAAAAAAAAAAAAAAAAAAAQE3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII"#;
     let deserialized_dip = signed_message(dip_raw).unwrap().1;
 
     // Process dip event before delegating ixn event.
@@ -201,7 +202,7 @@ fn test_process_delegated() -> Result<(), Error> {
     assert!(matches!(dip_from_db, Ok(None)));
 
     // Bob's ixn event with delegating event seal.
-    let bobs_ixn = br#"{"v":"KERI10JSON000107_","i":"EiBlVttjqvySMbA4ShN19rSrz3D0ioNW-Uj92Ri7XnFE","s":"1","t":"ixn","p":"EvP2kWxEjTMI3auc6x64EpU-nMQZHiBeKeuavcGdRB24","a":[{"i":"ErLe2qWp4VCmDp7v_R01tC-ha13ZEZY0VGcgYtPRhqPs","s":"0","d":"ESDuaqpoI8-HLD8-eLijUMZpXqYFkNArJFDvt3ABYr9I"}]}-AABAAZ4V2cSIXYEPg5BtkJSHVBj-A0dGI6rH2XGaVt1kewqGeJjpy4uzObPWnoBpaEojFa5AnrUJEgMytORoWMqEhCw"#;
+    let bobs_ixn = br#"{"v":"KERI10JSON000107_","i":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI","s":"1","t":"ixn","p":"E1-QL0TCdsBTRaKoakLjFhjSlELK60Vv8WdRaG6zMnTM","a":[{"i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"0","d":"E1x1JOub6oEQkxAxTNFu1Pma6y-lrbprNsaILHJHoPmY"}]}-AABAAROVSK0qK2gqlr_OUsnHNW_ksCyLVmRaysRne2dI5dweECGIy3_ZuFHyOofiDRt5tRE09PlS0uZdot6byFNr-AA'"#;
     let deserialized_ixn = signed_message(bobs_ixn).unwrap().1;
     event_processor.process(deserialized_ixn.clone())?;
 
@@ -220,11 +221,11 @@ fn test_process_delegated() -> Result<(), Error> {
     assert_eq!(dip_from_db, Some(raw_parsed(deserialized_dip)?));
 
     // Bobs interaction event with delegated event seal.
-    let bob_ixn = br#"{"v":"KERI10JSON000107_","i":"EiBlVttjqvySMbA4ShN19rSrz3D0ioNW-Uj92Ri7XnFE","s":"2","t":"ixn","p":"EtzXPztLsGC5DGyooSdHdBGIOHjhblBWtZ_AOhGS-hDE","a":[{"i":"ErLe2qWp4VCmDp7v_R01tC-ha13ZEZY0VGcgYtPRhqPs","s":"1","d":"E-dZsWLp2IIPVDbGdGS-yvuw4HeV_w_w76FHsofmuiq0"}]}-AABAAmloDxOwz6ztvRR_4N8Hn-6ZJk6_0nQhfNE7bzX6NpJRfYDwmUw3rXod0g46iFOLqEWw12oaFVzVH85NYAh67Ag"#;
+    let bob_ixn = br#"{"v":"KERI10JSON000107_","i":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI","s":"2","t":"ixn","p":"E3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII","a":[{"i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"1","d":"EPjLBcb4pp-3PGvSi_fTvLvsqUqFoJ0CVCHvIFfu93Xc"}]}-AABAAclMVE-bkIn-wPiAqfgR384nWmslQHQvmo2o3xQvd_4Bt6bflc4BAmfBa03KgrDVqmB7qG2VXQbOHevkzOgRdD"#;
     let deserialized_ixn_drt = signed_message(bob_ixn).unwrap().1;
 
     // Delegated rotation event.
-    let drt_raw = br#"{"v":"KERI10JSON0001a1_","i":"ErLe2qWp4VCmDp7v_R01tC-ha13ZEZY0VGcgYtPRhqPs","s":"1","t":"drt","p":"ESDuaqpoI8-HLD8-eLijUMZpXqYFkNArJFDvt3ABYr9I","kt":"1","k":["DTf6QZWoet154o9wvzeMuNhLQRr8JaAUeiC6wjB_4_08"],"n":"E8kyiXDfkE7idwWnAZQjHbUZMz-kd_yIMH0miptIFFPo","wt":"0","wr":[],"wa":[],"a":[],"da":{"i":"EiBlVttjqvySMbA4ShN19rSrz3D0ioNW-Uj92Ri7XnFE","s":"2","t":"ixn","p":"EtzXPztLsGC5DGyooSdHdBGIOHjhblBWtZ_AOhGS-hDE"}}-AABAAXcUl6KlY4VOx8ZumFMc0uR4iHBGmPQo4IAx0nIiiEDB_u2ewkvgIDIp1ELDGxfc2VVUkl38Z7PqwydBdpIK0DA"#;
+    let drt_raw = br#"{"v":"KERI10JSON000122_","i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"1","t":"drt","p":"E1x1JOub6oEQkxAxTNFu1Pma6y-lrbprNsaILHJHoPmY","kt":"1","k":["DTf6QZWoet154o9wvzeMuNhLQRr8JaAUeiC6wjB_4_08"],"n":"E8kyiXDfkE7idwWnAZQjHbUZMz-kd_yIMH0miptIFFPo","bt":"0","br":[],"ba":[],"a":[]}-AABAAAVUMNfOl9Fcqx-C3fAYnaxvsiJJO3zG6rP0FQ2WVp__hMEaprrQbJL6-Esnny3U5zvMOqbso17rvecTwmVIwDw-GAB0AAAAAAAAAAAAAAAAAAAAAAgEbOI0OIIFv2VV5bmeSq1pwCn-6b2k6TdWcCbJHE6Ly7o"#;
     let deserialized_drt = signed_message(drt_raw).unwrap().1;
 
     // Process drt event before delegating ixn event.
@@ -315,21 +316,20 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
     let db = LmdbEventDatabase::new(root.path()).unwrap();
     let event_processor = EventProcessor::new(db);
 
-    let kerl_str = br#"{"v":"KERI10JSON0000e6_","i":"Dw6a91H7DSGKViP5rXvq3ToosLbsD9EQvwEAP2h4fp5w","s":"0","t":"icp","kt":"1","k":["Dw6a91H7DSGKViP5rXvq3ToosLbsD9EQvwEAP2h4fp5w"],"n":"EASFIEHtrEl7m-4L4_6fLUwE8VSsWVyw_2si5vb4jnrk","wt":"0","w":[],"c":[]}-AABAAttCGUqzUu8rQPl9TkPzs-MuczytlwI6XUekUeoa6waaY9hHWPpetFJ5M0zjEdFUR1s0kN0U5n-jyk-r-K0vUDg{"v":"KERI10JSON000122_","i":"Dw6a91H7DSGKViP5rXvq3ToosLbsD9EQvwEAP2h4fp5w","s":"1","t":"rot","p":"EuCdQ84sUCImYeXgfDcoIPYW1pQ6WBBIQHAfyGRKGN4Q","kt":"1","k":["DoCl1sPSeuzGoLQ_83qHtuZeAVThLu13kb4k23FkVDOg"],"n":"EiFDXLjMHWktBaDptBlmWvarRGO2G--7eUUllWwYJDyE","wt":"0","wr":[],"wa":[],"a":[]}-AABAAMg3D1oTUIuaDymERF-zD6tF1r9EatcOTcRQ1EQEV1h9CQoBSqfasfQBymyJDo2IOPA5hqirLqMfajZSoTgKZAg{"v":"KERI10JSON000122_","i":"Dw6a91H7DSGKViP5rXvq3ToosLbsD9EQvwEAP2h4fp5w","s":"2","t":"rot","p":"EA31ALscbTvnpsA0Uhl9euQYm9bVmHtNvP8I3Ctz8RGM","kt":"1","k":["DGTEck3tn-RmmvVpQb9YJyXSkTVrW8umwUzXQbsDDo3s"],"n":"E3bqoGXtOr6blxbatLZkv9g-Eap0247DOJh4jD81H4g4","wt":"0","wr":[],"wa":[],"a":[]}-AABAAoQCoJb3adFGNXHE9TF-e_efDGu1BJPQyCHZr6kHc1tYp0olKfdKAcYIN_JSGgtLMYKwswLq__KYIRtMfg-U4Bg{"v":"KERI10JSON0000cc_","i":"Dw6a91H7DSGKViP5rXvq3ToosLbsD9EQvwEAP2h4fp5w","s":"3","t":"ixn","p":"EIdLcIxlYfZuk20iUXuWLDVi8wXuGU38yvBIu-Ac_2w8","a":[{"d":"Ey9J7Ef2rjpSot3EahpwllhDzUWRynt7Z_J5TG_5OZS8"}]}-AABAA3yC6xkpug37v9Wkh5ctejpjYzPArAbnk70_HQ4CaeCzFbuu8KJhqkkH2voSLBqntU9AGrKMALjrsyXN9JVBCDQ{"v":"KERI10JSON000122_","i":"Dw6a91H7DSGKViP5rXvq3ToosLbsD9EQvwEAP2h4fp5w","s":"4","t":"rot","p":"EF5TFIpq4u_8DCu8CRqcJ_naeQ0Gj5URqjLkRYozTvbE","kt":"1","k":["DLngmY2lz5xtBJ3K8vzwDVnp2_57GOXS7Eph9ainHBm4"],"n":"Egq_ChqsiVDfFBMJSdqsJEGBu35pjYrsr59IHLLfw5Es","wt":"0","wr":[],"wa":[],"a":[]}-AABAAL6jWv7NkOEiqV59Z7DWva0RwL64xwgV8TeNRl-ucYj6bQyVWamL42742C3_s8ZYBte5zQq15pvFU8E3JfDO0CQ"#;
+    let kerl_str = br#"{"v":"KERI10JSON0000ed_","i":"DoQy7bwiYr80qXoISsMdGvfXmCCpZ9PUqetbR8e-fyTk","s":"0","t":"icp","kt":"1","k":["DoQy7bwiYr80qXoISsMdGvfXmCCpZ9PUqetbR8e-fyTk"],"n":"EGofBtQtAeDMOO3AA4QM0OHxKyGQQ1l2HzBOtrKDnD-o","bt":"0","b":[],"c":[],"a":[]}-AABAAxemWo-mppcRkiGSOXpVwh8CYeTSEJ-a0HDrCkE-TKJ-_76GX-iD7s4sbZ7j5fdfvOuTNyuFw3a797gwpnJ-NAg{"v":"KERI10JSON000122_","i":"DoQy7bwiYr80qXoISsMdGvfXmCCpZ9PUqetbR8e-fyTk","s":"1","t":"rot","p":"EvZY9w3fS1h98tJeysdNQqT70XLLec4oso8kIYjfu2Ks","kt":"1","k":["DLqde_jCw-C3y0fTvXMXX5W7QB0188bMvXVkRcedgTwY"],"n":"EW5MfLjWGOUCIV1tQLKNBu_WFifVK7ksthNDoHP89oOc","bt":"0","br":[],"ba":[],"a":[]}-AABAAuQcoYU04XYzJxOPp4cxmvXbqVpGADfQWqPOzo1S6MajUl1sEWEL1Ry30jNXaV3-izvHRNROYtPm2LIuIimIFDg{"v":"KERI10JSON000122_","i":"DoQy7bwiYr80qXoISsMdGvfXmCCpZ9PUqetbR8e-fyTk","s":"2","t":"rot","p":"EOi_KYKjP4hinuTfgtoYj5QBw_Q1ZrRtWFQDp0qsNuks","kt":"1","k":["De5pKs8wiP9bplyjspW9L62PEANoad-5Kum1uAllRxPY"],"n":"ERKagV0hID1gqZceLsOV3s7MjcoRmCaps2bPBHvVQPEQ","bt":"0","br":[],"ba":[],"a":[]}-AABAAPKIYNAm6nmz4cv37nvn5XMKRVzfKkVpJwMDt2DG-DqTJRCP8ehCeyDFJTdtvdJHjKqrnxE4Lfpll3iUzuQM4Aw{"v":"KERI10JSON000122_","i":"DoQy7bwiYr80qXoISsMdGvfXmCCpZ9PUqetbR8e-fyTk","s":"3","t":"rot","p":"EVK1FbLl7yWTxOzPwk7vo_pQG5AumFoeSE51KapaEymc","kt":"1","k":["D2M5V_e23Pa0IAqqhNDKzZX0kRIMkJyW8_M-gT_Kw9sc"],"n":"EYJkIfnCYcMFVIEi-hMMIjBQfXcTqH_lGIIqMw4LaeOE","bt":"0","br":[],"ba":[],"a":[]}-AABAAsrKFTSuA6tEzqV0C7fEbeiERLdZpStZMCTvgDvzNMfa_Tn26ejFRZ_rDmovoo8xh0dH7SdMQ5B_FvwCx9E98Aw{"v":"KERI10JSON000098_","i":"DoQy7bwiYr80qXoISsMdGvfXmCCpZ9PUqetbR8e-fyTk","s":"4","t":"ixn","p":"EY7VDg-9Gixr9rgH2VyWGvnnoebgTyT9oieHZIaiv2UA","a":[]}-AABAAqHtncya5PNnwSbMRegftJc1y8E4tMZwajVVj2-FmGmp82b2A7pY1vr7cv36m7wPRV5Dusf4BRa5moMlHUpSqDA"#;
     // Process kerl
     signed_event_stream(kerl_str)
-        .map_err(|_| Error::DeserializationError)?
+        .unwrap()
         .1
         .into_iter()
         .for_each(|event| {
-            event_processor
-                .process(event.clone()).unwrap();
+            event_processor.process(event.clone()).unwrap();
         });
 
     let event_seal = EventSeal {
-        prefix: "Dw6a91H7DSGKViP5rXvq3ToosLbsD9EQvwEAP2h4fp5w".parse()?,
+        prefix: "DoQy7bwiYr80qXoISsMdGvfXmCCpZ9PUqetbR8e-fyTk".parse()?,
         sn: 2,
-        event_digest: "EIdLcIxlYfZuk20iUXuWLDVi8wXuGU38yvBIu-Ac_2w8".parse()?,
+        event_digest: "EVK1FbLl7yWTxOzPwk7vo_pQG5AumFoeSE51KapaEymc".parse()?,
     };
 
     let state_at_sn = event_processor

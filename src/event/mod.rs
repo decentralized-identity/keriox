@@ -40,7 +40,7 @@ impl EventSemantics for Event {
                     return Err(Error::SemanticError("SN is not correct".to_string()));
                 }
             }
-            EventData::Vrc(_) | EventData::Rct(_) => {
+            EventData::Rct(_) => {
                 if self.prefix != state.prefix {
                     return Err(Error::SemanticError(
                         "Invalid Identifier Prefix Binding".into(),
@@ -87,14 +87,15 @@ mod tests {
     \"BVrTkep6HHA8tr54sHON1Qt27fThWoNZsa88-4vWl6FE\"
   ],
   \"n\": \"FWoNZsa88VrTkep6HQt27fTh-4HA8tr54sHON1vWl6FE\",
-  \"wt\": \"2\",
-  \"w\":
+  \"bt\": \"2\",
+  \"b\":
   [
     \"DVrTkep6H-Qt27fThWoNZsa884HA8tr54sHON1vWl6FE\",
     \"DHON1vWl6FEQt27fThWoNZsa88VrTkep6H-4HA8tr54s\",
     \"DThWoNZsa88VrTkeQt27fp6H-4HA8tr54sHON1vWl6FE\"
   ],
-  \"c\": []
+  \"c\": [],
+  \"a\": []
 }";
 
         let event: Event = serde_json::from_str(event_str)?;

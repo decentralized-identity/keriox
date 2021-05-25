@@ -1,8 +1,12 @@
-use crate::{derivation::{basic::Basic, self_signing::SelfSigning}, error::Error};
+use crate::{
+    derivation::{basic::Basic, self_signing::SelfSigning},
+    error::Error,
+};
 use base64::encode_config;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+pub mod attached_seal;
 pub mod attached_signature;
 pub mod basic;
 pub mod parse;
@@ -106,17 +110,17 @@ pub fn verify(
     key: &BasicPrefix,
     signature: &SelfSigningPrefix,
 ) -> Result<bool, Error> {
-   match key.derivation {
+    match key.derivation {
         Basic::Ed25519 | Basic::Ed25519NT => match signature.derivation {
-            SelfSigning::Ed25519Sha512 => {
-                Ok(key.public_key.verify_ed(data.as_ref(), &signature.signature))
-            }
+            SelfSigning::Ed25519Sha512 => Ok(key
+                .public_key
+                .verify_ed(data.as_ref(), &signature.signature)),
             _ => Err(Error::SemanticError("wrong sig type".to_string())),
         },
         Basic::ECDSAsecp256k1 | Basic::ECDSAsecp256k1NT => match signature.derivation {
-            SelfSigning::ECDSAsecp256k1Sha256 => {
-                Ok(key.public_key.verify_ecdsa(data.as_ref(), &signature.signature))
-            }
+            SelfSigning::ECDSAsecp256k1Sha256 => Ok(key
+                .public_key
+                .verify_ecdsa(data.as_ref(), &signature.signature)),
             _ => Err(Error::SemanticError("wrong sig type".to_string())),
         },
         _ => Err(Error::SemanticError("inelligable key type".to_string())),
@@ -144,9 +148,9 @@ pub fn derive(seed: &SeedPrefix, transferable: bool) -> Result<BasicPrefix, Erro
 mod tests {
     use super::*;
     use crate::{derivation::self_addressing::SelfAddressing, keys::Key};
-    use ed25519_dalek::{PublicKey, Keypair};
+    use ed25519_dalek::{Keypair, PublicKey};
     use rand::rngs::OsRng;
-    
+
     #[test]
     fn simple_deserialize() -> Result<(), Error> {
         let pref: IdentifierPrefix = "BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".parse()?;
@@ -189,7 +193,9 @@ mod tests {
 
     #[test]
     fn simple_serialize() -> Result<(), Error> {
-        let pref = Basic::Ed25519NT.derive(Key::new(PublicKey::from_bytes(&[0; 32])?.to_bytes().to_vec()));
+        let pref = Basic::Ed25519NT.derive(Key::new(
+            PublicKey::from_bytes(&[0; 32])?.to_bytes().to_vec(),
+        ));
 
         assert_eq!(
             pref.to_str(),
@@ -278,15 +284,27 @@ mod tests {
 
         // Test BasicPrefix serialization.
         assert_eq!(
-            BasicPrefix::new(Basic::Ed25519NT, Key::new(PublicKey::from_bytes(&[0; 32])?.to_bytes().to_vec())).to_str(),
+            BasicPrefix::new(
+                Basic::Ed25519NT,
+                Key::new(PublicKey::from_bytes(&[0; 32])?.to_bytes().to_vec())
+            )
+            .to_str(),
             ["B".to_string(), "A".repeat(43)].join("")
         );
         assert_eq!(
-            BasicPrefix::new(Basic::X25519, Key::new(PublicKey::from_bytes(&[0; 32])?.to_bytes().to_vec())).to_str(),
+            BasicPrefix::new(
+                Basic::X25519,
+                Key::new(PublicKey::from_bytes(&[0; 32])?.to_bytes().to_vec())
+            )
+            .to_str(),
             ["C".to_string(), "A".repeat(43)].join("")
         );
         assert_eq!(
-            BasicPrefix::new(Basic::Ed25519, Key::new(PublicKey::from_bytes(&[0; 32])?.to_bytes().to_vec())).to_str(),
+            BasicPrefix::new(
+                Basic::Ed25519,
+                Key::new(PublicKey::from_bytes(&[0; 32])?.to_bytes().to_vec())
+            )
+            .to_str(),
             ["D".to_string(), "A".repeat(43)].join("")
         );
         assert_eq!(

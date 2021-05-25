@@ -5,7 +5,7 @@ use super::{
 use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
-    event::Event,
+    event::{sections::seal::Seal, Event},
     event_message::{serialization_info::SerializationFormats, EventMessage},
     prefix::IdentifierPrefix,
     state::{EventSemantics, IdentifierState},
@@ -25,6 +25,9 @@ pub struct InceptionEvent {
 
     #[serde(rename = "c")]
     pub inception_configuration: Vec<String>,
+
+    #[serde(rename = "a")]
+    pub data: Vec<Seal>,
 }
 
 impl InceptionEvent {
@@ -37,6 +40,7 @@ impl InceptionEvent {
             key_config,
             witness_config: witness_config.map_or_else(|| InceptionWitnessConfig::default(), |w| w),
             inception_configuration: inception_config.map_or_else(|| vec![], |c| c),
+            data: vec![],
         }
     }
 
