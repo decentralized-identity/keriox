@@ -103,6 +103,7 @@ impl EventProcessor {
     /// Get KERL for Prefix
     ///
     /// Returns the current validated KEL for a given Prefix
+    /// FIXME: add recipe messages into the mix when those are in SLED db
     pub fn get_kerl(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Error> {
        match self.db.get_kel_finalized_events(id) {
            Some(events) => 
