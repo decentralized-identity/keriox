@@ -210,10 +210,8 @@ impl EventProcessor {
         validator_pref: &IdentifierPrefix,
     ) -> Result<bool, Error> {
         Ok(if let Some(receipts) = self.db .get_receipts_t(id) {
-            if let Some(receipt) = 
-                receipts.find(|r| r.body.event.sn.eq(&sn)) {
-                    receipt.validator_seal.event_seal.prefix.eq(validator_pref)
-            } else { false }
+            receipts.filter(|r| r.body.event.sn.eq(&sn))
+                .any(|receipt| receipt.validator_seal.event_seal.prefix.eq(validator_pref))
         } else { false })
     }
 
@@ -262,30 +260,28 @@ impl EventProcessor {
         self.apply_to_state(event.event.event)
             .and_then(|new_state| {
                 // match on verification result
-                new_state
+                match new_state
                     .current
                     .verify(&event.event.raw, &event.signatures)
                     .and_then(|_result| {
                         // TODO should check if there are enough receipts and probably escrow
                         self.db.add_kel_finalized_event(signed_event, &event.event.event.event.prefix)?;
-                        Ok(Some(new_state))
-                    })
-                    .map_err(|e| match e {
-                        Error::NotEnoughSigsError => 
-                            self.db.add_partially_signed_event(signed_event, &event.event.event.event.prefix),
-                        _ => e,
-                    })
-            })
-            .map_err(|e| {
-                match e {
-                    // see why application failed and reject or escrow accordingly
-                    Error::EventOutOfOrderError =>
-                        self.db.add_outoforder_event(signed_event, &event.event.event.event.prefix),
-                    Error::EventDuplicateError =>
-                        self.db.add_duplicious_event(signed_event, &event.event.event.event.prefix),
-                    _ => Ok(()),
-                };
-                e
+                        Ok(new_state)
+                    }) {
+                        Ok(state) => Ok(Some(state)),
+                        Err(e) => {
+                            match e {
+                                Error::NotEnoughSigsError => 
+                                    self.db.add_partially_signed_event(signed_event, &event.event.event.event.prefix)?,
+                                Error::EventOutOfOrderError =>
+                                    self.db.add_outoforder_event(signed_event, &event.event.event.event.prefix)?,
+                                Error::EventDuplicateError =>
+                                    self.db.add_duplicious_event(signed_event, &event.event.event.event.prefix)?,
+                                _ => (),
+                            };
+                            Err(e)
+                        },
+                    }
             })
     }
 
