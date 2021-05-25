@@ -1,12 +1,10 @@
 use std::str::FromStr;
-
 use base64::URL_SAFE;
-
+use serde::{Serialize, Deserialize};
 use crate::{error::Error, event::sections::seal::EventSeal};
-
 use super::Prefix;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttachedEventSeal {
     pub event_seal: EventSeal,
 }

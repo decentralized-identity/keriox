@@ -209,9 +209,12 @@ impl EventProcessor {
         sn: u64,
         validator_pref: &IdentifierPrefix,
     ) -> Result<bool, Error> {
-        self.db
-            .has_receipt(id, sn, validator_pref)
-            .map_err(|_e| Error::StorageError)
+        Ok(if let Some(receipts) = self.db .get_receipts_t(id) {
+            if let Some(receipt) = 
+                receipts.find(|r| r.body.event.sn.eq(&sn)) {
+                    receipt.validator_seal.event_seal.prefix.eq(validator_pref)
+            } else { false }
+        } else { false })
     }
 
     /// Process

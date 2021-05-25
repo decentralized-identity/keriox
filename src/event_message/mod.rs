@@ -143,7 +143,7 @@ pub struct SignedNontransferableReceipt {
 /// Identifiers. Provides both the signatures and a commitment to
 /// the latest establishment event of the receipt creator.
 /// Mostly intended for use by Validators
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignedTransferableReceipt {
     pub body: EventMessage,
     pub validator_seal: AttachedEventSeal,

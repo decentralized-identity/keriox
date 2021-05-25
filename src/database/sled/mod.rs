@@ -4,15 +4,10 @@ use tables::{SledEventTree, SledEventTreeVec};
 use std::path::Path;
 use crate::{
     error::Error,
-    event::{
-        EventMessage, 
-        event_data::{
-            ReceiptNonTransferable,
-            ReceiptTransferable
-        }
-    },
+    event::EventMessage,
     event_message::{
         SignedEventMessage,
+        SignedTransferableReceipt,
         TimestampedEventMessage,
         TimestampedSignedEventMessage,
     },
@@ -27,14 +22,6 @@ pub struct SledEventDatabase {
     events: SledEventTreeVec<TimestampedEventMessage>,
     // "sevts" tree
     signed_events: SledEventTreeVec<TimestampedSignedEventMessage>,
-    // "rcts" tree
-    receipts_nt: SledEventTreeVec<ReceiptNonTransferable>,
-    // "ures" tree
-    escrowed_receipts_nt: SledEventTreeVec<ReceiptNonTransferable>,
-    // "vrcs" tree
-    receipts_t: SledEventTreeVec<ReceiptTransferable>,
-    // "vres" tree
-    escrowed_receipts_t: SledEventTreeVec<ReceiptTransferable>,
     // "kels" tree
     key_event_logs: SledEventTreeVec<SignedEventMessage>,
     // "pses" tree
@@ -45,6 +32,14 @@ pub struct SledEventDatabase {
     likely_duplicious_events: SledEventTreeVec<TimestampedEventMessage>,
     // "dels" tree
     duplicitous_events: SledEventTreeVec<SignedEventMessage>,
+    // "rcts" tree
+    receipts_nt: SledEventTreeVec<SignedTransferableReceipt>,
+    // "ures" tree
+    escrowed_receipts_nt: SledEventTreeVec<SignedTransferableReceipt>,
+    // "vrcs" tree
+    receipts_t: SledEventTreeVec<SignedTransferableReceipt>,
+    // "vres" tree
+    escrowed_receipts_t: SledEventTreeVec<SignedTransferableReceipt>,
 }
 
 
@@ -97,25 +92,47 @@ impl SledEventDatabase {
             self.key_event_logs.iter_values(self.identifiers.designated_key(id))
         }
 
-    pub fn add_escrow_t_receipt(&self, receipt: ReceiptTransferable, id: &IdentifierPrefix)
+    pub fn add_receipt_t(&self, receipt: SignedTransferableReceipt, id: &IdentifierPrefix)
+        -> Result<(), Error> {
+            self.receipts_t
+                .push(self.identifiers.designated_key(id), receipt)
+        }
+
+    pub fn get_receipts_t(&self, id: &IdentifierPrefix)
+        -> Option<impl DoubleEndedIterator<Item = SignedTransferableReceipt>> {
+            self.receipts_t.iter_values(self.identifiers.designated_key(id))
+        }
+
+    pub fn add_receipt_nt(&self, receipt: SignedTransferableReceipt, id: &IdentifierPrefix)
+        -> Result<(), Error> {
+            self.receipts_nt
+                .push(self.identifiers.designated_key(id), receipt)
+        }
+
+    pub fn get_receipts_nt(&self, id: &IdentifierPrefix)
+        -> Option<impl DoubleEndedIterator<Item = SignedTransferableReceipt>> {
+            self.receipts_nt.iter_values(self.identifiers.designated_key(id))
+        }
+
+    pub fn add_escrow_t_receipt(&self, receipt: SignedTransferableReceipt, id: &IdentifierPrefix)
         -> Result<(), Error> {
             self.escrowed_receipts_t
                 .push(self.identifiers.designated_key(id), receipt)
         }
 
     pub fn get_escrow_t_receipts(&self, id: &IdentifierPrefix)
-        -> Option<impl DoubleEndedIterator<Item = ReceiptTransferable>> {
+        -> Option<impl DoubleEndedIterator<Item = SignedTransferableReceipt>> {
             self.escrowed_receipts_t.iter_values(self.identifiers.designated_key(id))
         }
 
-    pub fn add_escrow_nt_receipt(&self, receipt: ReceiptNonTransferable, id: &IdentifierPrefix)
+    pub fn add_escrow_nt_receipt(&self, receipt: SignedTransferableReceipt, id: &IdentifierPrefix)
         -> Result<(), Error> {
             self.escrowed_receipts_nt
                 .push(self.identifiers.designated_key(id), receipt)
         }
 
     pub fn get_escrow_nt_receipts(&self, id: &IdentifierPrefix)
-        -> Option<impl DoubleEndedIterator<Item = ReceiptNonTransferable>> {
+        -> Option<impl DoubleEndedIterator<Item = SignedTransferableReceipt>> {
             self.escrowed_receipts_nt.iter_values(self.identifiers.designated_key(id))
         }
 
