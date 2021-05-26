@@ -1,10 +1,16 @@
-use crate::{database::sled::SledEventDatabase, derivation::self_addressing::SelfAddressing, error::Error, event::{
-        event_data::EventData,
-        sections::{
+use crate::{database::sled::SledEventDatabase, derivation::self_addressing::SelfAddressing, error::Error, event::{EventMessage, event_data::EventData, sections::{
             seal::{EventSeal, LocationSeal, Seal},
             KeyConfig,
-        },
-    }, event_message::{EventMessage, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedEventMessage, parse::{Deserialized, DeserializedSignedEvent}}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
+        }}, event_message::{
+        SignedEventMessage,
+        SignedNontransferableReceipt,
+        SignedTransferableReceipt,
+        TimestampedEventMessage, 
+        parse::{
+            Deserialized,
+            DeserializedSignedEvent
+            }
+        }, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
 
 #[cfg(test)]
 mod tests;
@@ -348,45 +354,25 @@ impl EventProcessor {
         match &rct.body.event.event_data {
             // get event which is being receipted
             EventData::Rct(r) => {
-                match self
-                    .db
-                    .last_event_at_sn(&rct.body.event.prefix, rct.body.event.sn)
-                    // return if lookup fails
-                    .map_err(|_| Error::StorageError)?
-                {
-                    Some(event) => {
-                        // verify receipts and store or discard
-                        let cas_dig = SelfAddressing::Blake3_256.derive(&event);
-                        for (witness, receipt) in &rct.couplets {
-                            if witness.verify(&event, &receipt)? {
-                                self.db
-                                    .add_nt_receipt_for_event(
-                                        &rct.body.event.prefix,
-                                        &cas_dig,
-                                        &witness,
-                                        &receipt,
-                                    )
-                                    .map_err(|_| Error::StorageError)?;
-                            };
-                        }
+                if let Some(events) = self.db.get_events(&rct.body.event.prefix) {
+                    match events.find(|event| event.event.event.sn == rct.body.event.sn) {
+                        Some(event) => {
+                            let serialized_event = rct.body.serialize()?;
+                            for (witness, receipt) in &rct.couplets {
+                                if witness.verify(&serialized_event, &receipt)? {
+                                    self.db.add_receipt_nt(receipt, &rct.body.event.prefix)?
+                                }
+                            }
+                        },
+                        None =>
+                            for (witness, receipt) in rct.couplets {
+                                self.db.add_escrow_nt_receipt(receipt, &rct.body.event.prefix)?
+                            }
                     }
-                    None => {
-                        for (witness, receipt) in rct.couplets {
-                            self.db
-                                .escrow_nt_receipt(
-                                    &rct.body.event.prefix,
-                                    // TODO THIS MAY NOT ALWAYS MATCH, see issue #74 in dif/keri
-                                    &r.receipted_event_digest,
-                                    &witness,
-                                    &receipt,
-                                )
-                                .map_err(|_| Error::StorageError)?;
-                        }
-                    }
-                };
+                }
                 self.compute_state(&rct.body.event.prefix)
-            }
-            _ => Err(Error::SemanticError("incorrect receipt structure".into())),
+            },
+           _ => Err(Error::SemanticError("incorrect receipt structure".into())), 
         }
     }
 
