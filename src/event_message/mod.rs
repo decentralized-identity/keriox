@@ -131,7 +131,7 @@ impl From<SignedEventMessage> for TimestampedSignedEventMessage {
 /// Mostly intended for use by Witnesses.
 /// NOTE: This receipt has a unique structure to it's appended
 /// signatures
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignedNontransferableReceipt {
     pub body: EventMessage,
     pub couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,

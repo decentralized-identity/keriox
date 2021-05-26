@@ -36,7 +36,7 @@ impl EventProcessor {
             let mut sorted_events = events.collect::<Vec<TimestampedEventMessage>>();
             sorted_events.sort();
             for event in sorted_events {
-                state = match state.apply(&event.event) {
+                state = match state.clone().apply(&event.event) {
                     Ok(s) => s,
                     // will happen when a recovery has overridden some part of the KEL,
                     // stop processing here
@@ -304,7 +304,7 @@ impl EventProcessor {
         match &vrc.body.event.event_data {
             EventData::Rct(r) => {
                 let seal = vrc.validator_seal.event_seal;
-                if let Some(events) = self.db.get_events(&seal.prefix) {
+                if let Some(mut events) = self.db.get_events(&seal.prefix) {
                     match events.find(|event| event.event.event.sn == seal.sn) {
                         Some(event) => {
                             // prev .get_keys_at_event()
@@ -318,7 +318,7 @@ impl EventProcessor {
                             if kp.is_some() && kp.unwrap().verify(&event.event.serialize()?, &vrc.signatures)? {
                                 let(_, errors): (Vec<_>, Vec<_>) = vrc.signatures.into_iter()
                                     .map(|signature|
-                                        self.db.add_receipt_t(vrc, &vrc.body.event.prefix))
+                                        self.db.add_receipt_t(vrc.clone(), &vrc.body.event.prefix))
                                     .partition(Result::is_ok);
                                 if errors.len() != 0 {
                                     Err(Error::StorageError)
@@ -353,24 +353,24 @@ impl EventProcessor {
         // check structure is correct
         match &rct.body.event.event_data {
             // get event which is being receipted
-            EventData::Rct(r) => {
-                if let Some(events) = self.db.get_events(&rct.body.event.prefix) {
+            EventData::Rct(_) => {
+                let id = &rct.body.event.prefix.to_owned();
+                if let Some(mut events) = self.db.get_events(&rct.body.event.prefix) {
                     match events.find(|event| event.event.event.sn == rct.body.event.sn) {
                         Some(event) => {
-                            let serialized_event = rct.body.serialize()?;
-                            for (witness, receipt) in &rct.couplets {
-                                if witness.verify(&serialized_event, &receipt)? {
-                                    self.db.add_receipt_nt(receipt, &rct.body.event.prefix)?
-                                }
+                            let serialized_event = event.event.serialize()?;
+                            let (_, errors): (Vec<_>, Vec<_>) = rct.clone().couplets.into_iter()
+                                .map(|(witness, receipt)| 
+                                    witness.verify(&&serialized_event, &receipt))
+                                .partition(Result::is_ok);
+                            if errors.len() == 0 {
+                                self.db.add_receipt_nt(rct, &id)?
                             }
                         },
-                        None =>
-                            for (witness, receipt) in rct.couplets {
-                                self.db.add_escrow_nt_receipt(receipt, &rct.body.event.prefix)?
-                            }
+                        None => self.db.add_escrow_nt_receipt(rct, &id)?
                     }
                 }
-                self.compute_state(&rct.body.event.prefix)
+                self.compute_state(&id)
             },
            _ => Err(Error::SemanticError("incorrect receipt structure".into())), 
         }
