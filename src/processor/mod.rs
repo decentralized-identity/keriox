@@ -304,27 +304,16 @@ impl EventProcessor {
     ) -> Result<Option<IdentifierState>, Error> {
         match &vrc.body.event.event_data {
             EventData::Rct(_r) => {
-                let seal = vrc.validator_seal.event_seal.clone();
-                if let Some(mut events) = self.db.get_events(&seal.prefix) {
-                    match events.find(|event| event.event.event.sn == seal.sn) {
+                if let Some(mut events) = self.db.get_events(&vrc.body.event.prefix) {
+                    match events.find(|event| event.event.event.sn == vrc.body.event.sn) {
                         Some(event) => {
                             // prev .get_keys_at_event()
-                            let kp = match event.event.event.event_data.clone() {
-                                EventData::Dip(e) => Some(e.inception_data.key_config),
-                                EventData::Drt(e) => Some(e.rotation_data.key_config),
-                                EventData::Icp(e) => Some(e.key_config),
-                                EventData::Rot(e) => Some(e.key_config),
-                                _ => None,
-                            };
+                            let kp = self.get_keys_at_event(
+                                &vrc.validator_seal.event_seal.prefix,
+                                vrc.validator_seal.event_seal.sn,
+                                &vrc.validator_seal.event_seal.event_digest)?;
                             if kp.is_some() && kp.unwrap().verify(&event.event.serialize()?, &vrc.signatures)? {
-                                // FIXME: `r` and `signature` are not used - is logic broken here?
-                                let(_, errors): (Vec<_>, Vec<_>) = vrc.signatures.clone().into_iter()
-                                    .map(|signature|
-                                        self.db.add_receipt_t(vrc.clone(), &vrc.body.event.prefix))
-                                    .partition(Result::is_ok);
-                                if errors.len() != 0 {
-                                    Err(Error::StorageError)
-                                } else { Ok(()) }
+                                self.db.add_receipt_t(vrc.clone(), &vrc.body.event.prefix)
                             } else { Ok(()) }
                         },
                         None => {
