@@ -4,7 +4,7 @@ use crate::{database::sled::SledEventDatabase, derivation::self_addressing::Self
             seal::{EventSeal, LocationSeal, Seal},
             KeyConfig,
         },
-    }, event_message::{EventMessage, SignedEventMessage, SignedNontransferableReceipt, TimestampedEventMessage, parse::{Deserialized, DeserializedSignedEvent}}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
+    }, event_message::{EventMessage, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedEventMessage, parse::{Deserialized, DeserializedSignedEvent}}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
 
 #[cfg(test)]
 mod tests;
@@ -298,50 +298,40 @@ impl EventProcessor {
         match &vrc.body.event.event_data {
             EventData::Rct(r) => {
                 let seal = vrc.validator_seal.event_seal;
-                match self
-                    .db
-                    .last_event_at_sn(&vrc.body.event.prefix, vrc.body.event.sn)
-                    .map_err(|_| Error::StorageError)?
-                {
-                    // No event found, escrow the receipt
-                    None => {
-                        for sig in vrc.signatures {
-                            self.db
-                                .escrow_t_receipt(
-                                    &vrc.body.event.prefix,
-                                    &r.receipted_event_digest,
-                                    &seal.prefix,
-                                    &sig,
-                                )
-                                .map_err(|_| Error::StorageError)?
-                        }
-                        return Err(Error::SemanticError("Receipt escrowed".into()));
-                    }
-                    // Event found, verify receipt and store
-                    Some(event) => {
-                        let keys = self
-                            .get_keys_at_event(&seal.prefix, seal.sn, &seal.event_digest)?
-                            .ok_or(Error::SemanticError("No establishment Event found".into()))?;
-                        if keys.verify(&event, &vrc.signatures)? {
-                            for sig in vrc.signatures {
-                                self.db
-                                    .add_t_receipt_for_event(
-                                        &vrc.body.event.prefix,
-                                        &SelfAddressing::Blake3_256.derive(&event),
-                                        &seal.prefix,
-                                        &sig,
-                                    )
-                                    .map_err(|_| Error::StorageError)?;
-                            }
-                        } else {
-                            Err(Error::SemanticError("Incorrect receipt signatures".into()))?;
+                if let Some(events) = self.db.get_events(&seal.prefix) {
+                    match events.find(|event| event.event.event.sn == seal.sn) {
+                        Some(event) => {
+                            // prev .get_keys_at_event()
+                            let kp = match event.event.event.event_data {
+                                EventData::Dip(e) => Some(e.inception_data.key_config),
+                                EventData::Drt(e) => Some(e.rotation_data.key_config),
+                                EventData::Icp(e) => Some(e.key_config),
+                                EventData::Rot(e) => Some(e.key_config),
+                                _ => None,
+                            };
+                            if kp.is_some() && kp.unwrap().verify(&event.event.serialize()?, &vrc.signatures)? {
+                                let(_, errors): (Vec<_>, Vec<_>) = vrc.signatures.into_iter()
+                                    .map(|signature|
+                                        self.db.add_receipt_t(vrc, &vrc.body.event.prefix))
+                                    .partition(Result::is_ok);
+                                if errors.len() != 0 {
+                                    Err(Error::StorageError)
+                                } else { Ok(()) }
+                            } else { Ok(()) }
+                        },
+                        None => {
+                            self.db.add_escrow_t_receipt(vrc, &vrc.body.event.prefix)?;
+                            Err(Error::SemanticError("Receipt escrowed".into()))
                         }
                     }
-                };
-                self.compute_state(&vrc.body.event.prefix)
-            }
-            _ => Err(Error::SemanticError("incorrect receipt structure".into())),
-        }
+                } else {
+                    self.db.add_escrow_t_receipt(vrc, &vrc.body.event.prefix)?;
+                    Err(Error::SemanticError("Receipt escrowed".into()))
+                }
+            },
+            _ =>  Err(Error::SemanticError("incorrect receipt structure".into()))
+        }?;
+        self.compute_state(&vrc.body.event.prefix)
     }
 
     /// Process Witness Receipt
