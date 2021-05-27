@@ -20,15 +20,15 @@ use crate::{
     state::IdentifierState,
 };
 mod test;
-pub struct Keri<K: KeyManager> {
+pub struct Keri<'d, K: KeyManager> {
     prefix: IdentifierPrefix,
     key_manager: K,
-    processor: EventProcessor,
+    processor: EventProcessor<'d>,
 }
 
-impl<K: KeyManager> Keri<K> {
+impl<'d, K: KeyManager> Keri<'d, K> {
     // incept a state and keys
-    pub fn new(db: SledEventDatabase, key_manager: K, prefix: IdentifierPrefix) -> Result<Keri<K>, Error> {
+    pub fn new(db: &'d SledEventDatabase, key_manager: K, prefix: IdentifierPrefix) -> Result<Keri<K>, Error> {
         Ok(Keri {
             prefix,
             key_manager,

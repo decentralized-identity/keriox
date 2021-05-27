@@ -40,8 +40,8 @@ fn test_process() -> Result<(), Error> {
     event_processor.process(deserialized_icp)?.unwrap();
 
     // Check if processed event is in kel.
-    let icp_from_db = event_processor.db.last_event_at_sn(&id, 0).unwrap();
-    assert_eq!(icp_from_db, Some(raw_parsed));
+    let icp_from_db = event_processor.get_event_at_sn(&id, 0).unwrap().unwrap();
+    assert_eq!(icp_from_db.event.serialize().unwrap(), raw_parsed);
 
     let rot_raw = br#"{"v":"KERI10JSON000180_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"1","t":"rot","p":"ElIKmVhsgDtxLhFqsWPASdq9J2slLqG-Oiov0rEG4s-w","kt":"2","k":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ","D1kcBE7h0ImWW6_Sp7MQxGYSshZZz6XM7OiUE5DXm0dU","D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM"],"n":"EQpRYqbID2rW8X5lB6mOzDckJEIFae6NbJISXgJSN9qg","bt":"0","br":[],"ba":[],"a":[]}-AADAAOA7_2NfORAD7hnavnFDhIQ_1fX1zVjNzFLYLOqW4mLdmNlE4745-o75wtaPX1Reg27YP0lgrCFW_3Evz9ebNAQAB6CJhTEANFN8fAFEdxwbnllsUd3jBTZHeeR-KiYe0yjCdOhbEnTLKTpvwei9QsAP0z3xc6jKjUNJ6PoxNnmD7AQAC4YfEq1tZPteXlH2cLOMjOAxqygRgbDsFRvjEQCHQva1K4YsS3ErQjuKd5Z57Uac-aDaRjeH8KdSSDvtNshIyBw"#;
     let deserialized_rot = parse::signed_message(rot_raw).unwrap().1;
@@ -53,8 +53,8 @@ fn test_process() -> Result<(), Error> {
 
     // Process rotation event.
     event_processor.process(deserialized_rot.clone())?.unwrap();
-    let rot_from_db = event_processor.db.last_event_at_sn(&id, 1).unwrap();
-    assert_eq!(rot_from_db, Some(raw_parsed.clone()));
+    let rot_from_db = event_processor.get_event_at_sn(&id, 1).unwrap().unwrap();
+    assert_eq!(rot_from_db.event.serialize().unwrap(), raw_parsed.clone());
 
     // Process the same rotation event one more time.
     let id_state = event_processor.process(deserialized_rot);
@@ -73,8 +73,8 @@ fn test_process() -> Result<(), Error> {
     event_processor.process(deserialized_ixn)?.unwrap();
 
     // Check if processed event is in db.
-    let ixn_from_db = event_processor.db.last_event_at_sn(&id, 2).unwrap();
-    assert_eq!(ixn_from_db, Some(raw_parsed));
+    let ixn_from_db = event_processor.get_event_at_sn(&id, 2).unwrap().unwrap();
+    assert_eq!(ixn_from_db.event.serialize().unwrap(), raw_parsed);
 
     // Construct partially signed interaction event.
     let ixn_raw_2 = br#"{"v":"KERI10JSON000098_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"3","t":"ixn","p":"ElB_2LYB2i5wus2Dscnmc6e302HK-pgxLIe7iJhftzl0","a":[]}-AADAA18DLkJf2G--KOpRW2aD6ZAXR4koYdj0_OzEfDF5PFP3Y5vx8MSY3UwRBN97AT1pIkDVGqVbBg6nFi-0Bg5RTBQABZq5Kn6sML7NRTEyFKfyHez1YQJ4gzSqGsf1nyOxrXl5h0gwJllyNwTCzQhoyVT2fFAKtt9N_vaP9f90wB2ugCAACLsZcJWVrb1hL7EqL0wuzdtEJOSr-5-7EL0ae_nzvfCO6fw4q0PjgzCgFtoeDbAqUQbhzjfaybDwF9z9MVelWBg"#;
@@ -94,7 +94,7 @@ fn test_process() -> Result<(), Error> {
     assert!(matches!(id_state, Err(Error::NotEnoughSigsError)));
 
     // Check if processed ixn event is in kel. It shouldn't because of not enough signatures.
-    let ixn_from_db = event_processor.db.last_event_at_sn(&id, 3);
+    let ixn_from_db = event_processor.get_event_at_sn(&id, 3);
     assert!(matches!(ixn_from_db, Ok(None)));
 
     // // Out of order event.
@@ -106,7 +106,7 @@ fn test_process() -> Result<(), Error> {
     assert!(matches!(id_state, Err(Error::EventOutOfOrderError)));
 
     // Check if processed event is in kel. It shouldn't.
-    let raw_from_db = event_processor.db.last_event_at_sn(&id, 4);
+    let raw_from_db = event_processor.get_event_at_sn(&id, 4);
     assert!(matches!(raw_from_db, Ok(None)));
 
     let id: IdentifierPrefix = "EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8".parse()?;
@@ -196,7 +196,7 @@ fn test_process_delegated() -> Result<(), Error> {
     let child_prefix: IdentifierPrefix = "ErLe2qWp4VCmDp7v_R01tC-ha13ZEZY0VGcgYtPRhqPs".parse()?;
 
     // Check if processed dip is in kel.
-    let dip_from_db = event_processor.db.last_event_at_sn(&child_prefix, 0);
+    let dip_from_db = event_processor.get_event_at_sn(&child_prefix, 0);
     assert!(matches!(dip_from_db, Ok(None)));
 
     // Bob's ixn event with delegating event seal.
@@ -205,18 +205,17 @@ fn test_process_delegated() -> Result<(), Error> {
     event_processor.process(deserialized_ixn.clone())?;
 
     // Check if processed event is in db.
-    let ixn_from_db = event_processor.db.last_event_at_sn(&bobs_pref, 1).unwrap();
-    assert_eq!(ixn_from_db, Some(raw_parsed(deserialized_ixn)?));
+    let ixn_from_db = event_processor.get_event_at_sn(&bobs_pref, 1).unwrap().unwrap();
+    assert_eq!(ixn_from_db.event.serialize()?, raw_parsed(deserialized_ixn)?);
 
     // Process delegated inception event once again.
     event_processor.process(deserialized_dip.clone())?.unwrap();
 
     // Check if processed dip event is in db.
     let dip_from_db = event_processor
-        .db
-        .last_event_at_sn(&child_prefix, 0)
+        .get_event_at_sn(&child_prefix, 0)?
         .unwrap();
-    assert_eq!(dip_from_db, Some(raw_parsed(deserialized_dip)?));
+    assert_eq!(dip_from_db.event.serialize()?, raw_parsed(deserialized_dip)?);
 
     // Bobs interaction event with delegated event seal.
     let bob_ixn = br#"{"v":"KERI10JSON000107_","i":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI","s":"2","t":"ixn","p":"E3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII","a":[{"i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"1","d":"EPjLBcb4pp-3PGvSi_fTvLvsqUqFoJ0CVCHvIFfu93Xc"}]}-AABAAclMVE-bkIn-wPiAqfgR384nWmslQHQvmo2o3xQvd_4Bt6bflc4BAmfBa03KgrDVqmB7qG2VXQbOHevkzOgRdD"#;
@@ -231,24 +230,23 @@ fn test_process_delegated() -> Result<(), Error> {
     assert!(matches!(child_state, Err(Error::EventOutOfOrderError)));
 
     // Check if processed drt is in kel.
-    let drt_from_db = event_processor.db.last_event_at_sn(&child_prefix, 1);
+    let drt_from_db = event_processor.get_event_at_sn(&child_prefix, 1);
     assert!(matches!(drt_from_db, Ok(None)));
 
     event_processor.process(deserialized_ixn_drt.clone())?;
 
     // Check if processed event is in db.
-    let ixn_from_db = event_processor.db.last_event_at_sn(&bobs_pref, 2).unwrap();
-    assert_eq!(ixn_from_db, Some(raw_parsed(deserialized_ixn_drt)?));
+    let ixn_from_db = event_processor.get_event_at_sn(&bobs_pref, 2)?.unwrap();
+    assert_eq!(ixn_from_db.event.serialize()?, raw_parsed(deserialized_ixn_drt)?);
 
     // Process delegated rotation event once again.
     event_processor.process(deserialized_drt.clone())?.unwrap();
 
     // Check if processed drt event is in db.
     let drt_from_db = event_processor
-        .db
-        .last_event_at_sn(&child_prefix, 1)
+        .get_event_at_sn(&child_prefix, 1)?
         .unwrap();
-    assert_eq!(drt_from_db, Some(raw_parsed(deserialized_drt)?));
+    assert_eq!(drt_from_db.event.serialize()?, raw_parsed(deserialized_drt)?);
 
     Ok(())
 }

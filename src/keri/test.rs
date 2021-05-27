@@ -17,11 +17,11 @@ fn test_direct_mode() -> Result<(), Error> {
     let db = SledEventDatabase::new(root.path()).unwrap();
 
     // Init alice.
-    let mut alice = Keri::new(db, CryptoBox::new()?, IdentifierPrefix::default())?;
+    let mut alice = Keri::new(&db, CryptoBox::new()?, IdentifierPrefix::default())?;
     assert_eq!(alice.get_state()?, None);
 
     // Init bob.
-    let mut bob = Keri::new(db, CryptoBox::new()?, IdentifierPrefix::default())?;
+    let mut bob = Keri::new(&db, CryptoBox::new()?, IdentifierPrefix::default())?;
     bob.incept()?;
     assert_eq!(bob.get_state()?.unwrap().sn, 0);
 

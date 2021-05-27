@@ -15,12 +15,12 @@ use crate::{database::sled::SledEventDatabase, derivation::self_addressing::Self
 #[cfg(test)]
 mod tests;
 
-pub struct EventProcessor {
-    db: SledEventDatabase,
+pub struct EventProcessor<'d> {
+    db: &'d SledEventDatabase,
 }
 
-impl EventProcessor {
-    pub fn new(db: SledEventDatabase) -> Self {
+impl<'d> EventProcessor<'d> {
+    pub fn new(db: &'d SledEventDatabase) -> Self {
         Self { db }
     }
 
