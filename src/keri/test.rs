@@ -23,10 +23,12 @@ fn test_direct_mode() -> Result<(), Error> {
     // Init bob.
     let mut bob = Keri::new(&db, CryptoBox::new()?, IdentifierPrefix::default())?;
     bob.incept()?;
-    assert_eq!(bob.get_state()?.unwrap().sn, 0);
+    let bob_state = bob.get_state()?;
+    assert_eq!(bob_state.unwrap().sn, 0);
 
     // Get alice's inception event.
-    let mut msg_to_bob = alice.incept()?.serialize()?;
+    let alice_incepted = alice.incept()?;
+    let mut msg_to_bob = alice_incepted.serialize()?;
 
     // Send it to bob.
     let mut msg_to_alice = bob.respond(&msg_to_bob)?;

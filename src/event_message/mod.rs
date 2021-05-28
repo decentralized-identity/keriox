@@ -93,12 +93,12 @@ impl From<EventMessage> for TimestampedEventMessage {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SignedEventMessage {
     pub event_message: EventMessage,
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq)]
 pub struct TimestampedSignedEventMessage {
     pub timestamp: DateTime<Local>,
     pub event: SignedEventMessage,
@@ -124,6 +124,33 @@ impl From<SignedEventMessage> for TimestampedSignedEventMessage {
         TimestampedSignedEventMessage::new(event)
     }
 }
+
+impl PartialOrd for TimestampedSignedEventMessage {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(match self.event.event_message.event.sn == other.event.event_message.event.sn {
+            true => Ordering::Equal,
+            false => match self.event.event_message.event.sn > other.event.event_message.event.sn {
+                true => Ordering::Greater,
+                false => Ordering::Less,
+            }
+        })
+   }
+}
+
+impl Ord for TimestampedSignedEventMessage {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.event.event_message.event.sn == other.event.event_message.event.sn {
+            true => Ordering::Equal,
+            false => match self.event.event_message.event.sn > other.event.event_message.event.sn {
+                true => Ordering::Greater,
+                false => Ordering::Less,
+            }
+        }
+    }
+}
+
+impl Eq for TimestampedSignedEventMessage {}
+
 
 /// Signed Non-Transferrable Receipt
 ///

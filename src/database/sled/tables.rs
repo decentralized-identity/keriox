@@ -56,6 +56,17 @@ where
             }
         }
 
+        /// Removes value `T` if present
+        ///
+        pub fn remove(&self, key: u64, value: T)
+            -> Result<(), Error> where T: PartialEq {
+           if let Ok(Some(set)) = self.get(key) {
+                self.put(key, set.into_iter().filter(|e| e != &value).collect())
+            } else {
+                Ok(())
+            } 
+        }
+
         /// Appends one `Vec<T>` into DB present one
         /// or `put()`s it if not present as is.
         ///
@@ -150,8 +161,8 @@ where
     /// provides which `u64` key to use to add NEW entry
     ///
     pub fn get_next_key(&self) -> u64 {
-        if let Ok(Some((k, _v))) = self.tree.last() {
-            u64::from_be_bytes(array_ref!(k, 0, 8).to_owned())
+        if let Ok(Some((k, _v))) = self.tree.last() { 
+            u64::from_be_bytes(array_ref!(k, 0, 8).to_owned()) + 1
         } else { 0 }
     }
 
@@ -159,10 +170,11 @@ where
     /// if present in the db
     ///
     pub fn get_key_by_value(&self, value: &T) 
-        -> Result<Option<u64>, Error> 
-    where T: PartialEq + Default {
+        -> Result<Option<u64>, Error>
+            where T: Serialize {
+        let value = serde_cbor::to_vec(value)?;
         if let Some((key, _)) = self.tree.iter().flatten()
-            .find(|(_k, v)| serde_cbor::from_slice::<T>(v).unwrap_or_default().eq(value)) {
+            .find(|(_k, v)| v.eq(&value)) {
                 Ok(Some(u64::from_be_bytes(array_ref!(key, 0, 8).to_owned())))
         } else {
             Ok(None)
@@ -174,11 +186,13 @@ where
     /// to be used when unsure if identifier is present in the db
     ///
     pub fn designated_key(&self, identifier: &T)
-        -> u64 where T: PartialEq + Default {
+        -> u64 where T: Serialize {
         if let Ok(Some(key)) = self.get_key_by_value(identifier) {
             key
         } else {
-            self.get_next_key()
+            let key = self.get_next_key();
+            self.tree.insert(key_bytes(key), serde_cbor::to_vec(identifier).unwrap()).unwrap();
+            key
         }
     }
 }

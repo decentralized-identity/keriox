@@ -1,16 +1,10 @@
 use crate::{database::sled::SledEventDatabase, derivation::self_addressing::SelfAddressing, error::Error, event::{EventMessage, event_data::EventData, sections::{
             seal::{EventSeal, LocationSeal, Seal},
             KeyConfig,
-        }}, event_message::{
-        SignedEventMessage,
-        SignedNontransferableReceipt,
-        SignedTransferableReceipt,
-        TimestampedEventMessage, 
-        parse::{
+        }}, event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedSignedEventMessage, parse::{
             Deserialized,
             DeserializedSignedEvent
-            }
-        }, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
+            }}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
 
 #[cfg(test)]
 mod tests;
@@ -31,9 +25,9 @@ impl<'d> EventProcessor<'d> {
     pub fn compute_state(&self, id: &IdentifierPrefix) -> Result<Option<IdentifierState>, Error> {
         // start with empty state
         let mut state = IdentifierState::default();
-        if let Some(events) = self.db.get_events(id) {
+        if let Some(events) = self.db.get_kel_finalized_events(id) {
             // we sort here to get inception first
-            let mut sorted_events = events.collect::<Vec<TimestampedEventMessage>>();
+            let mut sorted_events = events.collect::<Vec<TimestampedSignedEventMessage>>();
             sorted_events.sort();
             for event in sorted_events {
                 state = match state.clone().apply(&event.event) {
@@ -60,11 +54,11 @@ impl<'d> EventProcessor<'d> {
         sn: u64,
     ) -> Result<Option<IdentifierState>, Error> {
         let mut state = IdentifierState::default();
-        if let Some(events) = self.db.get_events(id) {
+        if let Some(events) = self.db.get_kel_finalized_events(id) {
             // TODO: testing approach if events come out sorted already (as they should coz of put sequence)
             for event in events
-                .filter(|e| e.event.event.sn <= sn) {
-                    state = state.apply(&event.event.event)?;
+                .filter(|e| e.event.event_message.event.sn <= sn) {
+                    state = state.apply(&event.event.event_message.event)?;
                 }
         } else {
             return Ok(None);
@@ -82,11 +76,11 @@ impl<'d> EventProcessor<'d> {
     ) -> Result<Option<EventSeal>, Error> {
         let mut state = IdentifierState::default();
         let mut last_est = None;
-        if let Some(events) = self.db.get_events(id) {
+        if let Some(events) = self.db.get_kel_finalized_events(id) {
             for event in events {
-                state = state.apply(&event.event.event)?;
+                state = state.apply(&event.event.event_message.event)?;
                 // TODO: is this event.event.event stuff too ugly? =)
-                last_est = match event.event.event.event_data {
+                last_est = match event.event.event_message.event.event_data {
                     EventData::Icp(_) => Some(event.event),
                     EventData::Rot(_) => Some(event.event),
                     _ => last_est,
@@ -98,8 +92,8 @@ impl<'d> EventProcessor<'d> {
         let seal = last_est.and_then(|event| {
             let event_digest = SelfAddressing::Blake3_256.derive(&event.serialize().unwrap());
             Some(EventSeal {
-                prefix: event.event.prefix,
-                sn: event.event.sn,
+                prefix: event.event_message.event.prefix,
+                sn: event.event_message.event.sn,
                 event_digest,
             })
         });
@@ -113,7 +107,7 @@ impl<'d> EventProcessor<'d> {
     pub fn get_kerl(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Error> {
        match self.db.get_kel_finalized_events(id) {
            Some(events) => 
-               Ok(Some(events.map(|event| event.serialize().unwrap_or_default())
+               Ok(Some(events.map(|event| event.event.event_message.serialize().unwrap_or_default())
                 .fold(vec!(), |mut accum, serialized_event| { accum.extend(serialized_event); accum }))),
             None => Ok(None)
        }
@@ -131,12 +125,12 @@ impl<'d> EventProcessor<'d> {
         event_digest: &SelfAddressingPrefix,
     ) -> Result<Option<KeyConfig>, Error> {
         if let Ok(Some(event)) = self.get_event_at_sn(id, sn) {
-            match event.event.event.prefix {
+            match event.event.event_message.event.prefix {
                 IdentifierPrefix::SelfAddressing(p) => {
                     // if it's the event we're looking for
                     if event_digest.digest == p.digest {
                         // return the config or error if it's not an establishment event
-                        return Ok(Some(match event.event.event.event_data {
+                        return Ok(Some(match event.event.event_message.event.event_data {
                             EventData::Icp(icp) => icp.key_config,
                             EventData::Rot(rot) => rot.key_config,
                             EventData::Dip(dip) => dip.inception_data.key_config,
@@ -160,7 +154,7 @@ impl<'d> EventProcessor<'d> {
         // Check if event of seal's prefix and sn is in db.
         if let Ok(Some(event)) = self.get_event_at_sn(&seal.prefix, seal.sn) {
             // Extract prior_digest and data field from delegating event.
-            let (prior_dig, data) = match event.event.event.event_data {
+            let (prior_dig, data) = match event.event.event_message.event.event_data {
                 EventData::Rot(rot) => (rot.previous_event_hash, rot.data),
                 EventData::Ixn(ixn) => (ixn.previous_event_hash, ixn.data),
                 EventData::Drt(drt) => (
@@ -178,7 +172,7 @@ impl<'d> EventProcessor<'d> {
                 // get previous event from db
                 match self.get_event_at_sn(&seal.prefix, seal.sn -1)? {
                     Some(previous_event) => {
-                        match previous_event.event.event.prefix {
+                        match previous_event.event.event_message.event.prefix {
                             IdentifierPrefix::SelfAddressing(prefix) => 
                                 Ok(prefix.digest == seal.prior_digest.digest),
                             _ => Err(Error::SemanticError("No event in db".into()))
@@ -232,7 +226,6 @@ impl<'d> EventProcessor<'d> {
     /// returns the updated state
     /// TODO improve checking and handling of errors!
     /// FIXME: refactor to remove multiple event recourse wrappers
-    /// FIXME 2: should event be writtent into db priore the check?
     pub fn process_event(
         &self,
         event: DeserializedSignedEvent,
@@ -240,7 +233,6 @@ impl<'d> EventProcessor<'d> {
         // Log event.
         let signed_event = SignedEventMessage::new(
                 &event.event.event, event.signatures.clone());
-        self.db.add_new_signed_event_message(signed_event.clone(), &event.event.event.event.prefix)?;
         // If delegated event, check its delegator seal.
         match event.event.event.event.event_data.clone() {
             EventData::Dip(dip) =>
@@ -353,9 +345,9 @@ impl<'d> EventProcessor<'d> {
         }
     }
 
-    pub fn get_event_at_sn(&self, id: &IdentifierPrefix, sn: u64) -> Result<Option<TimestampedEventMessage>, Error> {
-       if let Some(mut events) = self.db.get_events(id) {
-            Ok(events.find(|event| event.event.event.sn == sn))
+    pub fn get_event_at_sn(&self, id: &IdentifierPrefix, sn: u64) -> Result<Option<TimestampedSignedEventMessage>, Error> {
+       if let Some(mut events) = self.db.get_kel_finalized_events(id) {
+            Ok(events.find(|event| event.event.event_message.event.sn == sn))
        } else { Ok(None) }
     }
 
