@@ -125,25 +125,23 @@ impl<'d> EventProcessor<'d> {
         event_digest: &SelfAddressingPrefix,
     ) -> Result<Option<KeyConfig>, Error> {
         if let Ok(Some(event)) = self.get_event_at_sn(id, sn) {
-            match event.event.event_message.event.prefix {
-                IdentifierPrefix::SelfAddressing(p) => {
-                    // if it's the event we're looking for
-                    if event_digest.digest == p.digest {
-                        // return the config or error if it's not an establishment event
-                        return Ok(Some(match event.event.event_message.event.event_data {
-                            EventData::Icp(icp) => icp.key_config,
-                            EventData::Rot(rot) => rot.key_config,
-                            EventData::Dip(dip) => dip.inception_data.key_config,
-                            EventData::Drt(drt) => drt.rotation_data.key_config,
-                            // the receipt has a binding but it's NOT an establishment event
-                            _ => Err(Error::SemanticError("Receipt binding incorrect".into()))?,
-                        }));
-                    }
-                },
-                _ => ()
+            // if it's the event we're looking for
+            if event_digest.verify_binding(&event.event.event_message.serialize()?) {
+                // return the config or error if it's not an establishment event
+                Ok(Some(match event.event.event_message.event.event_data {
+                    EventData::Icp(icp) => icp.key_config,
+                    EventData::Rot(rot) => rot.key_config,
+                    EventData::Dip(dip) => dip.inception_data.key_config,
+                    EventData::Drt(drt) => drt.rotation_data.key_config,
+                    // the receipt has a binding but it's NOT an establishment event
+                    _ => Err(Error::SemanticError("Receipt binding incorrect".into()))?,
+                }))
+                } else {
+                    Err(Error::SemanticError("Event digests doesn't match".into()))
+                } 
+            } else {
+                Err(Error::SemanticError("No event of given sn and prefix in database".into()))
             }
-        }
-        Ok(None)
     }
 
     /// Validate delegating event seal.
@@ -296,7 +294,7 @@ impl<'d> EventProcessor<'d> {
                         &vrc.validator_seal.event_seal.prefix,
                         vrc.validator_seal.event_seal.sn,
                         &vrc.validator_seal.event_seal.event_digest)?;
-                    if kp.is_some() && kp.unwrap().verify(&event.event.serialize()?, &vrc.signatures)? {
+                    if kp.is_some() && kp.unwrap().verify(&event.event.event_message.serialize()?, &vrc.signatures)? {
                         self.db.add_receipt_t(vrc.clone(), &vrc.body.event.prefix)
                     } else {
                         Err(Error::SemanticError("Incorrect receipt signatures".into()))
