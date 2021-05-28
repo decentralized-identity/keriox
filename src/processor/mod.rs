@@ -58,7 +58,7 @@ impl<'d> EventProcessor<'d> {
             // TODO: testing approach if events come out sorted already (as they should coz of put sequence)
             for event in events
                 .filter(|e| e.event.event_message.event.sn <= sn) {
-                    state = state.apply(&event.event.event_message.event)?;
+                    state = state.apply(&event.event.event_message)?;
                 }
         } else {
             return Ok(None);
@@ -107,7 +107,7 @@ impl<'d> EventProcessor<'d> {
     pub fn get_kerl(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Error> {
        match self.db.get_kel_finalized_events(id) {
            Some(events) => 
-               Ok(Some(events.map(|event| event.event.event_message.serialize().unwrap_or_default())
+               Ok(Some(events.map(|event| event.event.serialize().unwrap_or_default())
                 .fold(vec!(), |mut accum, serialized_event| { accum.extend(serialized_event); accum }))),
             None => Ok(None)
        }
@@ -298,7 +298,9 @@ impl<'d> EventProcessor<'d> {
                         &vrc.validator_seal.event_seal.event_digest)?;
                     if kp.is_some() && kp.unwrap().verify(&event.event.serialize()?, &vrc.signatures)? {
                         self.db.add_receipt_t(vrc.clone(), &vrc.body.event.prefix)
-                    } else { Ok(()) }
+                    } else {
+                        Err(Error::SemanticError("Incorrect receipt signatures".into()))
+                    }
                 } else {
                     self.db.add_escrow_t_receipt(vrc.clone(), &vrc.body.event.prefix)?;
                     Err(Error::SemanticError("Receipt escrowed".into()))

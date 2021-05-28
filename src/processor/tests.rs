@@ -31,7 +31,7 @@ fn test_process() -> Result<(), Error> {
     let icp_raw = br#"{"v":"KERI10JSON00014b_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"0","t":"icp","kt":"2","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"E9izzBkXX76sqt0N-tfLzJeRqj0W56p4pDQ_ZqNCDpyw","bt":"0","b":[],"c":[],"a":[]}-AADAAhcaP-l0DkIKlJ87iIVcDx-m0iKPdSArEu63b-2cSEn9wXVGNpWw9nfwxodQ9G8J3q_Pm-AWfDwZGD9fobWuHBAAB6mz7zP0xFNBEBfSKG4mjpPbeOXktaIyX8mfsEa1A3Psf7eKxSrJ5Woj3iUB2AhhLg412-zkk795qxsK2xfdxBAACj5wdW-EyUJNgW0LHePQcSFNxW3ZyPregL4H2FoOrsPxLa3MZx6xYTh6i7YRMGY50ezEjV81hkI1Yce75M_bPCQ"#;
     let deserialized_icp = parse::signed_message(icp_raw).unwrap().1;
 
-    let (id, raw_parsed) = match &deserialized_icp {
+    let (id, _raw_parsed) = match &deserialized_icp {
         Deserialized::Event(e) => (e.event.event.event.prefix.clone(), e.event.raw.to_vec()),
         _ => Err(Error::SemanticError("bad deser".into()))?,
     };
@@ -41,12 +41,12 @@ fn test_process() -> Result<(), Error> {
 
     // Check if processed event is in kel.
     let icp_from_db = event_processor.get_event_at_sn(&id, 0).unwrap().unwrap();
-    assert_eq!(icp_from_db.event.serialize().unwrap(), raw_parsed);
+    assert_eq!(icp_from_db.event.serialize().unwrap(), icp_raw);
 
     let rot_raw = br#"{"v":"KERI10JSON000180_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"1","t":"rot","p":"ElIKmVhsgDtxLhFqsWPASdq9J2slLqG-Oiov0rEG4s-w","kt":"2","k":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ","D1kcBE7h0ImWW6_Sp7MQxGYSshZZz6XM7OiUE5DXm0dU","D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM"],"n":"EQpRYqbID2rW8X5lB6mOzDckJEIFae6NbJISXgJSN9qg","bt":"0","br":[],"ba":[],"a":[]}-AADAAOA7_2NfORAD7hnavnFDhIQ_1fX1zVjNzFLYLOqW4mLdmNlE4745-o75wtaPX1Reg27YP0lgrCFW_3Evz9ebNAQAB6CJhTEANFN8fAFEdxwbnllsUd3jBTZHeeR-KiYe0yjCdOhbEnTLKTpvwei9QsAP0z3xc6jKjUNJ6PoxNnmD7AQAC4YfEq1tZPteXlH2cLOMjOAxqygRgbDsFRvjEQCHQva1K4YsS3ErQjuKd5Z57Uac-aDaRjeH8KdSSDvtNshIyBw"#;
     let deserialized_rot = parse::signed_message(rot_raw).unwrap().1;
 
-    let raw_parsed = match &deserialized_rot {
+    let _raw_parsed = match &deserialized_rot {
         Deserialized::Event(e) => e.event.raw.to_vec(),
         _ => Err(Error::SemanticError("bad deser".into()))?,
     };
@@ -54,7 +54,7 @@ fn test_process() -> Result<(), Error> {
     // Process rotation event.
     event_processor.process(deserialized_rot.clone())?.unwrap();
     let rot_from_db = event_processor.get_event_at_sn(&id, 1).unwrap().unwrap();
-    assert_eq!(rot_from_db.event.serialize().unwrap(), raw_parsed.clone());
+    assert_eq!(rot_from_db.event.serialize().unwrap(), rot_raw);
 
     // Process the same rotation event one more time.
     let id_state = event_processor.process(deserialized_rot);
@@ -64,7 +64,7 @@ fn test_process() -> Result<(), Error> {
     let ixn_raw = br#"{"v":"KERI10JSON000098_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"2","t":"ixn","p":"EFLtKYQZIoCFdSEjP7D5OgqElY2WwFB5vQD0Uvtp4RmI","a":[]}-AADAAip7QM2tvcyC4vbSX4A4avT03hHrJTTlkjQujOZRMroRL897wojcI4DIyxejOqsZcjrZHlU4S3RLYGmVbDEoPDgAB3NZj06_KCwxdTdIgCMETTHVJQa5AB8-dtqoD7ltaFIQxmC2K_ESp6DFLOrGQ2xTr97a-By1beM66YyBThjV8DQAC50owTQUxkyJ78vato0HuX9Edx-OxvBoepr61KknIfCjXKnlZrf-s_L0XFbz_0k8t3c9gmPkaI2vI-ZhzP31jBA"#;
     let deserialized_ixn = parse::signed_message(ixn_raw).unwrap().1;
 
-    let raw_parsed = match &deserialized_ixn {
+    let _raw_parsed = match &deserialized_ixn {
         Deserialized::Event(e) => e.event.raw.to_vec(),
         _ => Err(Error::SemanticError("bad deser".into()))?,
     };
@@ -74,7 +74,7 @@ fn test_process() -> Result<(), Error> {
 
     // Check if processed event is in db.
     let ixn_from_db = event_processor.get_event_at_sn(&id, 2).unwrap().unwrap();
-    assert_eq!(ixn_from_db.event.serialize().unwrap(), raw_parsed);
+    assert_eq!(ixn_from_db.event.serialize().unwrap(), ixn_raw);
 
     // Construct partially signed interaction event.
     let ixn_raw_2 = br#"{"v":"KERI10JSON000098_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"3","t":"ixn","p":"ElB_2LYB2i5wus2Dscnmc6e302HK-pgxLIe7iJhftzl0","a":[]}-AADAA18DLkJf2G--KOpRW2aD6ZAXR4koYdj0_OzEfDF5PFP3Y5vx8MSY3UwRBN97AT1pIkDVGqVbBg6nFi-0Bg5RTBQABZq5Kn6sML7NRTEyFKfyHez1YQJ4gzSqGsf1nyOxrXl5h0gwJllyNwTCzQhoyVT2fFAKtt9N_vaP9f90wB2ugCAACLsZcJWVrb1hL7EqL0wuzdtEJOSr-5-7EL0ae_nzvfCO6fw4q0PjgzCgFtoeDbAqUQbhzjfaybDwF9z9MVelWBg"#;
@@ -115,7 +115,9 @@ fn test_process() -> Result<(), Error> {
     kel.extend(rot_raw);
     kel.extend(ixn_raw);
 
-    assert_eq!(event_processor.get_kerl(&id)?, Some(kel));
+    let db_kel = event_processor.get_kerl(&id)?;
+
+    assert_eq!(db_kel, Some(kel));
 
     Ok(())
 }
