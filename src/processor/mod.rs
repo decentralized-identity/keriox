@@ -144,6 +144,22 @@ impl<'d> EventProcessor<'d> {
             }
     }
 
+     /// Get witness threshold at sn
+    ///
+    /// Returns the witness threshold associated with
+    /// the given Prefix and sn.
+    fn get_tally_at_sn(
+        &self,
+        id: &IdentifierPrefix,
+        sn: u64,
+    ) -> Result<Option<u64>, Error> {
+        Ok(if let Ok(Some(state)) = self.compute_state_at_sn(id, sn) {
+            
+            Some(state.tally)
+        } else {None})
+    }
+
+
     /// Validate delegating event seal.
     ///
     /// Validates binding between delegated and delegating events. The validation
@@ -321,21 +337,16 @@ impl<'d> EventProcessor<'d> {
     ) -> Result<Option<IdentifierState>, Error> {
         // check structure is correct
         match &rct.body.event.event_data {
-            // get event which is being receipted
             EventData::Rct(_) => {
+                // get event which is being receipted
                 let id = &rct.body.event.prefix.to_owned();
                 if let Ok(Some(event)) = self.get_event_at_sn(&rct.body.event.prefix, rct.body.event.sn) {
                     let serialized_event = event.event.serialize()?;
-                    let (_, mut errors): (Vec<_>, Vec<Result<bool, Error>>) = rct.clone().couplets.into_iter()
-                        .map(|(witness, receipt)| 
-                            witness.verify(&&serialized_event, &receipt))
-                        .partition(Result::is_ok);
-                    if errors.len() == 0 {
-                        self.db.add_receipt_nt(rct, &id)?
-                    } else { 
-                        let e = errors.pop().unwrap().unwrap_err();
-                        return Err(e);
-                    }
+                    let tally = self.get_tally_at_sn(&rct.body.event.prefix, rct.body.event.sn)?;
+                    
+                    rct.verify(tally.unwrap(), &serialized_event)?;
+                    self.db.add_receipt_nt(rct, &id)?
+                    
                 } else {
                     self.db.add_escrow_nt_receipt(rct, &id)?
                 }
@@ -358,5 +369,36 @@ impl<'d> EventProcessor<'d> {
             .and_then(|opt| Ok(opt.map_or_else(|| IdentifierState::default(), |s| s)))
             // process the event update
             .and_then(|state| event.apply_to(state))
+    }
+
+    /// Process escrow.
+    ///
+    /// Process any escrow entry related to event identified by Identifier
+    /// prefix and sn that can be now finalized.
+    pub fn process_escrow(
+        &self,
+        pref: &IdentifierPrefix,
+        sn: u64,
+    ) -> Result<(), Error> {
+        let serialized_msg = self.get_event_at_sn(pref, sn)?;
+        match serialized_msg {
+            Some(msg) => {
+                let escrowed_ev = self.db.get_escrow_nt_receipts(pref).unwrap().find(|ev| ev.body.event.sn == sn).unwrap();
+                // Should event be removed?
+                match self.process_witness_receipt(escrowed_ev) {
+                    Ok(_) => {
+                        // Event processed succesfully
+                    }
+                    Err(_) => {
+                        // Event escrowed once again
+                    }
+                };
+
+            }
+            // Event not found in db.
+            // receipted event superseded so remove from escrow
+            None => { }
+        }
+        Ok(())
     }
 }

@@ -1,6 +1,6 @@
 pub mod event_msg_builder;
-pub mod serialization_info;
 pub mod parse;
+pub mod serialization_info;
 
 use std::cmp::Ordering;
 
@@ -61,9 +61,9 @@ impl PartialOrd for TimestampedEventMessage {
             false => match self.event.event.sn > other.event.event.sn {
                 true => Ordering::Greater,
                 false => Ordering::Less,
-            }
+            },
         })
-   }
+    }
 }
 
 impl Ord for TimestampedEventMessage {
@@ -73,7 +73,7 @@ impl Ord for TimestampedEventMessage {
             false => match self.event.event.sn > other.event.event.sn {
                 true => Ordering::Greater,
                 false => Ordering::Less,
-            }
+            },
         }
     }
 }
@@ -108,7 +108,7 @@ impl TimestampedSignedEventMessage {
     pub fn new(event: SignedEventMessage) -> Self {
         Self {
             timestamp: Local::now(),
-            event
+            event,
         }
     }
 }
@@ -162,6 +162,35 @@ impl Eq for TimestampedSignedEventMessage {}
 pub struct SignedNontransferableReceipt {
     pub body: EventMessage,
     pub couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
+}
+
+impl SignedNontransferableReceipt {
+    pub fn verify(&self, tally: u64, message: &[u8]) -> Result<bool, Error> {
+        // ensure there's enough witnessses
+        if (self.couplets.len() as u64) < tally {
+            Err(Error::NotEnoughSigsError)
+        } else {
+            // TODO improve error handling
+            // TODO check if there are no duplicates?
+            let (oks, _errors): (Vec<_>, Vec<_>) = self
+                .couplets
+                .iter()
+                .map(|(witness, signature)| witness.verify(message, signature))
+                .partition(Result::is_ok);
+            
+            if (oks
+                .into_iter()
+                .map(Result::unwrap)
+                .filter(|res| *res)
+                .count() as u64)
+                < tally
+            {
+                Err(Error::NotEnoughSigsError)
+            } else {
+                Ok(true)
+            }
+        }
+    }
 }
 
 /// Signed Transferrable Receipt
