@@ -41,6 +41,9 @@ pub enum Error {
     #[error("Error while applying event: out of order event")]
     EventOutOfOrderError,
 
+    #[error("No event of given sn and prefix in database")]
+    NoEventError,
+
     #[error("Error while aplying event: duplicate event")]
     EventDuplicateError,
 

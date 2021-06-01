@@ -1,10 +1,9 @@
+use std::fs;
+
 use crate::{database::sled::SledEventDatabase, derivation::self_addressing::SelfAddressing, error::Error, event::{EventMessage, event_data::EventData, sections::{
             seal::{EventSeal, LocationSeal, Seal},
             KeyConfig,
-        }}, event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedSignedEventMessage, parse::{
-            Deserialized,
-            DeserializedSignedEvent
-            }}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
+        }}, event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedSignedEventMessage, parse::{Deserialized, DeserializedSignedEvent, signed_message}}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
 
 #[cfg(test)]
 mod tests;
@@ -140,7 +139,7 @@ impl<'d> EventProcessor<'d> {
                     Err(Error::SemanticError("Event digests doesn't match".into()))
                 } 
             } else {
-                Err(Error::SemanticError("No event of given sn and prefix in database".into()))
+                Err(Error::NoEventError)
             }
     }
 
@@ -229,7 +228,17 @@ impl<'d> EventProcessor<'d> {
         match data {
             Deserialized::Event(e) => self.process_event(e),
             Deserialized::NontransferableRct(rct) => self.process_witness_receipt(rct),
-            Deserialized::TransferableRct(rct) => self.process_validator_receipt(rct),
+            Deserialized::TransferableRct(rct) => {
+                match self.process_validator_receipt(rct.clone()) {
+                    Ok(p) => Ok(p),
+                    Err(e) => {match e {
+                        Error::NoEventError => {self.db.add_escrow_t_receipt(rct.to_owned(), &rct.body.event.prefix)?;},
+                        _ => {}
+                    };
+                    Err(e)}
+
+                }
+            },
         }
     }
 
@@ -316,8 +325,7 @@ impl<'d> EventProcessor<'d> {
                         Err(Error::SemanticError("Incorrect receipt signatures".into()))
                     }
                 } else {
-                    self.db.add_escrow_t_receipt(vrc.clone(), &vrc.body.event.prefix)?;
-                    Err(Error::SemanticError("Receipt escrowed".into()))
+                    Err(Error::NoEventError)
                 }
             },
             _ =>  Err(Error::SemanticError("incorrect receipt structure".into()))
@@ -375,30 +383,26 @@ impl<'d> EventProcessor<'d> {
     ///
     /// Process any escrow entry related to event identified by Identifier
     /// prefix and sn that can be now finalized.
-    pub fn process_escrow(
+    pub fn process_transferable_receipts_escrow(
         &self,
         pref: &IdentifierPrefix,
         sn: u64,
     ) -> Result<(), Error> {
-        let serialized_msg = self.get_event_at_sn(pref, sn)?;
-        match serialized_msg {
-            Some(msg) => {
-                let escrowed_ev = self.db.get_escrow_nt_receipts(pref).unwrap().find(|ev| ev.body.event.sn == sn).unwrap();
-                // Should event be removed?
-                match self.process_witness_receipt(escrowed_ev) {
-                    Ok(_) => {
-                        // Event processed succesfully
-                    }
-                    Err(_) => {
-                        // Event escrowed once again
-                    }
-                };
-
+        // Get receipt from escrow
+        let escrowed_receipt = self.db.get_escrow_t_receipts(pref)
+            .ok_or(Error::NoEventError)?
+            .find(|ev| ev.body.event.sn == sn)
+            .ok_or(Error::NoEventError)?;
+        match self.process_validator_receipt(escrowed_receipt) {
+            Ok(_) => {
+                // Event processed succesfully, remove it from escrow
+                self.db.remove_rct(pref, sn)?;
             }
-            // Event not found in db.
-            // receipted event superseded so remove from escrow
-            None => { }
-        }
+            Err(e) => {
+                // Event should stay in escrow.
+            }
+        };
+
         Ok(())
     }
 }

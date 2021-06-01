@@ -207,17 +207,24 @@ fn test_process_delegated() -> Result<(), Error> {
     event_processor.process(deserialized_ixn.clone())?;
 
     // Check if processed event is in db.
-    let ixn_from_db = event_processor.get_event_at_sn(&bobs_pref, 1).unwrap().unwrap();
-    assert_eq!(ixn_from_db.event.serialize()?, raw_parsed(deserialized_ixn)?);
+    let ixn_from_db = event_processor
+        .get_event_at_sn(&bobs_pref, 1)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        ixn_from_db.event.serialize()?,
+        raw_parsed(deserialized_ixn)?
+    );
 
     // Process delegated inception event once again.
     event_processor.process(deserialized_dip.clone())?.unwrap();
 
     // Check if processed dip event is in db.
-    let dip_from_db = event_processor
-        .get_event_at_sn(&child_prefix, 0)?
-        .unwrap();
-    assert_eq!(dip_from_db.event.serialize()?, raw_parsed(deserialized_dip)?);
+    let dip_from_db = event_processor.get_event_at_sn(&child_prefix, 0)?.unwrap();
+    assert_eq!(
+        dip_from_db.event.serialize()?,
+        raw_parsed(deserialized_dip)?
+    );
 
     // Bobs interaction event with delegated event seal.
     let bob_ixn = br#"{"v":"KERI10JSON000107_","i":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI","s":"2","t":"ixn","p":"E3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII","a":[{"i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"1","d":"EPjLBcb4pp-3PGvSi_fTvLvsqUqFoJ0CVCHvIFfu93Xc"}]}-AABAAclMVE-bkIn-wPiAqfgR384nWmslQHQvmo2o3xQvd_4Bt6bflc4BAmfBa03KgrDVqmB7qG2VXQbOHevkzOgRdD"#;
@@ -239,16 +246,20 @@ fn test_process_delegated() -> Result<(), Error> {
 
     // Check if processed event is in db.
     let ixn_from_db = event_processor.get_event_at_sn(&bobs_pref, 2)?.unwrap();
-    assert_eq!(ixn_from_db.event.serialize()?, raw_parsed(deserialized_ixn_drt)?);
+    assert_eq!(
+        ixn_from_db.event.serialize()?,
+        raw_parsed(deserialized_ixn_drt)?
+    );
 
     // Process delegated rotation event once again.
     event_processor.process(deserialized_drt.clone())?.unwrap();
 
     // Check if processed drt event is in db.
-    let drt_from_db = event_processor
-        .get_event_at_sn(&child_prefix, 1)?
-        .unwrap();
-    assert_eq!(drt_from_db.event.serialize()?, raw_parsed(deserialized_drt)?);
+    let drt_from_db = event_processor.get_event_at_sn(&child_prefix, 1)?.unwrap();
+    assert_eq!(
+        drt_from_db.event.serialize()?,
+        raw_parsed(deserialized_drt)?
+    );
 
     Ok(())
 }
@@ -336,6 +347,125 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
     assert_eq!(state_at_sn.prefix, event_seal.prefix);
     let ev_dig = event_seal.event_digest.derivation.derive(&state_at_sn.last);
     assert_eq!(event_seal.event_digest, ev_dig);
+
+    Ok(())
+}
+
+#[test]
+fn test_escrow_trans_receipt() -> Result<(), Error> {
+    use tempfile::Builder;
+    // Create test db and event processor.
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    fs::create_dir_all(root.path()).unwrap();
+    let db = SledEventDatabase::new(root.path()).unwrap();
+    let event_processor = EventProcessor::new(&db);
+
+    let receipted_icp_raw = r#"{"v":"KERI10JSON00014b_","i":"Ew6zD07kTItS-jsaXb4dfDiZuRzKVdLPn2vt0lxyRfO8","s":"0","t":"icp","kt":"1","k":["DyVl2PmD3sasa7Dua5D0kYI4TKWHqrxJ3T56GygrbEVo","D23TFwtUxx0g6s6PZ_Y105MRA1zguhVvT3pHvNBm0eKI","Dl762uk9FDMKmbI9L9OaWJ0pZ4jQI9Anw_Idf-1j96E0"],"n":"EmvbCD2xJCLVVX5tPKx1Sx4fkJH9lxK3UPLfaz2uBcK8","bt":"0","b":[],"c":[],"a":[]}-AADAAtxQVTmnIuryIzoJCeG6FP0hXf9VBeYcPKK-oXQR5DuWPEPrvubI8uC1FpPqGBZr5h02OlizPeTTKGntUkuzsDgABlVnLnOz69hjJGWrqFZBC7QKxRjvRuQ1W1VxeZIVtqJ--5B4RsiFLiv5CPChY6_qHYHw8q5PdsAO8JUIMq5zABgACNN6aGP8ucfeAAxBgFjOVgOjQeSt-SBj7EaANZL7IeBCnWX-txKGu4AuHkAj543DjjwVjEYhHxoHL5kNnKiajCQ"#;
+    let deserialized_icp = signed_message(receipted_icp_raw.as_bytes()).unwrap().1;
+
+    let receipt_raw = r#"{"v":"KERI10JSON000091_","i":"Ew6zD07kTItS-jsaXb4dfDiZuRzKVdLPn2vt0lxyRfO8","s":"0","t":"rct","d":"EYlNEtEjHGdtRWBqGKEplUdZZeYZkaqnJX4v6X3wcYW4"}-FABEp1GZvfUnuPhOBMLQPXFmkOebDlL7kJNA1HkSipJJxQg0AAAAAAAAAAAAAAAAAAAAAAAExFmxTfgEofzzcRf8vTKqWscddHH2-lgdawQA-KQj0qo-AADAAPiK37BGm6QUhgbHKsiRGZ3AcIPirZ7RODeP7BRJ8VzYfHjTW_BfBxB8rNO2U3d3XUKbgMx2AzYZ9l9akcpEZDwABC4yB7vROuKGJB-AI0fiCYvUqSpfiVksMvDCkd0S90WZp7ITkhrm6At5DTlLQPNx4Tgx1VOY1_1LyE7jxu1xQCgACMkFdzCBwKF4_wx3KncbFrhDyTH5izvyrP4mdQL4kX__ck65zn5lkcnmEhw5VnwqJ0hbTWyjhRO_Aj96um1hlCQ"#;
+    let deserialized_rct = signed_message(receipt_raw.as_bytes()).unwrap().1;
+
+    let validator_icp = r#"{"v":"KERI10JSON00014b_","i":"Ep1GZvfUnuPhOBMLQPXFmkOebDlL7kJNA1HkSipJJxQg","s":"0","t":"icp","kt":"1","k":["DhZmbp0Gho0hr_GLUQZc20kpNNeCDJDIMhhLppqWMEdw","D4wt4AOt_GjhlGCn-1_I1_Lu8xsMD7offgheWEeAmMWw","DljvHsCaxADsqx-AtZmmuYJMCIK3ughSVhWOoDEETBvE"],"n":"Er-WtzG1t5_TrQ30u18DKvpVSdjaX_8LzdspR63RnwmA","bt":"0","b":[],"c":[],"a":[]}-AADAAKcdrOKvfbqmhQWuJSgOkDA6ldPBRqQdI3AD7bHljRN7aMAIIbT648VUszgVwnIFceSEFqFuTekBO_y-DgJwsAAABvuLOR3qEg1jlBksNWNzYmQq39pikWXOY4hPYM6mAA0qrn7yY7429eA82KBA_CWO9cbB1nupXwS_uZjakhKjADgACxRSVmN01paGWRLRiOv2rApYaBaobOlQSBmfXXzfEv9zd8cua_hmcVS5TT6WIez147wegmGxf1ZzY56XEoGMnAg"#;
+    let deserialized_val_icp = signed_message(validator_icp.as_bytes()).unwrap().1;
+
+    // Recepter (the one who made event) prefix
+    let pref: IdentifierPrefix = "Ew6zD07kTItS-jsaXb4dfDiZuRzKVdLPn2vt0lxyRfO8".parse()?;
+
+    // Receipt message should be escrowed, because there is neither validator pref nor recepter pref in db.
+    let state = event_processor.process(deserialized_rct.clone());
+    assert!(state.is_err());
+    // Check if it is in receipts.
+    let trans_receipts = event_processor.db.get_receipts_t(&pref);
+    assert!(matches!(trans_receipts, None));
+
+    // Check if it is in escrow.
+    let esc = event_processor.db.get_escrow_t_receipts(&pref).unwrap();
+    assert_eq!(esc.count(), 1);
+
+    // Recepter's ixn:
+    let ixn_raw = br#"{"v":"KERI10JSON000098_","i":"Ew6zD07kTItS-jsaXb4dfDiZuRzKVdLPn2vt0lxyRfO8","s":"1","t":"ixn","p":"EYlNEtEjHGdtRWBqGKEplUdZZeYZkaqnJX4v6X3wcYW4","a":[]}-AADAAPGLwK1HzVU2-PkTlCDaRJJOoqwvcG8uGxq7soFkcjLNs4ox995IDpiJN7R4scau7j2ukvsZekqhv42tTYTzPAAABZVOI5WsAFzxH0xjiuZj_A5Q3Uls7UEZKjGCRS3jGSaHCiqNHiGxKO9kf2dQ3ugVpzP5ptRQGDIMqnuLfEw8UAwAC4zaP5SZ-g_oDxTac0OqrNZ47klR2vafwou8GSlLX2dXpLFOyDzD150BbbykaNNIADAR-rxDXNlbzbjMa9InLBw"#;
+    let deserialized_ixn = signed_message(ixn_raw).unwrap().1;
+
+    // Validator's rot:
+    let validator_rot_raw = br#"{"v":"KERI10JSON000180_","i":"Ep1GZvfUnuPhOBMLQPXFmkOebDlL7kJNA1HkSipJJxQg","s":"1","t":"rot","p":"ExFmxTfgEofzzcRf8vTKqWscddHH2-lgdawQA-KQj0qo","kt":"1","k":["DfGz_Jdwm7ljrT8xR8MyPIspIFlBavorgPf-pd45gqvM","D84sztcgyr19nHJM8aBEDEe8IfMU8JyStnJgcgNT1URM","DOIBNK4GstnZ4866As94LKs7L4_FnpB5YWccoY0Om8cE"],"n":"Ets4P5L4tYBXo2C3g-GeHwkhBZbL_kMF_aYai28iXHHc","bt":"0","br":[],"ba":[],"a":[]}-AADAAVBzUfnc9gDigsh5kxGkIc4g9ebO1F8SRCS4qVn_Of4iPLkvrDcpanP4Dno1MYs1ZHKsaxWooiEYwe-NbhliECgABpGbP7jrWTauQD_q4JpyNdCf-Bi54SIkIuv-SBEbKUIuXMw2LcmG07uAPIhi06GRDD_6GJo-wltRlKL3WJJ1VCQACITX9C9kFHs-b0Bzqi5LQKGcWYZJHuWX85Du6DiTJ86_UyeeG8dx1EuFAVkzTiW4eOK_pllSrhLwTxBljyxotDQ"#;
+    let deserialized_val_rot = signed_message(validator_rot_raw).unwrap().1;
+
+    // Signed receipt of ixn:
+    let receipt_ixn_raw = br#"{"v":"KERI10JSON000091_","i":"Ew6zD07kTItS-jsaXb4dfDiZuRzKVdLPn2vt0lxyRfO8","s":"1","t":"rct","d":"Es9Y7SujBNBgTu3FO8cwGahDqMsz8J0yo0U_X89pMRes"}-FABEp1GZvfUnuPhOBMLQPXFmkOebDlL7kJNA1HkSipJJxQg0AAAAAAAAAAAAAAAAAAAAAAQE5PVpebKFwhAAqArUyYeM2vi1iJrXbhPQtcZp-WSNpeY-AADAAZOzX8q9DdMD9mKolWk-u_Yx4o8pldEyou5Bwdh-zL2UoHNa8mttNQQ7hJX8BXTXjLyYojU_2iakv5mfMaATQCwABfNX6I0eyFVfURCnypK6QZpSroklVQ-IfAdmFkDK0aCYXpfmuU6m922UkA-vpEhRLEgtwFdOzA5YAhJiemFwiDwAC5Y3PWeIUc4gGIx_cUbm-b29j2gjAgWkAupRIDnYOmnxt2fH_BvJ479gBf1HzgiPMYf8lEXZKiiwRU1VQaM5CBw"#;
+    let deserialized_ixn_rct = signed_message(receipt_ixn_raw).unwrap().1;
+
+    // Receipt message should be escrowed, because there is neither validator pref nor recepter pref in db.
+    let state = event_processor.process(deserialized_ixn_rct);
+    assert!(state.is_err());
+    // Check if it is in receipts.
+    let trans_receipts = event_processor.db.get_receipts_t(&pref);
+    assert!(matches!(trans_receipts, None));
+
+    // Check if it is in escrow.
+    let esc = event_processor.db.get_escrow_t_receipts(&pref).unwrap();
+    assert_eq!(esc.count(), 2);
+
+    // Receptor's rot:
+    let rot_raw = br#"{"v":"KERI10JSON000180_","i":"Ew6zD07kTItS-jsaXb4dfDiZuRzKVdLPn2vt0lxyRfO8","s":"2","t":"rot","p":"Es9Y7SujBNBgTu3FO8cwGahDqMsz8J0yo0U_X89pMRes","kt":"1","k":["D5B8KSGWb__uNJMPMciNk5FBz-sgaRimja0tuPmUfs0o","DcxtFVilB-Ei4D0wbzSHq9_rBvsCdWvfpjkPsc2r2FN0","DAlrozT3JzoA9xd3YN-w16nQYXnk5jp1hMNWXUbo2NtI"],"n":"EkQMjUHUTzWSL8aCbS-kC6UOXiwJeNWKwpngM0sjlL6g","bt":"0","br":[],"ba":[],"a":[]}-AADAAyuk-YthqgUIZw8BJXYHliG2U-HOyIh2qYhpUXnbMDtjRX71kyjXhTtOw5SN-36bdaA6LmaOPuKevmVUI5L4pBAABecn61ol49ilAGK6lfPVKKcDfcPFir0q6cTlc2RERAUY3xFTgR5iSAmbCqEF11vtXa_7wX6Hotu49YCSSPNUHAQACziP1JLEiIU_Cgea9ljRNuzwMiCF_QW0NgxLb3m3mt24RTqisC99Jgv0boxiKWyqqzEnj6dbiHq6YzTaF23kdDg"#;
+    let deserialized_rot = signed_message(rot_raw).unwrap().1;
+
+    // Signed receipt of rot:
+    let receipt_rot_raw = br#"{"v":"KERI10JSON000091_","i":"Ew6zD07kTItS-jsaXb4dfDiZuRzKVdLPn2vt0lxyRfO8","s":"2","t":"rct","d":"EQnwRD64gFSecMxSFvMKFsDO2pGl9HUprcAdAERq8bns"}-FABEp1GZvfUnuPhOBMLQPXFmkOebDlL7kJNA1HkSipJJxQg0AAAAAAAAAAAAAAAAAAAAAAQE5PVpebKFwhAAqArUyYeM2vi1iJrXbhPQtcZp-WSNpeY-AADAAQRVTrgeHdfyszSG1BZZrFN0BKmnl6jJN3qfCgeeOw3c53XLoLmyz3uqHQ0EHubQnLUq_CEBnZC4LuiZW9X3cBwABRICFglr10L_mZ2UZCQf8JbMgR_nNje_mvzeCYRUlOzeqh5tZis3rYElCEBtiEZ9dOXgKgChrfhF1FbHUYF5wBgACyLARatvJqjXYBPpeHz2QDNDYHui0s1sqaYvPktsMhsmP7m1eoEC_jS5lvCq-U237ybvV4Urs_20YoF7vtlVIDQ"#;
+    let deserialized_rot_rct = signed_message(receipt_rot_raw).unwrap().1;
+
+    // Receipt message should be escrowed, because there is neither validator pref nor recepter pref in db.
+    let state = event_processor.process(deserialized_rot_rct);
+    assert!(state.is_err());
+    // Check if it is in receipts.
+    let trans_receipts = event_processor.db.get_receipts_t(&pref);
+    assert!(matches!(trans_receipts, None));
+
+    // Check the escrow.
+    let esc = event_processor.db.get_escrow_t_receipts(&pref).unwrap();
+    assert_eq!(esc.count(), 3);
+
+    // Process receiptor's events.
+    event_processor.process(deserialized_icp)?;
+    event_processor.process(deserialized_ixn)?;
+    event_processor.process(deserialized_rot)?;
+
+    event_processor.process_transferable_receipts_escrow(&pref, 0)?;
+    event_processor.process_transferable_receipts_escrow(&pref, 1)?;
+    event_processor.process_transferable_receipts_escrow(&pref, 2)?;
+
+    // Check if it is in escrow. All receipts still should be there because there is no validator events in db yet.
+    let esc = event_processor.db.get_escrow_t_receipts(&pref).unwrap();
+    assert_eq!(esc.count(), 3);
+
+    // Process validateor inception event and process escrow again.
+    event_processor.process(deserialized_val_icp)?;
+    event_processor.process_transferable_receipts_escrow(&pref, 0)?;
+    event_processor.process_transferable_receipts_escrow(&pref, 1)?;
+    event_processor.process_transferable_receipts_escrow(&pref, 2)?;
+
+    // Check if receipts are still in escrow. One of them should be processed successfully..
+    let esc = event_processor.db.get_escrow_t_receipts(&pref).unwrap();
+    assert_eq!(esc.count(), 2);
+
+    // Check if any receipt is in receipts.
+    let trans_receipts = event_processor.db.get_receipts_t(&pref);
+    assert!(matches!(trans_receipts, Some(_)));
+    assert_eq!(trans_receipts.unwrap().count(), 1);
+
+    // Process validator rotation event and process escrows again.
+    event_processor.process(deserialized_val_rot)?;
+    event_processor.process_transferable_receipts_escrow(&pref, 1)?;
+    event_processor.process_transferable_receipts_escrow(&pref, 2)?;
+
+    // Check if receipts are still in escrow. All of them shoud be processed successfully.
+    let esc = event_processor.db.get_escrow_t_receipts(&pref).unwrap();
+    assert_eq!(esc.count(), 0);
+
+    // Check if any receipt is in receipts. All of them should be there.
+    let trans_receipts = event_processor.db.get_receipts_t(&pref);
+    assert!(matches!(trans_receipts, Some(_)));
+    assert_eq!(trans_receipts.unwrap().count(), 3);
 
     Ok(())
 }

@@ -137,4 +137,11 @@ impl SledEventDatabase {
         -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
             self.duplicitous_events.iter_values(self.identifiers.designated_key(id))
         }
+
+    pub fn remove_rct(&self, id: &IdentifierPrefix, sn: u64) -> Result<(), Error> {
+        let current: Vec<SignedTransferableReceipt> = self.get_escrow_t_receipts(id).unwrap().filter(|ev| ev.body.event.sn != sn).collect();
+        self.escrowed_receipts_t.put(self.identifiers.designated_key(id), current)?;
+        
+        Ok(())
+    }
 }
