@@ -1,8 +1,8 @@
-use std::str::FromStr;
-use base64::URL_SAFE;
-use serde::{Serialize, Deserialize};
-use crate::{error::Error, event::sections::seal::EventSeal};
 use super::Prefix;
+use crate::{error::Error, event::sections::seal::EventSeal};
+use base64::URL_SAFE;
+use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttachedEventSeal {

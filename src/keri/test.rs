@@ -1,9 +1,6 @@
 #[cfg(test)]
 use crate::{
-    database::sled::SledEventDatabase,
-    error::Error,
-    keri::Keri,
-    prefix::IdentifierPrefix,
+    database::sled::SledEventDatabase, error::Error, keri::Keri, prefix::IdentifierPrefix,
     signer::CryptoBox,
 };
 

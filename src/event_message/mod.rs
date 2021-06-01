@@ -127,14 +127,18 @@ impl From<SignedEventMessage> for TimestampedSignedEventMessage {
 
 impl PartialOrd for TimestampedSignedEventMessage {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(match self.event.event_message.event.sn == other.event.event_message.event.sn {
-            true => Ordering::Equal,
-            false => match self.event.event_message.event.sn > other.event.event_message.event.sn {
-                true => Ordering::Greater,
-                false => Ordering::Less,
-            }
-        })
-   }
+        Some(
+            match self.event.event_message.event.sn == other.event.event_message.event.sn {
+                true => Ordering::Equal,
+                false => {
+                    match self.event.event_message.event.sn > other.event.event_message.event.sn {
+                        true => Ordering::Greater,
+                        false => Ordering::Less,
+                    }
+                }
+            },
+        )
+    }
 }
 
 impl Ord for TimestampedSignedEventMessage {
@@ -144,13 +148,12 @@ impl Ord for TimestampedSignedEventMessage {
             false => match self.event.event_message.event.sn > other.event.event_message.event.sn {
                 true => Ordering::Greater,
                 false => Ordering::Less,
-            }
+            },
         }
     }
 }
 
 impl Eq for TimestampedSignedEventMessage {}
-
 
 /// Signed Non-Transferrable Receipt
 ///
@@ -177,7 +180,7 @@ impl SignedNontransferableReceipt {
                 .iter()
                 .map(|(witness, signature)| witness.verify(message, signature))
                 .partition(Result::is_ok);
-            
+
             if (oks
                 .into_iter()
                 .map(Result::unwrap)
