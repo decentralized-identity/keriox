@@ -28,7 +28,11 @@ pub struct Keri<'d, K: KeyManager> {
 
 impl<'d, K: KeyManager> Keri<'d, K> {
     // incept a state and keys
-    pub fn new(db: &'d SledEventDatabase, key_manager: K, prefix: IdentifierPrefix) -> Result<Keri<K>, Error> {
+    pub fn new(
+        db: &'d SledEventDatabase,
+        key_manager: K,
+        prefix: IdentifierPrefix,
+    ) -> Result<Keri<K>, Error> {
         Ok(Keri {
             prefix,
             key_manager,

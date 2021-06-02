@@ -7,7 +7,7 @@ use crate::{
         SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         TimestampedEventMessage, TimestampedSignedEventMessage,
     },
-    prefix::IdentifierPrefix,
+    prefix::{IdentifierPrefix, SelfAddressingPrefix},
 };
 use std::path::Path;
 use tables::{SledEventTree, SledEventTreeVec};
@@ -209,13 +209,29 @@ impl SledEventDatabase {
             .iter_values(self.identifiers.designated_key(id))
     }
 
-    pub fn remove_rct(&self, id: &IdentifierPrefix, sn: u64) -> Result<(), Error> {
+    pub fn remove_escrowed_trans_rct(&self, id: &IdentifierPrefix, sn: u64) -> Result<(), Error> {
         let current: Vec<SignedTransferableReceipt> = self
             .get_escrow_t_receipts(id)
             .unwrap()
             .filter(|ev| ev.body.event.sn != sn)
             .collect();
         self.escrowed_receipts_t
+            .put(self.identifiers.designated_key(id), current)?;
+
+        Ok(())
+    }
+
+    pub fn remove_escrow_outoforder(
+        &self,
+        id: &IdentifierPrefix,
+        dig: SelfAddressingPrefix,
+    ) -> Result<(), Error> {
+        let current: Vec<TimestampedSignedEventMessage> = self
+            .get_outoforder_events(id)
+            .unwrap()
+            .filter(|ev| !dig.verify_binding(&ev.event.event_message.serialize().unwrap()))
+            .collect();
+        self.out_of_order_events
             .put(self.identifiers.designated_key(id), current)?;
 
         Ok(())

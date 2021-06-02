@@ -13,7 +13,7 @@ use crate::{
         EventMessage,
     },
     event_message::{
-        parse::{signed_message, Deserialized, DeserializedSignedEvent},
+        parse::{signed_message, Deserialized, DeserializedEvent, DeserializedSignedEvent},
         SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         TimestampedSignedEventMessage,
     },
@@ -244,7 +244,30 @@ impl<'d> EventProcessor<'d> {
     /// Process a deserialized KERI message
     pub fn process(&self, data: Deserialized) -> Result<Option<IdentifierState>, Error> {
         match data {
-            Deserialized::Event(e) => self.process_event(e),
+            Deserialized::Event(ev) => self
+                .process_event(&ev)
+                // If processing failed, check the error and escrow event properly.
+                .map_err(|error| {
+                    let signed_event: SignedEventMessage = ev.to_owned().into();
+                    let prefix = ev.to_owned().event.event.event.prefix;
+                    let out = match error {
+                        Error::EventOutOfOrderError => {
+                            self.db.add_outoforder_event(signed_event, &prefix)
+                        }
+                        Error::NotEnoughSigsError => {
+                            self.db.add_partially_signed_event(signed_event, &prefix)
+                        }
+
+                        Error::EventDuplicateError => {
+                            self.db.add_duplicious_event(signed_event, &prefix)
+                        }
+                        _ => Ok(()),
+                    };
+                    match out {
+                        Ok(_) => error,
+                        Err(e) => e,
+                    }
+                }),
             Deserialized::NontransferableRct(rct) => self.process_witness_receipt(rct),
             Deserialized::TransferableRct(rct) => {
                 match self.process_validator_receipt(rct.clone()) {
@@ -273,7 +296,7 @@ impl<'d> EventProcessor<'d> {
     /// FIXME: refactor to remove multiple event recourse wrappers
     pub fn process_event(
         &self,
-        event: DeserializedSignedEvent,
+        event: &DeserializedSignedEvent,
     ) -> Result<Option<IdentifierState>, Error> {
         // Log event.
         let signed_event = SignedEventMessage::new(&event.event.event, event.signatures.clone());
@@ -282,20 +305,10 @@ impl<'d> EventProcessor<'d> {
             EventData::Dip(dip) => self.validate_seal(dip.seal, &event.event.raw),
             EventData::Drt(drt) => self.validate_seal(drt.seal, &event.event.raw),
             _ => Ok(()),
-        }
-        .or_else(|e| {
-            if let Error::EventOutOfOrderError = e {
-                // FIXME: should this be signed event instead?
-                self.db
-                    .add_outoforder_event(signed_event.clone(), &event.event.event.event.prefix)?
-            };
-            Err(e)
-        })?;
-
+        }?;
         self.apply_to_state(event.event.event.clone())
             .and_then(|new_state| {
-                // match on verification result
-                match new_state
+                new_state
                     .current
                     .verify(&event.event.raw, &event.signatures)
                     .and_then(|_result| {
@@ -304,28 +317,8 @@ impl<'d> EventProcessor<'d> {
                             signed_event.clone(),
                             &event.event.event.event.prefix,
                         )?;
-                        Ok(new_state)
-                    }) {
-                    Ok(state) => Ok(Some(state)),
-                    Err(e) => {
-                        match e {
-                            Error::NotEnoughSigsError => self.db.add_partially_signed_event(
-                                signed_event,
-                                &event.event.event.event.prefix,
-                            )?,
-                            Error::EventOutOfOrderError => self.db.add_outoforder_event(
-                                signed_event,
-                                &event.event.event.event.prefix,
-                            )?,
-                            Error::EventDuplicateError => self.db.add_duplicious_event(
-                                signed_event,
-                                &event.event.event.event.prefix,
-                            )?,
-                            _ => (),
-                        };
-                        Err(e)
-                    }
-                }
+                        Ok(Some(new_state))
+                    })
             })
     }
 
@@ -425,7 +418,44 @@ impl<'d> EventProcessor<'d> {
     ///
     /// Process any escrow entry related to event identified by Identifier
     /// prefix and sn that can be now finalized.
-    pub fn process_transferable_receipts_escrow(
+    pub fn process_escrow(&self, pref: &IdentifierPrefix, sn: u64) -> Result<(), Error> {
+        self.process_transferable_receipts_escrow(pref, sn)?;
+        self.process_outoforder_escrow(pref, sn)
+    }
+
+    fn process_outoforder_escrow(&self, pref: &IdentifierPrefix, sn: u64) -> Result<(), Error> {
+        // Get receipt from escrow
+        let escrowed_receipt: Vec<TimestampedSignedEventMessage> = self
+            .db
+            .get_outoforder_events(pref)
+            .ok_or(Error::NoEventError)?
+            .filter(|ev| ev.event.event_message.event.sn == sn)
+            .collect();
+        for escrowed in escrowed_receipt {
+            let des_event = DeserializedSignedEvent {
+                event: DeserializedEvent {
+                    event: escrowed.event.event_message.clone(),
+                    raw: &escrowed.event.serialize()?,
+                },
+                signatures: escrowed.event.signatures,
+            };
+            match self.process_event(&des_event) {
+                Ok(_) => {
+                    // Event processed succesfully, remove it from escrow
+                    let dig = SelfAddressing::Blake3_256
+                        .derive(&escrowed.event.event_message.serialize()?);
+                    self.db.remove_escrow_outoforder(pref, dig)?;
+                }
+                Err(e) => {
+                    // Event should stay in escrow.
+                }
+            };
+        }
+
+        Ok(())
+    }
+
+    fn process_transferable_receipts_escrow(
         &self,
         pref: &IdentifierPrefix,
         sn: u64,
@@ -440,7 +470,7 @@ impl<'d> EventProcessor<'d> {
         match self.process_validator_receipt(escrowed_receipt) {
             Ok(_) => {
                 // Event processed succesfully, remove it from escrow
-                self.db.remove_rct(pref, sn)?;
+                self.db.remove_escrowed_trans_rct(pref, sn)?;
             }
             Err(e) => {
                 // Event should stay in escrow.

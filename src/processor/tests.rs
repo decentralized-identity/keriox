@@ -4,7 +4,7 @@ use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
     event::{event_data::EventData, sections::seal::LocationSeal},
-    event_message::parse::message,
+    event_message::{parse::message, SignedEventMessage},
 };
 use crate::{
     event_message::{
@@ -466,6 +466,97 @@ fn test_escrow_trans_receipt() -> Result<(), Error> {
     let trans_receipts = event_processor.db.get_receipts_t(&pref);
     assert!(matches!(trans_receipts, Some(_)));
     assert_eq!(trans_receipts.unwrap().count(), 3);
+
+    Ok(())
+}
+
+#[test]
+pub fn test_process_outoforder_escrow() -> Result<(), Error> {
+    use tempfile::Builder;
+    // Create test db and event processor.
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    fs::create_dir_all(root.path()).unwrap();
+    let db = SledEventDatabase::new(root.path()).unwrap();
+    let event_processor = EventProcessor::new(&db);
+    // Events and sigs are from keripy `test_multisig_digprefix` test.
+    // (keripy/tests/core/test_eventing.py#1138)
+    let icp_raw = br#"{"v":"KERI10JSON00014b_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"0","t":"icp","kt":"2","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"E9izzBkXX76sqt0N-tfLzJeRqj0W56p4pDQ_ZqNCDpyw","bt":"0","b":[],"c":[],"a":[]}-AADAAhcaP-l0DkIKlJ87iIVcDx-m0iKPdSArEu63b-2cSEn9wXVGNpWw9nfwxodQ9G8J3q_Pm-AWfDwZGD9fobWuHBAAB6mz7zP0xFNBEBfSKG4mjpPbeOXktaIyX8mfsEa1A3Psf7eKxSrJ5Woj3iUB2AhhLg412-zkk795qxsK2xfdxBAACj5wdW-EyUJNgW0LHePQcSFNxW3ZyPregL4H2FoOrsPxLa3MZx6xYTh6i7YRMGY50ezEjV81hkI1Yce75M_bPCQ"#;
+    let deserialized_icp = parse::signed_message(icp_raw).unwrap().1;
+
+    let rot_raw = br#"{"v":"KERI10JSON000180_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"1","t":"rot","p":"ElIKmVhsgDtxLhFqsWPASdq9J2slLqG-Oiov0rEG4s-w","kt":"2","k":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ","D1kcBE7h0ImWW6_Sp7MQxGYSshZZz6XM7OiUE5DXm0dU","D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM"],"n":"EQpRYqbID2rW8X5lB6mOzDckJEIFae6NbJISXgJSN9qg","bt":"0","br":[],"ba":[],"a":[]}-AADAAOA7_2NfORAD7hnavnFDhIQ_1fX1zVjNzFLYLOqW4mLdmNlE4745-o75wtaPX1Reg27YP0lgrCFW_3Evz9ebNAQAB6CJhTEANFN8fAFEdxwbnllsUd3jBTZHeeR-KiYe0yjCdOhbEnTLKTpvwei9QsAP0z3xc6jKjUNJ6PoxNnmD7AQAC4YfEq1tZPteXlH2cLOMjOAxqygRgbDsFRvjEQCHQva1K4YsS3ErQjuKd5Z57Uac-aDaRjeH8KdSSDvtNshIyBw"#;
+    let deserialized_rot = parse::signed_message(rot_raw).unwrap().1;
+
+    let ixn_raw = br#"{"v":"KERI10JSON000098_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"2","t":"ixn","p":"EFLtKYQZIoCFdSEjP7D5OgqElY2WwFB5vQD0Uvtp4RmI","a":[]}-AADAAip7QM2tvcyC4vbSX4A4avT03hHrJTTlkjQujOZRMroRL897wojcI4DIyxejOqsZcjrZHlU4S3RLYGmVbDEoPDgAB3NZj06_KCwxdTdIgCMETTHVJQa5AB8-dtqoD7ltaFIQxmC2K_ESp6DFLOrGQ2xTr97a-By1beM66YyBThjV8DQAC50owTQUxkyJ78vato0HuX9Edx-OxvBoepr61KknIfCjXKnlZrf-s_L0XFbz_0k8t3c9gmPkaI2vI-ZhzP31jBA"#;
+    let deserialized_ixn = parse::signed_message(ixn_raw).unwrap().1;
+    
+    let id = match &deserialized_icp {
+        Deserialized::Event(e) => e.event.event.event.prefix.clone(),
+        _ => Err(Error::SemanticError("bad deser".into()))?,
+    };
+    // Process ixn. It is out of order event.
+    let state = event_processor.process(deserialized_ixn.clone());
+    assert!(matches!(state, Err(Error::EventOutOfOrderError)));
+
+    let outoforder: Vec<SignedEventMessage> = event_processor
+        .db
+        .get_outoforder_events(&id)
+        .unwrap()
+        .map(|e| e.into())
+        .collect();
+    assert_eq!(outoforder.len(), 1);
+
+    // Process the same ixn to check if escrowing is idepotent.
+    // TODO it's not. Fix it.
+    // let state = event_processor.process(deserialized_ixn);
+    // let outoforder: Vec<SignedEventMessage> = event_processor
+    //     .db
+    //     .get_outoforder_events(&id)
+    //     .unwrap()
+    //     .map(|e| e.into())
+    //     .collect();
+    // assert_eq!(outoforder.len(), 1);
+
+    // Process out of order escrow. Check if is change anything in escrow.
+    event_processor.process_outoforder_escrow(&id, 2)?;
+    let outoforder: Vec<_> = event_processor
+        .db
+        .get_outoforder_events(&id)
+        .unwrap()
+        .collect();
+    assert_eq!(outoforder.len(), 1);
+
+    // Process rot. It should be esrowed as out of order.
+    let state = event_processor.process(deserialized_rot);
+    assert!(matches!(state, Err(Error::EventOutOfOrderError)));
+    let outoforder: Vec<_> = event_processor
+        .db
+        .get_outoforder_events(&id)
+        .unwrap()
+        .collect();
+    assert_eq!(outoforder.len(), 2);
+
+    // Process out of order escrow. Check if is change anything in escrow.
+    event_processor.process_outoforder_escrow(&id, 1)?;
+    event_processor.process_outoforder_escrow(&id, 2)?;
+    let outoforder: Vec<_> = event_processor
+        .db
+        .get_outoforder_events(&id)
+        .unwrap()
+        .collect();
+    assert_eq!(outoforder.len(), 2);
+
+    // Process icp event and out of order events then.
+    event_processor.process(deserialized_icp)?;
+    event_processor.process_outoforder_escrow(&id, 1)?;
+    event_processor.process_outoforder_escrow(&id, 2)?;
+
+    // Check if escrowed event was processed succesfully.
+    let outoforder: Vec<_> = event_processor
+    .db
+    .get_outoforder_events(&id)
+    .unwrap()
+    .collect();
+    assert_eq!(outoforder.len(), 0);
 
     Ok(())
 }

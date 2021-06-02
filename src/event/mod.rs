@@ -47,6 +47,10 @@ impl EventSemantics for Event {
                 }
             }
             _ => {
+                // if prefix is default and event is not inception it can be out of order.
+                if state.prefix == IdentifierPrefix::default() {
+                    return Err(Error::EventOutOfOrderError);
+                }
                 // prefix must equal.
                 if self.prefix != state.prefix {
                     return Err(Error::SemanticError("Prefix does not match".to_string()));
