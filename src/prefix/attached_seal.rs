@@ -4,7 +4,7 @@ use base64::URL_SAFE;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Hash)]
 pub struct AttachedEventSeal {
     pub event_seal: EventSeal,
 }

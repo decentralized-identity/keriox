@@ -4,11 +4,10 @@ use k256::ecdsa::{
     signature::{Signer as EcdsaSigner, Verifier as EcdsaVerifier},
     Signature as EcdsaSignature, SigningKey, VerifyingKey,
 };
-use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Hash)]
 pub struct Key {
     key: Vec<u8>,
 }
@@ -79,6 +78,7 @@ impl Drop for Key {
 
 #[test]
 fn libsodium_to_ed25519_dalek_compat() {
+    use rand::rngs::OsRng;
     let kp = ed25519_dalek::Keypair::generate(&mut OsRng);
 
     let msg = b"are libsodium and dalek compatible?";

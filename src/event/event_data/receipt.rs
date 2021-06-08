@@ -2,7 +2,7 @@ use crate::prefix::SelfAddressingPrefix;
 use crate::state::EventSemantics;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Hash)]
 pub struct Receipt {
     /// Receipted Event Digest
     ///

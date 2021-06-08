@@ -6,7 +6,7 @@ use crate::{
     error::Error,
     event::sections::seal::EventSeal,
     keys::Key,
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
 };
 use base64::URL_SAFE;
 use nom::{bytes::complete::take, error::ErrorKind};
@@ -215,6 +215,7 @@ fn test() {
 fn test_basic_prefix() {
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
+    use crate::prefix::Prefix;
 
     let kp = Keypair::generate(&mut OsRng);
 
@@ -229,6 +230,7 @@ fn test_basic_prefix() {
 
 #[test]
 fn test_self_adressing() {
+    use crate::prefix::Prefix;
     let sap: SelfAddressingPrefix = "EJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8"
         .parse()
         .unwrap();
@@ -241,6 +243,7 @@ fn test_self_adressing() {
 
 #[test]
 fn test_self_signing() {
+    use crate::prefix::Prefix;
     let sig_prefix: SelfSigningPrefix =
         "0Bq1UBr1QD5TokdcnO_FmnoYsd8rB4_-oaQtk0dfFSSXPcxAu7pSaQIVfkhzckCVmTIgrdxyXS21uZgs7NxoyZAQ"
             .parse()

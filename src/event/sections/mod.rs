@@ -8,7 +8,7 @@ use serde_hex::{Compact, SerHex};
 
 pub mod seal;
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Hash)]
 pub struct KeyConfig {
     #[serde(rename = "kt", with = "SerHex::<Compact>")]
     pub threshold: u64,
@@ -141,7 +141,7 @@ mod empty_string_as_none {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Hash)]
 pub struct WitnessConfig {
     #[serde(rename = "bt", with = "SerHex::<Compact>")]
     pub tally: u64,
@@ -153,7 +153,7 @@ pub struct WitnessConfig {
     pub graft: Vec<BasicPrefix>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Hash)]
 pub struct InceptionWitnessConfig {
     #[serde(rename = "bt", with = "SerHex::<Compact>")]
     pub tally: u64,

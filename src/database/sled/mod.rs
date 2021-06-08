@@ -9,8 +9,11 @@ use crate::{
     },
     prefix::{IdentifierPrefix, SelfAddressingPrefix},
 };
-use std::path::Path;
-use tables::{SledEventTree, SledEventTreeVec};
+use std::{
+    path::Path,
+    collections::HashSet,
+};
+use tables::{SledEventTree, SledEventTreeVec, SledEventTreeMap};
 
 pub struct SledEventDatabase {
     // "iids" tree
@@ -19,21 +22,21 @@ pub struct SledEventDatabase {
     // "kels" tree
     key_event_logs: SledEventTreeVec<TimestampedSignedEventMessage>,
     // "pses" tree
-    partially_signed_events: SledEventTreeVec<TimestampedSignedEventMessage>,
+    partially_signed_events: SledEventTreeMap<TimestampedSignedEventMessage>,
     // "ooes" tree
-    out_of_order_events: SledEventTreeVec<TimestampedSignedEventMessage>,
+    out_of_order_events: SledEventTreeMap<TimestampedSignedEventMessage>,
     // "ldes" tree
-    likely_duplicious_events: SledEventTreeVec<TimestampedEventMessage>,
+    likely_duplicious_events: SledEventTreeMap<TimestampedEventMessage>,
     // "dels" tree
-    duplicitous_events: SledEventTreeVec<TimestampedSignedEventMessage>,
+    duplicitous_events: SledEventTreeMap<TimestampedSignedEventMessage>,
     // "rcts" tree
     receipts_nt: SledEventTreeVec<SignedNontransferableReceipt>,
     // "ures" tree
-    escrowed_receipts_nt: SledEventTreeVec<SignedNontransferableReceipt>,
+    escrowed_receipts_nt: SledEventTreeMap<SignedNontransferableReceipt>,
     // "vrcs" tree
     receipts_t: SledEventTreeVec<SignedTransferableReceipt>,
     // "vres" tree
-    escrowed_receipts_t: SledEventTreeVec<SignedTransferableReceipt>,
+    escrowed_receipts_t: SledEventTreeMap<SignedTransferableReceipt>,
 }
 
 impl SledEventDatabase {
@@ -44,15 +47,15 @@ impl SledEventDatabase {
         let db = sled::open(path.into())?;
         Ok(Self {
             identifiers: SledEventTree::new(db.open_tree(b"iids")?),
-            escrowed_receipts_nt: SledEventTreeVec::new(db.open_tree(b"ures")?),
+            escrowed_receipts_nt: SledEventTreeMap::new(db.open_tree(b"ures")?),
             receipts_t: SledEventTreeVec::new(db.open_tree(b"vrcs")?),
-            escrowed_receipts_t: SledEventTreeVec::new(db.open_tree(b"vres")?),
+            escrowed_receipts_t: SledEventTreeMap::new(db.open_tree(b"vres")?),
             receipts_nt: SledEventTreeVec::new(db.open_tree(b"rcts")?),
             key_event_logs: SledEventTreeVec::new(db.open_tree(b"kels")?),
-            partially_signed_events: SledEventTreeVec::new(db.open_tree(b"pses")?),
-            out_of_order_events: SledEventTreeVec::new(db.open_tree(b"ooes")?),
-            likely_duplicious_events: SledEventTreeVec::new(db.open_tree(b"ldes")?),
-            duplicitous_events: SledEventTreeVec::new(db.open_tree(b"dels")?),
+            partially_signed_events: SledEventTreeMap::new(db.open_tree(b"pses")?),
+            out_of_order_events: SledEventTreeMap::new(db.open_tree(b"ooes")?),
+            likely_duplicious_events: SledEventTreeMap::new(db.open_tree(b"ldes")?),
+            duplicitous_events: SledEventTreeMap::new(db.open_tree(b"dels")?),
         })
     }
 
@@ -113,13 +116,13 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Result<(), Error> {
         self.escrowed_receipts_t
-            .push(self.identifiers.designated_key(id), receipt)
+            .add_or_skip(self.identifiers.designated_key(id), receipt)
     }
 
     pub fn get_escrow_t_receipts(
         &self,
         id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = SignedTransferableReceipt>> {
+    ) -> Option<impl IntoIterator<Item = SignedTransferableReceipt>> {
         self.escrowed_receipts_t
             .iter_values(self.identifiers.designated_key(id))
     }
@@ -130,13 +133,13 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Result<(), Error> {
         self.escrowed_receipts_nt
-            .push(self.identifiers.designated_key(id), receipt)
+            .add_or_skip(self.identifiers.designated_key(id), receipt)
     }
 
     pub fn get_escrow_nt_receipts(
         &self,
         id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>> {
+    ) -> Option<impl IntoIterator<Item = SignedNontransferableReceipt>> {
         self.escrowed_receipts_nt
             .iter_values(self.identifiers.designated_key(id))
     }
@@ -147,13 +150,13 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Result<(), Error> {
         self.out_of_order_events
-            .push(self.identifiers.designated_key(id), event.into())
+            .add_or_skip(self.identifiers.designated_key(id), event.into())
     }
 
     pub fn get_outoforder_events(
         &self,
         id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
+    ) -> Option<impl IntoIterator<Item = TimestampedSignedEventMessage>> {
         self.out_of_order_events
             .iter_values(self.identifiers.designated_key(id))
     }
@@ -164,13 +167,13 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Result<(), Error> {
         self.partially_signed_events
-            .push(self.identifiers.designated_key(id), event.into())
+            .add_or_skip(self.identifiers.designated_key(id), event.into())
     }
 
     pub fn get_partially_signed_events(
         &self,
         id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
+    ) -> Option<impl IntoIterator<Item = TimestampedSignedEventMessage>> {
         self.partially_signed_events
             .iter_values(self.identifiers.designated_key(id))
     }
@@ -181,13 +184,13 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Result<(), Error> {
         self.likely_duplicious_events
-            .push(self.identifiers.designated_key(id), event.into())
+            .add_or_skip(self.identifiers.designated_key(id), event.into())
     }
 
     pub fn get_likely_duplicitous_events(
         &self,
         id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = TimestampedEventMessage>> {
+    ) -> Option<impl IntoIterator<Item = TimestampedEventMessage>> {
         self.likely_duplicious_events
             .iter_values(self.identifiers.designated_key(id))
     }
@@ -198,25 +201,26 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Result<(), Error> {
         self.duplicitous_events
-            .push(self.identifiers.designated_key(id), event.into())
+            .add_or_skip(self.identifiers.designated_key(id), event.into())
     }
 
     pub fn get_duplicious_events(
         &self,
         id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
+    ) -> Option<impl IntoIterator<Item = TimestampedSignedEventMessage>> {
         self.duplicitous_events
             .iter_values(self.identifiers.designated_key(id))
     }
 
     pub fn remove_escrowed_trans_rct(&self, id: &IdentifierPrefix, sn: u64) -> Result<(), Error> {
-        let current: Vec<SignedTransferableReceipt> = self
+        let current: HashSet<SignedTransferableReceipt> = self
             .get_escrow_t_receipts(id)
             .unwrap()
+            .into_iter()
             .filter(|ev| ev.body.event.sn != sn)
             .collect();
         self.escrowed_receipts_t
-            .put(self.identifiers.designated_key(id), current)?;
+            .replace_or_insert(self.identifiers.designated_key(id), current)?;
 
         Ok(())
     }
@@ -226,13 +230,14 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
         dig: SelfAddressingPrefix,
     ) -> Result<(), Error> {
-        let current: Vec<TimestampedSignedEventMessage> = self
+        let current: HashSet<TimestampedSignedEventMessage> = self
             .get_outoforder_events(id)
             .unwrap()
+            .into_iter()
             .filter(|ev| !dig.verify_binding(&ev.event.event_message.serialize().unwrap()))
             .collect();
         self.out_of_order_events
-            .put(self.identifiers.designated_key(id), current)?;
+            .replace_or_insert(self.identifiers.designated_key(id), current)?;
 
         Ok(())
     }

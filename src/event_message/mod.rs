@@ -22,7 +22,7 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use serialization_info::*;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Hash)]
 pub struct EventMessage {
     /// Serialization Information
     ///
@@ -39,7 +39,7 @@ pub struct EventMessage {
     // pub extra: HashMap<String, Value>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Hash)]
 pub struct TimestampedEventMessage {
     pub timestamp: DateTime<Local>,
     pub event: EventMessage,
@@ -93,12 +93,12 @@ impl From<EventMessage> for TimestampedEventMessage {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Hash)]
 pub struct SignedEventMessage {
     pub event_message: EventMessage,
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, Hash)]
 pub struct TimestampedSignedEventMessage {
     pub timestamp: DateTime<Local>,
     pub event: SignedEventMessage,
@@ -110,6 +110,12 @@ impl TimestampedSignedEventMessage {
             timestamp: Local::now(),
             event,
         }
+    }
+}
+
+impl PartialEq for TimestampedSignedEventMessage{
+    fn eq(&self, other: &Self) -> bool {
+        self.event == other.event
     }
 }
 
@@ -161,7 +167,7 @@ impl Eq for TimestampedSignedEventMessage {}
 /// Mostly intended for use by Witnesses.
 /// NOTE: This receipt has a unique structure to it's appended
 /// signatures
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Hash)]
 pub struct SignedNontransferableReceipt {
     pub body: EventMessage,
     pub couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
@@ -196,18 +202,51 @@ impl SignedNontransferableReceipt {
     }
 }
 
+impl Eq for SignedNontransferableReceipt {}
+
 /// Signed Transferrable Receipt
 ///
 /// Event Receipt which is suitable for creation by Transferable
 /// Identifiers. Provides both the signatures and a commitment to
 /// the latest establishment event of the receipt creator.
 /// Mostly intended for use by Validators
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Hash)]
 pub struct SignedTransferableReceipt {
     pub body: EventMessage,
     pub validator_seal: AttachedEventSeal,
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
+
+impl SignedTransferableReceipt {
+    pub fn new(
+        message: &EventMessage,
+        event_seal: EventSeal,
+        sigs: Vec<AttachedSignaturePrefix>,
+    ) -> Self {
+        Self {
+            body: message.clone(),
+            validator_seal: AttachedEventSeal::new(event_seal),
+            signatures: sigs,
+        }
+    }
+
+    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
+        Ok([
+            self.body.serialize()?,
+            self.validator_seal.serialize()?,
+            get_sig_count(self.signatures.len() as u16)
+                .as_bytes()
+                .to_vec(),
+            self.signatures
+                .iter()
+                .map(|sig| sig.to_str().as_bytes().to_vec())
+                .fold(vec![], |acc, next| [acc, next].concat()),
+        ]
+        .concat())
+    }
+}
+
+impl Eq for SignedTransferableReceipt {}
 
 impl EventMessage {
     pub fn new(event: Event, format: SerializationFormats) -> Result<Self, Error> {
@@ -254,35 +293,6 @@ impl SignedEventMessage {
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         Ok([
             self.event_message.serialize()?,
-            get_sig_count(self.signatures.len() as u16)
-                .as_bytes()
-                .to_vec(),
-            self.signatures
-                .iter()
-                .map(|sig| sig.to_str().as_bytes().to_vec())
-                .fold(vec![], |acc, next| [acc, next].concat()),
-        ]
-        .concat())
-    }
-}
-
-impl SignedTransferableReceipt {
-    pub fn new(
-        message: &EventMessage,
-        event_seal: EventSeal,
-        sigs: Vec<AttachedSignaturePrefix>,
-    ) -> Self {
-        Self {
-            body: message.clone(),
-            validator_seal: AttachedEventSeal::new(event_seal),
-            signatures: sigs,
-        }
-    }
-
-    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        Ok([
-            self.body.serialize()?,
-            self.validator_seal.serialize()?,
             get_sig_count(self.signatures.len() as u16)
                 .as_bytes()
                 .to_vec(),

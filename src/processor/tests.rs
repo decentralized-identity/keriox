@@ -381,7 +381,7 @@ fn test_escrow_trans_receipt() -> Result<(), Error> {
 
     // Check if it is in escrow.
     let esc = event_processor.db.get_escrow_t_receipts(&pref).unwrap();
-    assert_eq!(esc.count(), 1);
+    assert_eq!(esc.into_iter().count(), 1);
 
     // Recepter's ixn:
     let ixn_raw = br#"{"v":"KERI10JSON000098_","i":"Ew6zD07kTItS-jsaXb4dfDiZuRzKVdLPn2vt0lxyRfO8","s":"1","t":"ixn","p":"EYlNEtEjHGdtRWBqGKEplUdZZeYZkaqnJX4v6X3wcYW4","a":[]}-AADAAPGLwK1HzVU2-PkTlCDaRJJOoqwvcG8uGxq7soFkcjLNs4ox995IDpiJN7R4scau7j2ukvsZekqhv42tTYTzPAAABZVOI5WsAFzxH0xjiuZj_A5Q3Uls7UEZKjGCRS3jGSaHCiqNHiGxKO9kf2dQ3ugVpzP5ptRQGDIMqnuLfEw8UAwAC4zaP5SZ-g_oDxTac0OqrNZ47klR2vafwou8GSlLX2dXpLFOyDzD150BbbykaNNIADAR-rxDXNlbzbjMa9InLBw"#;
@@ -404,7 +404,7 @@ fn test_escrow_trans_receipt() -> Result<(), Error> {
 
     // Check if it is in escrow.
     let esc = event_processor.db.get_escrow_t_receipts(&pref).unwrap();
-    assert_eq!(esc.count(), 2);
+    assert_eq!(esc.into_iter().count(), 2);
 
     // Receptor's rot:
     let rot_raw = br#"{"v":"KERI10JSON000180_","i":"Ew6zD07kTItS-jsaXb4dfDiZuRzKVdLPn2vt0lxyRfO8","s":"2","t":"rot","p":"Es9Y7SujBNBgTu3FO8cwGahDqMsz8J0yo0U_X89pMRes","kt":"1","k":["D5B8KSGWb__uNJMPMciNk5FBz-sgaRimja0tuPmUfs0o","DcxtFVilB-Ei4D0wbzSHq9_rBvsCdWvfpjkPsc2r2FN0","DAlrozT3JzoA9xd3YN-w16nQYXnk5jp1hMNWXUbo2NtI"],"n":"EkQMjUHUTzWSL8aCbS-kC6UOXiwJeNWKwpngM0sjlL6g","bt":"0","br":[],"ba":[],"a":[]}-AADAAyuk-YthqgUIZw8BJXYHliG2U-HOyIh2qYhpUXnbMDtjRX71kyjXhTtOw5SN-36bdaA6LmaOPuKevmVUI5L4pBAABecn61ol49ilAGK6lfPVKKcDfcPFir0q6cTlc2RERAUY3xFTgR5iSAmbCqEF11vtXa_7wX6Hotu49YCSSPNUHAQACziP1JLEiIU_Cgea9ljRNuzwMiCF_QW0NgxLb3m3mt24RTqisC99Jgv0boxiKWyqqzEnj6dbiHq6YzTaF23kdDg"#;
@@ -423,7 +423,7 @@ fn test_escrow_trans_receipt() -> Result<(), Error> {
 
     // Check the escrow.
     let esc = event_processor.db.get_escrow_t_receipts(&pref).unwrap();
-    assert_eq!(esc.count(), 3);
+    assert_eq!(esc.into_iter().count(), 3);
 
     // Process receiptor's events.
     event_processor.process(deserialized_icp)?;
@@ -436,7 +436,7 @@ fn test_escrow_trans_receipt() -> Result<(), Error> {
 
     // Check if it is in escrow. All receipts still should be there because there is no validator events in db yet.
     let esc = event_processor.db.get_escrow_t_receipts(&pref).unwrap();
-    assert_eq!(esc.count(), 3);
+    assert_eq!(esc.into_iter().count(), 3);
 
     // Process validateor inception event and process escrow again.
     event_processor.process(deserialized_val_icp)?;
@@ -446,7 +446,7 @@ fn test_escrow_trans_receipt() -> Result<(), Error> {
 
     // Check if receipts are still in escrow. One of them should be processed successfully..
     let esc = event_processor.db.get_escrow_t_receipts(&pref).unwrap();
-    assert_eq!(esc.count(), 2);
+    assert_eq!(esc.into_iter().count(), 2);
 
     // Check if any receipt is in receipts.
     let trans_receipts = event_processor.db.get_receipts_t(&pref);
@@ -460,7 +460,7 @@ fn test_escrow_trans_receipt() -> Result<(), Error> {
 
     // Check if receipts are still in escrow. All of them shoud be processed successfully.
     let esc = event_processor.db.get_escrow_t_receipts(&pref).unwrap();
-    assert_eq!(esc.count(), 0);
+    assert_eq!(esc.into_iter().count(), 0);
 
     // Check if any receipt is in receipts. All of them should be there.
     let trans_receipts = event_processor.db.get_receipts_t(&pref);
@@ -501,6 +501,7 @@ pub fn test_process_outoforder_escrow() -> Result<(), Error> {
         .db
         .get_outoforder_events(&id)
         .unwrap()
+        .into_iter()
         .map(|e| e.into())
         .collect();
     assert_eq!(outoforder.len(), 1);
@@ -522,6 +523,7 @@ pub fn test_process_outoforder_escrow() -> Result<(), Error> {
         .db
         .get_outoforder_events(&id)
         .unwrap()
+        .into_iter()
         .collect();
     assert_eq!(outoforder.len(), 1);
 
@@ -532,6 +534,7 @@ pub fn test_process_outoforder_escrow() -> Result<(), Error> {
         .db
         .get_outoforder_events(&id)
         .unwrap()
+        .into_iter()
         .collect();
     assert_eq!(outoforder.len(), 2);
 
@@ -542,6 +545,7 @@ pub fn test_process_outoforder_escrow() -> Result<(), Error> {
         .db
         .get_outoforder_events(&id)
         .unwrap()
+        .into_iter()
         .collect();
     assert_eq!(outoforder.len(), 2);
 
@@ -555,6 +559,7 @@ pub fn test_process_outoforder_escrow() -> Result<(), Error> {
     .db
     .get_outoforder_events(&id)
     .unwrap()
+    .into_iter()
     .collect();
     assert_eq!(outoforder.len(), 0);
 

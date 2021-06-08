@@ -3,7 +3,7 @@ use core::str::FromStr;
 use rmp_serde as serde_mgpk;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Copy, Hash)]
 pub enum SerializationFormats {
     JSON,
     MGPK,
@@ -41,7 +41,7 @@ impl FromStr for SerializationFormats {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash)]
 pub struct SerializationInfo {
     pub major_version: u8,
     pub minor_version: u8,

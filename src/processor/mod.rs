@@ -429,6 +429,7 @@ impl<'d> EventProcessor<'d> {
             .db
             .get_outoforder_events(pref)
             .ok_or(Error::NoEventError)?
+            .into_iter()
             .filter(|ev| ev.event.event_message.event.sn == sn)
             .collect();
         for escrowed in escrowed_receipt {
@@ -439,6 +440,8 @@ impl<'d> EventProcessor<'d> {
                 },
                 signatures: escrowed.event.signatures,
             };
+            // FIXME: process_event should work with events, not Deserialized
+            // DeserializedEvents should be removed
             match self.process_event(&des_event) {
                 Ok(_) => {
                     // Event processed succesfully, remove it from escrow
@@ -465,6 +468,7 @@ impl<'d> EventProcessor<'d> {
             .db
             .get_escrow_t_receipts(pref)
             .ok_or(Error::NoEventError)?
+            .into_iter()
             .find(|ev| ev.body.event.sn == sn)
             .ok_or(Error::NoEventError)?;
         match self.process_validator_receipt(escrowed_receipt) {

@@ -9,7 +9,7 @@ use crate::error::Error;
 use crate::state::EventSemantics;
 use serde_hex::{Compact, SerHex};
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Hash)]
 pub struct Event {
     #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,

@@ -5,7 +5,7 @@ use core::str::FromStr;
 /// Self Signing Derivations
 ///
 /// A self signing prefix derivation outputs a signature as its derivative (2.3.5)
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, Hash)]
 pub enum SelfSigning {
     Ed25519Sha512,
     ECDSAsecp256k1Sha256,
