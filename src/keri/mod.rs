@@ -1,18 +1,18 @@
 use crate::{
-    database::EventDatabase,
+    database::sled::SledEventDatabase,
     derivation::basic::Basic,
     derivation::self_addressing::SelfAddressing,
     derivation::self_signing::SelfSigning,
     error::Error,
     event::sections::seal::{DigestSeal, Seal},
-    event::{event_data::receipt::ReceiptTransferable, sections::seal::EventSeal},
     event::{event_data::EventData, Event, EventMessage, SerializationFormats},
+    event::{event_data::Receipt, sections::seal::EventSeal},
     event_message::parse::signed_message,
-    event_message::SignedEventMessage,
     event_message::{
         event_msg_builder::{EventMsgBuilder, EventType},
         parse::{signed_event_stream, Deserialized},
     },
+    event_message::{SignedEventMessage, SignedTransferableReceipt},
     prefix::AttachedSignaturePrefix,
     prefix::IdentifierPrefix,
     processor::EventProcessor,
@@ -20,15 +20,15 @@ use crate::{
     state::IdentifierState,
 };
 mod test;
-pub struct Keri<D: EventDatabase, K: KeyManager> {
+pub struct Keri<'d, K: KeyManager> {
     prefix: IdentifierPrefix,
     key_manager: K,
-    processor: EventProcessor<D>,
+    processor: EventProcessor<'d>,
 }
 
-impl<D: EventDatabase, K: KeyManager> Keri<D, K> {
+impl<'d, K: KeyManager> Keri<'d, K> {
     // incept a state and keys
-    pub fn new(db: D, key_manager: K, prefix: IdentifierPrefix) -> Result<Keri<D, K>, Error> {
+    pub fn new(db: &'d SledEventDatabase, key_manager: K, prefix: IdentifierPrefix) -> Result<Keri<K>, Error> {
         Ok(Keri {
             prefix,
             key_manager,
@@ -169,7 +169,7 @@ impl<D: EventDatabase, K: KeyManager> Keri<D, K> {
         Ok(response)
     }
 
-    fn make_rct(&self, event: EventMessage) -> Result<SignedEventMessage, Error> {
+    fn make_rct(&self, event: EventMessage) -> Result<SignedTransferableReceipt, Error> {
         let ser = event.serialize()?;
         let signature = self.key_manager.sign(&ser)?;
         let validator_event_seal = self
@@ -179,21 +179,23 @@ impl<D: EventDatabase, K: KeyManager> Keri<D, K> {
         let rcp = Event {
             prefix: event.event.prefix,
             sn: event.event.sn,
-            event_data: EventData::Vrc(ReceiptTransferable {
+            event_data: EventData::Rct(Receipt {
                 receipted_event_digest: SelfAddressing::Blake3_256.derive(&ser),
-                validator_seal: validator_event_seal,
             }),
         }
-        .to_message(SerializationFormats::JSON)?
-        .sign(vec![AttachedSignaturePrefix::new(
+        .to_message(SerializationFormats::JSON)?;
+
+        let signatures = vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
             signature,
             0,
-        )]);
-        self.processor
-            .process(signed_message(&rcp.serialize()?).unwrap().1)?;
+        )];
+        let signed_rcp = SignedTransferableReceipt::new(&rcp, validator_event_seal, signatures);
 
-        Ok(rcp)
+        self.processor
+            .process(signed_message(&signed_rcp.serialize()?).unwrap().1)?;
+
+        Ok(signed_rcp)
     }
 
     pub fn get_state(&self) -> Result<Option<IdentifierState>, Error> {

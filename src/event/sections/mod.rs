@@ -143,22 +143,22 @@ mod empty_string_as_none {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct WitnessConfig {
-    #[serde(rename = "wt", with = "SerHex::<Compact>")]
+    #[serde(rename = "bt", with = "SerHex::<Compact>")]
     pub tally: u64,
 
-    #[serde(rename = "wr")]
+    #[serde(rename = "br")]
     pub prune: Vec<BasicPrefix>,
 
-    #[serde(rename = "wa")]
+    #[serde(rename = "ba")]
     pub graft: Vec<BasicPrefix>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct InceptionWitnessConfig {
-    #[serde(rename = "wt", with = "SerHex::<Compact>")]
+    #[serde(rename = "bt", with = "SerHex::<Compact>")]
     pub tally: u64,
 
-    #[serde(rename = "w")]
+    #[serde(rename = "b")]
     pub initial_witnesses: Vec<BasicPrefix>,
 }
 

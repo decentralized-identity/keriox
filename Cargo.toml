@@ -1,6 +1,6 @@
 [package]
 name = "keri"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["Decentralized Identity Foundation", "Charles Cunningham <charles@jolocom.io>"]
 edition = "2018"
 description = "Core library for the Key Event Receipt Infrastructure "
@@ -12,8 +12,9 @@ license = "Apache-2.0"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-lmdb = ["rkv", "bincode"]
-default = ["lmdb"]
+# lmdb = ["rkv", "bincode"] # deprecated since 0.7
+sled-db = ["sled", "fixed"]
+default = ["sled-db"]
 
 [dependencies]
 ed25519-dalek = "1.0.1"
@@ -25,17 +26,20 @@ rand = { version = "0.7.3", features = ["std", "getrandom"] }
 base64 = "0.12"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-serde_cbor = "0.10"
+serde_cbor = "0.11.1"
+serde_derive = "1.0.106"
 thiserror = "1.0"
 serde-hex = "0.1"
 nom = "5"
 itoa = "0.4"
 ryu = "1.0"
 blake3 = { version = "0.3", default-features = false }
-chrono = "0.4.18"
+chrono = { version = "0.4.18", features = ["serde"] }
 rmp-serde = "0.14"
 arrayref = "0.3.6"
 zeroize = "1.3.0"
+sled = { version = "0.34.6", optional = true }
+fixed = { version = "1.9", optional = true }
 
 rkv = { version = "0.17", optional = true }
 bincode = { version = "1.3.1", optional = true }

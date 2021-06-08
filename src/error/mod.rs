@@ -1,9 +1,9 @@
 use base64::DecodeError;
 use core::num::ParseIntError;
+use ed25519_dalek;
 use rmp_serde as serde_mgpk;
 use serde_cbor;
 use serde_json;
-use ed25519_dalek;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -50,6 +50,12 @@ pub enum Error {
     #[error("Deserialization error")]
     DeserializationError,
 
+    #[error("Identifier is not indexed into the DB")]
+    NotIndexedError,
+
+    #[error("Identifier ID is already present in the DB")]
+    IdentifierPresentError,
+
     #[error("Base64 Decoding error")]
     Base64DecodingError {
         #[from]
@@ -64,4 +70,7 @@ pub enum Error {
 
     #[error(transparent)]
     Ed25519DalekSignatureError(#[from] ed25519_dalek::SignatureError),
+
+    #[error(transparent)]
+    SledError(#[from] sled::Error),
 }

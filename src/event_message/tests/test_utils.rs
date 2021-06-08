@@ -1,6 +1,13 @@
-use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning}, error::Error, event::sections::nxt_commitment, keys::Key, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix}, state::IdentifierState};
-use ed25519_dalek::Keypair;
 use super::event_msg_builder::{EventMsgBuilder, EventType};
+use crate::{
+    derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
+    error::Error,
+    event::sections::nxt_commitment,
+    keys::Key,
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
+    state::IdentifierState,
+};
+use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
 
 /// Collects data for testing `IdentifierState` update. `prev_event_hash`, `sn`,

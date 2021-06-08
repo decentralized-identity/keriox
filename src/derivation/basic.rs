@@ -1,7 +1,7 @@
 use super::DerivationCode;
 use crate::{error::Error, keys::Key, prefix::BasicPrefix};
-use serde::{Serialize, Deserialize};
 use core::str::FromStr;
+use serde::{Deserialize, Serialize};
 
 /// Basic Derivations
 ///

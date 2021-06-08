@@ -1,31 +1,20 @@
-use crate::{
-    database::EventDatabase,
-    derivation::self_addressing::SelfAddressing,
-    error::Error,
-    event::{
-        event_data::EventData,
-        sections::{
+use crate::{database::sled::SledEventDatabase, derivation::self_addressing::SelfAddressing, error::Error, event::{EventMessage, event_data::EventData, sections::{
             seal::{EventSeal, LocationSeal, Seal},
             KeyConfig,
-        },
-    },
-    event_message::{
-        parse::{message, Deserialized, DeserializedSignedEvent},
-        EventMessage, SignedEventMessage, SignedNontransferableReceipt,
-    },
-    prefix::{IdentifierPrefix, SelfAddressingPrefix},
-    state::{EventSemantics, IdentifierState},
-};
+        }}, event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedSignedEventMessage, parse::{
+            Deserialized,
+            DeserializedSignedEvent
+            }}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
 
 #[cfg(test)]
 mod tests;
 
-pub struct EventProcessor<D: EventDatabase> {
-    db: D,
+pub struct EventProcessor<'d> {
+    db: &'d SledEventDatabase,
 }
 
-impl<D: EventDatabase> EventProcessor<D> {
-    pub fn new(db: D) -> Self {
+impl<'d> EventProcessor<'d> {
+    pub fn new(db: &'d SledEventDatabase) -> Self {
         Self { db }
     }
 
@@ -36,38 +25,22 @@ impl<D: EventDatabase> EventProcessor<D> {
     pub fn compute_state(&self, id: &IdentifierPrefix) -> Result<Option<IdentifierState>, Error> {
         // start with empty state
         let mut state = IdentifierState::default();
-
-        // starting from inception
-        for sn in 0.. {
-            // read the latest raw event
-            let raw = match self
-                .db
-                .last_event_at_sn(id, sn)
-                .map_err(|_| Error::StorageError)?
-            {
-                Some(r) => r,
-                None => {
-                    if sn == 0 {
-                        // no inception event, no state
-                        return Ok(None);
-                    } else {
-                        // end of KEL, stop looping
-                        break;
-                    }
-                }
-            };
-            // parse event
-            let parsed = message(&raw).map_err(|_| Error::DeserializationError)?.1;
-            // apply it to the state
-            // TODO avoid .clone()
-            state = match state.clone().apply(&parsed.event) {
-                Ok(s) => s,
-                // will happen when a recovery has overridden some part of the KEL,
-                // stop processing here
-                Err(_) => break,
+        if let Some(events) = self.db.get_kel_finalized_events(id) {
+            // we sort here to get inception first
+            let mut sorted_events = events.collect::<Vec<TimestampedSignedEventMessage>>();
+            sorted_events.sort();
+            for event in sorted_events {
+                state = match state.clone().apply(&event.event) {
+                    Ok(s) => s,
+                    // will happen when a recovery has overridden some part of the KEL,
+                    // stop processing here
+                    Err(_) => break
+                };
             }
+        } else {
+            // no inception event, no state
+            return Ok(None);
         }
-
         Ok(Some(state))
     }
 
@@ -81,19 +54,14 @@ impl<D: EventDatabase> EventProcessor<D> {
         sn: u64,
     ) -> Result<Option<IdentifierState>, Error> {
         let mut state = IdentifierState::default();
-        for sn in 0..sn + 1 {
-            let raw = match self
-                .db
-                .last_event_at_sn(id, sn)
-                .map_err(|_| Error::StorageError)?
-            {
-                Some(r) => r,
-                // There is no event for sn
-                None => return Ok(None),
-            };
-            // update state
-            let parsed = message(&raw).map_err(|_| Error::DeserializationError)?.1;
-            state = state.clone().apply(&parsed.event)?;
+        if let Some(events) = self.db.get_kel_finalized_events(id) {
+            // TODO: testing approach if events come out sorted already (as they should coz of put sequence)
+            for event in events
+                .filter(|e| e.event.event_message.event.sn <= sn) {
+                    state = state.apply(&event.event.event_message)?;
+                }
+        } else {
+            return Ok(None);
         }
         Ok(Some(state))
     }
@@ -108,33 +76,24 @@ impl<D: EventDatabase> EventProcessor<D> {
     ) -> Result<Option<EventSeal>, Error> {
         let mut state = IdentifierState::default();
         let mut last_est = None;
-        for sn in 0.. {
-            let raw = match self
-                .db
-                .last_event_at_sn(id, sn)
-                .map_err(|_| Error::StorageError)?
-            {
-                Some(raw) => raw,
-                None => {
-                    // end of kel
-                    break;
+        if let Some(events) = self.db.get_kel_finalized_events(id) {
+            for event in events {
+                state = state.apply(&event.event.event_message.event)?;
+                // TODO: is this event.event.event stuff too ugly? =)
+                last_est = match event.event.event_message.event.event_data {
+                    EventData::Icp(_) => Some(event.event),
+                    EventData::Rot(_) => Some(event.event),
+                    _ => last_est,
                 }
-            };
-            // parse event
-            let parsed = message(&raw).map_err(|_| Error::DeserializationError)?.1;
-            state = state.clone().apply(&parsed.event)?;
-
-            last_est = match parsed.event.event.event_data {
-                EventData::Icp(_) => Some(parsed.event),
-                EventData::Rot(_) => Some(parsed.event),
-                _ => last_est,
             }
+        } else {
+            return Ok(None);
         }
         let seal = last_est.and_then(|event| {
             let event_digest = SelfAddressing::Blake3_256.derive(&event.serialize().unwrap());
             Some(EventSeal {
-                prefix: event.event.prefix,
-                sn: event.event.sn,
+                prefix: event.event_message.event.prefix,
+                sn: event.event_message.event.sn,
                 event_digest,
             })
         });
@@ -144,8 +103,14 @@ impl<D: EventDatabase> EventProcessor<D> {
     /// Get KERL for Prefix
     ///
     /// Returns the current validated KEL for a given Prefix
+    /// FIXME: add recipe messages into the mix when those are in SLED db
     pub fn get_kerl(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Error> {
-        self.db.get_kerl(id).map_err(|_| Error::StorageError)
+       match self.db.get_kel_finalized_events(id) {
+           Some(events) => 
+               Ok(Some(events.map(|event| event.event.serialize().unwrap_or_default())
+                .fold(vec!(), |mut accum, serialized_event| { accum.extend(serialized_event); accum }))),
+            None => Ok(None)
+       }
     }
 
     /// Get keys from Establishment Event
@@ -159,94 +124,72 @@ impl<D: EventDatabase> EventProcessor<D> {
         sn: u64,
         event_digest: &SelfAddressingPrefix,
     ) -> Result<Option<KeyConfig>, Error> {
-        let raw = match self
-            .db
-            .last_event_at_sn(id, sn)
-            .map_err(|_| Error::StorageError)?
-        {
-            Some(r) => r,
-            None => return Ok(None),
-        };
-
-        // if it's the event we're looking for
-        if event_digest.verify_binding(&raw) {
-            // parse event
-            let parsed = message(&raw).map_err(|_| Error::DeserializationError)?.1;
-
-            // return the config or error if it's not an establishment event
-            return Ok(Some(match parsed.event.event.event_data {
-                EventData::Icp(icp) => icp.key_config,
-                EventData::Rot(rot) => rot.key_config,
-                EventData::Dip(dip) => dip.inception_data.key_config,
-                EventData::Drt(drt) => drt.rotation_data.key_config,
-                // the receipt has a binding but it's NOT an establishment event
-                _ => Err(Error::SemanticError("Receipt binding incorrect".into()))?,
-            }));
-        }
-
-        Ok(None)
+        if let Ok(Some(event)) = self.get_event_at_sn(id, sn) {
+            // if it's the event we're looking for
+            if event_digest.verify_binding(&event.event.event_message.serialize()?) {
+                // return the config or error if it's not an establishment event
+                Ok(Some(match event.event.event_message.event.event_data {
+                    EventData::Icp(icp) => icp.key_config,
+                    EventData::Rot(rot) => rot.key_config,
+                    EventData::Dip(dip) => dip.inception_data.key_config,
+                    EventData::Drt(drt) => drt.rotation_data.key_config,
+                    // the receipt has a binding but it's NOT an establishment event
+                    _ => Err(Error::SemanticError("Receipt binding incorrect".into()))?,
+                }))
+                } else {
+                    Err(Error::SemanticError("Event digests doesn't match".into()))
+                } 
+            } else {
+                Err(Error::SemanticError("No event of given sn and prefix in database".into()))
+            }
     }
 
     /// Validate delegating event seal.
     ///
     /// Validates binding between delegated and delegating events. The validation
-    /// is based on delegating location seal and delegated event raw.
-    fn validate_seal(&self, seal: LocationSeal, raw: &[u8]) -> Result<(), Error> {
+    /// is based on delegating location seal and delegated event.
+    fn validate_seal(&self, seal: LocationSeal, delegated_event: &[u8]) -> Result<(), Error> {
         // Check if event of seal's prefix and sn is in db.
-        match self
-            .db
-            .last_event_at_sn(&seal.prefix, seal.sn)
-            .map_err(|_| Error::StorageError)?
-        {
-            None => {
-                // No event found.
-                return Err(Error::EventOutOfOrderError);
-            }
-            Some(del_event) => {
-                // Deserialize event.
-                let deserialized_event = message(&del_event)
-                    .map_err(|_err| Error::SemanticError("Can't parse event".to_string()))?
-                    .1;
+        if let Ok(Some(event)) = self.get_event_at_sn(&seal.prefix, seal.sn) {
+            // Extract prior_digest and data field from delegating event.
+            let (prior_dig, data) = match event.event.event_message.event.event_data {
+                EventData::Rot(rot) => (rot.previous_event_hash, rot.data),
+                EventData::Ixn(ixn) => (ixn.previous_event_hash, ixn.data),
+                EventData::Drt(drt) => (
+                    drt.rotation_data.previous_event_hash,
+                    drt.rotation_data.data,
+                ),
+                _ => return Err(Error::SemanticError("Improper event type".to_string())),
+            };
 
-                // Extract prior_digest and data field from delegating event.
-                let (prior_dig, data) = match deserialized_event.event.event.event_data {
-                    EventData::Rot(rot) => (rot.previous_event_hash, rot.data),
-                    EventData::Ixn(ixn) => (ixn.previous_event_hash, ixn.data),
-                    EventData::Drt(drt) => (
-                        drt.rotation_data.previous_event_hash,
-                        drt.rotation_data.data,
-                    ),
-                    _ => return Err(Error::SemanticError("Improper event type".to_string())),
-                };
-
-                // Check if prior event digest matches prior event digest from
-                // the seal.
-                if prior_dig.derivation == seal.prior_digest.derivation {
-                    Ok(prior_dig == seal.prior_digest)
-                } else {
-                    // get previous event from db
-                    self.db.last_event_at_sn(&seal.prefix, seal.sn - 1).map_or(
-                        Err(Error::StorageError),
-                        |event| {
-                            event.map_or(
-                                Err(Error::SemanticError("No event in db".into())),
-                                // recompute hash and compare
-                                |ev| Ok(seal.prior_digest.verify_binding(&ev)),
-                            )
-                        },
-                    )
-                }?;
-
-                // Check if event seal list contains delegating event seal.
-                if !data.iter().any(|s| match s {
-                    Seal::Event(es) => es.event_digest.verify_binding(raw),
-                    _ => false,
-                }) {
-                    return Err(Error::SemanticError(
-                        "Data field doesn't contain delegating event seal.".to_string(),
-                    ));
-                };
-            }
+            // Check if prior event digest matches prior event digest from
+            // the seal.
+            if prior_dig.derivation == seal.prior_digest.derivation {
+                Ok(prior_dig == seal.prior_digest)
+            } else {
+                // get previous event from db
+                match self.get_event_at_sn(&seal.prefix, seal.sn -1)? {
+                    Some(previous_event) => {
+                        match previous_event.event.event_message.event.prefix {
+                            IdentifierPrefix::SelfAddressing(prefix) => 
+                                Ok(prefix.digest == seal.prior_digest.digest),
+                            _ => Err(Error::SemanticError("No event in db".into()))
+                        }
+                    },
+                    None => return Err(Error::SemanticError("No event in db".into()))
+                }
+            }?;
+            // Check if event seal list contains delegating event seal.
+            if !data.iter().any(|s| match s {
+                Seal::Event(es) => es.event_digest.verify_binding(delegated_event),
+                _ => false,
+            }) {
+                return Err(Error::SemanticError(
+                    "Data field doesn't contain delegating event seal.".to_string(),
+                ));
+            };
+        } else {
+            return Err(Error::EventOutOfOrderError);
         }
         Ok(())
     }
@@ -257,9 +200,10 @@ impl<D: EventDatabase> EventProcessor<D> {
         sn: u64,
         validator_pref: &IdentifierPrefix,
     ) -> Result<bool, Error> {
-        self.db
-            .has_receipt(id, sn, validator_pref)
-            .map_err(|_e| Error::StorageError)
+        Ok(if let Some(receipts) = self.db .get_receipts_t(id) {
+            receipts.filter(|r| r.body.event.sn.eq(&sn))
+                .any(|receipt| receipt.validator_seal.event_seal.prefix.eq(validator_pref))
+        } else { false })
     }
 
     /// Process
@@ -268,8 +212,8 @@ impl<D: EventDatabase> EventProcessor<D> {
     pub fn process(&self, data: Deserialized) -> Result<Option<IdentifierState>, Error> {
         match data {
             Deserialized::Event(e) => self.process_event(e),
-            Deserialized::Vrc(r) => self.process_validator_receipt(r),
-            Deserialized::Rct(r) => self.process_witness_receipt(r),
+            Deserialized::NontransferableRct(rct) => self.process_witness_receipt(rct),
+            Deserialized::TransferableRct(rct) => self.process_validator_receipt(rct),
         }
     }
 
@@ -279,71 +223,55 @@ impl<D: EventDatabase> EventProcessor<D> {
     /// of the Identifier and applies it to update the state
     /// returns the updated state
     /// TODO improve checking and handling of errors!
-    pub fn process_event<'a>(
+    /// FIXME: refactor to remove multiple event recourse wrappers
+    pub fn process_event(
         &self,
-        event: DeserializedSignedEvent<'a>,
+        event: DeserializedSignedEvent,
     ) -> Result<Option<IdentifierState>, Error> {
-        // extract some useful info from the event for readability
-        let dig = SelfAddressing::Blake3_256.derive(event.event.raw);
-        let pref = &event.event.event.event.prefix.clone();
-        let sn = event.event.event.event.sn;
-        let ilk = event.event.event.event.event_data.clone();
-        let raw = &event.event.raw;
-        let sigs = event.signatures;
-
         // Log event.
-        self.db
-            .log_event(&pref, &dig, raw, &sigs)
-            .map_err(|_| Error::StorageError)?;
-
+        let signed_event = SignedEventMessage::new(
+                &event.event.event, event.signatures.clone());
         // If delegated event, check its delegator seal.
-        match ilk {
-            EventData::Dip(dip) => self.validate_seal(dip.seal, &raw),
-            EventData::Drt(drt) => self.validate_seal(drt.seal, &raw),
+        match event.event.event.event.event_data.clone() {
+            EventData::Dip(dip) =>
+                self.validate_seal(dip.seal, &event.event.raw),
+            EventData::Drt(drt) =>
+                self.validate_seal(drt.seal, &event.event.raw),
             _ => Ok(()),
         }
         .or_else(|e| {
             if let Error::EventOutOfOrderError = e {
-                self.db
-                    .escrow_out_of_order_event(pref, sn, &dig)
-                    .map_err(|_| Error::StorageError)?;
+                // FIXME: should this be signed event instead?
+                self.db.add_outoforder_event(signed_event.clone(), &event.event.event.event.prefix)?
             };
             Err(e)
         })?;
 
-        self.apply_to_state(event.event.event)
+        self.apply_to_state(event.event.event.clone())
             .and_then(|new_state| {
                 // match on verification result
-                new_state
+                match new_state
                     .current
-                    .verify(raw, &sigs)
+                    .verify(&event.event.raw, &event.signatures)
                     .and_then(|_result| {
                         // TODO should check if there are enough receipts and probably escrow
-                        self.db
-                            .finalise_event(pref, sn, &dig)
-                            .map_err(|_| Error::StorageError)?;
-                        Ok(Some(new_state))
-                    })
-                    .map_err(|e| match e {
-                        Error::NotEnoughSigsError => {
-                            match self.db.escrow_partially_signed_event(pref, sn, &dig) {
-                                Ok(_) => e,
-                                Err(_) => Error::StorageError,
-                            }
-                        }
-                        _ => e,
-                    })
-            })
-            .map_err(|e| {
-                match e {
-                    // see why application failed and reject or escrow accordingly
-                    Error::EventOutOfOrderError => {
-                        self.db.escrow_out_of_order_event(pref, sn, &dig)
+                        self.db.add_kel_finalized_event(signed_event.clone(), &event.event.event.event.prefix)?;
+                        Ok(new_state)
+                    }) {
+                        Ok(state) => Ok(Some(state)),
+                        Err(e) => {
+                            match e {
+                                Error::NotEnoughSigsError => 
+                                    self.db.add_partially_signed_event(signed_event, &event.event.event.event.prefix)?,
+                                Error::EventOutOfOrderError =>
+                                    self.db.add_outoforder_event(signed_event, &event.event.event.event.prefix)?,
+                                Error::EventDuplicateError =>
+                                    self.db.add_duplicious_event(signed_event, &event.event.event.event.prefix)?,
+                                _ => (),
+                            };
+                            Err(e)
+                        },
                     }
-                    Error::EventDuplicateError => self.db.duplicitous_event(pref, sn, &dig),
-                    _ => Ok(()),
-                };
-                e
             })
     }
 
@@ -355,57 +283,30 @@ impl<D: EventDatabase> EventProcessor<D> {
     /// TODO improve checking and handling of errors!
     pub fn process_validator_receipt(
         &self,
-        vrc: SignedEventMessage,
+        vrc: SignedTransferableReceipt,
     ) -> Result<Option<IdentifierState>, Error> {
-        match &vrc.event_message.event.event_data {
-            EventData::Vrc(r) => {
-                match self
-                    .db
-                    .last_event_at_sn(&vrc.event_message.event.prefix, vrc.event_message.event.sn)
-                    .map_err(|_| Error::StorageError)?
-                {
-                    // No event found, escrow the receipt
-                    None => {
-                        for sig in vrc.signatures {
-                            self.db
-                                .escrow_t_receipt(
-                                    &vrc.event_message.event.prefix,
-                                    &r.receipted_event_digest,
-                                    &r.validator_seal.prefix,
-                                    &sig,
-                                )
-                                .map_err(|_| Error::StorageError)?
-                        }
+        match &vrc.body.event.event_data {
+            EventData::Rct(_r) => {
+                if let Ok(Some(event)) = 
+                    self.get_event_at_sn(&vrc.body.event.prefix, vrc.body.event.sn) {
+                    // prev .get_keys_at_event()
+                    let kp = self.get_keys_at_event(
+                        &vrc.validator_seal.event_seal.prefix,
+                        vrc.validator_seal.event_seal.sn,
+                        &vrc.validator_seal.event_seal.event_digest)?;
+                    if kp.is_some() && kp.unwrap().verify(&event.event.event_message.serialize()?, &vrc.signatures)? {
+                        self.db.add_receipt_t(vrc.clone(), &vrc.body.event.prefix)
+                    } else {
+                        Err(Error::SemanticError("Incorrect receipt signatures".into()))
                     }
-                    // Event found, verify receipt and store
-                    Some(event) => {
-                        let keys = self
-                            .get_keys_at_event(
-                                &r.validator_seal.prefix,
-                                r.validator_seal.sn,
-                                &r.validator_seal.event_digest,
-                            )?
-                            .ok_or(Error::SemanticError("No establishment Event found".into()))?;
-                        if keys.verify(&event, &vrc.signatures)? {
-                            for sig in vrc.signatures {
-                                self.db
-                                    .add_t_receipt_for_event(
-                                        &vrc.event_message.event.prefix,
-                                        &SelfAddressing::Blake3_256.derive(&event),
-                                        &r.validator_seal.prefix,
-                                        &sig,
-                                    )
-                                    .map_err(|_| Error::StorageError)?;
-                            }
-                        } else {
-                            Err(Error::SemanticError("Incorrect receipt signatures".into()))?;
-                        }
-                    }
-                };
-                self.compute_state(&vrc.event_message.event.prefix)
-            }
-            _ => Err(Error::SemanticError("incorrect receipt structure".into())),
-        }
+                } else {
+                    self.db.add_escrow_t_receipt(vrc.clone(), &vrc.body.event.prefix)?;
+                    Err(Error::SemanticError("Receipt escrowed".into()))
+                }
+            },
+            _ =>  Err(Error::SemanticError("incorrect receipt structure".into()))
+        }?;
+        self.compute_state(&vrc.body.event.prefix)
     }
 
     /// Process Witness Receipt
@@ -421,47 +322,33 @@ impl<D: EventDatabase> EventProcessor<D> {
         // check structure is correct
         match &rct.body.event.event_data {
             // get event which is being receipted
-            EventData::Rct(r) => {
-                match self
-                    .db
-                    .last_event_at_sn(&rct.body.event.prefix, rct.body.event.sn)
-                    // return if lookup fails
-                    .map_err(|_| Error::StorageError)?
-                {
-                    Some(event) => {
-                        // verify receipts and store or discard
-                        let cas_dig = SelfAddressing::Blake3_256.derive(&event);
-                        for (witness, receipt) in &rct.couplets {
-                            if witness.verify(&event, &receipt)? {
-                                self.db
-                                    .add_nt_receipt_for_event(
-                                        &rct.body.event.prefix,
-                                        &cas_dig,
-                                        &witness,
-                                        &receipt,
-                                    )
-                                    .map_err(|_| Error::StorageError);
-                            };
-                        }
+            EventData::Rct(_) => {
+                let id = &rct.body.event.prefix.to_owned();
+                if let Ok(Some(event)) = self.get_event_at_sn(&rct.body.event.prefix, rct.body.event.sn) {
+                    let serialized_event = event.event.serialize()?;
+                    let (_, mut errors): (Vec<_>, Vec<Result<bool, Error>>) = rct.clone().couplets.into_iter()
+                        .map(|(witness, receipt)| 
+                            witness.verify(&&serialized_event, &receipt))
+                        .partition(Result::is_ok);
+                    if errors.len() == 0 {
+                        self.db.add_receipt_nt(rct, &id)?
+                    } else { 
+                        let e = errors.pop().unwrap().unwrap_err();
+                        return Err(e);
                     }
-                    None => {
-                        for (witness, receipt) in rct.couplets {
-                            self.db
-                                .escrow_nt_receipt(
-                                    &rct.body.event.prefix,
-                                    // TODO THIS MAY NOT ALWAYS MATCH, see issue #74 in dif/keri
-                                    &r.receipted_event_digest,
-                                    &witness,
-                                    &receipt,
-                                )
-                                .map_err(|_| Error::StorageError);
-                        }
-                    }
-                };
-                self.compute_state(&rct.body.event.prefix)
-            }
-            _ => Err(Error::SemanticError("incorrect receipt structure".into())),
+                } else {
+                    self.db.add_escrow_nt_receipt(rct, &id)?
+                }
+                self.compute_state(&id)
+            },
+            _ => Err(Error::SemanticError("incorrect receipt structure".into())), 
         }
+    }
+
+    pub fn get_event_at_sn(&self, id: &IdentifierPrefix, sn: u64) -> Result<Option<TimestampedSignedEventMessage>, Error> {
+       if let Some(mut events) = self.db.get_kel_finalized_events(id) {
+            Ok(events.find(|event| event.event.event_message.event.sn == sn))
+       } else { Ok(None) }
     }
 
     fn apply_to_state(&self, event: EventMessage) -> Result<IdentifierState, Error> {

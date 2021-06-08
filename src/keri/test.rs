@@ -1,6 +1,6 @@
 #[cfg(test)]
 use crate::{
-    database::lmdb::LmdbEventDatabase,
+    database::sled::SledEventDatabase,
     error::Error,
     keri::Keri,
     prefix::IdentifierPrefix,
@@ -12,23 +12,23 @@ fn test_direct_mode() -> Result<(), Error> {
     use tempfile::Builder;
 
     // Create test db and event processor.
-    let alices_root = Builder::new().prefix("test-db").tempdir().unwrap();
-    let bobs_root = Builder::new().prefix("test-db2").tempdir().unwrap();
-    std::fs::create_dir_all(alices_root.path()).unwrap();
-    let alices_db = LmdbEventDatabase::new(alices_root.path()).unwrap();
-    let bobs_db = LmdbEventDatabase::new(bobs_root.path()).unwrap();
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    std::fs::create_dir_all(root.path()).unwrap();
+    let db = SledEventDatabase::new(root.path()).unwrap();
 
     // Init alice.
-    let mut alice = Keri::new(alices_db, CryptoBox::new()?, IdentifierPrefix::default())?;
+    let mut alice = Keri::new(&db, CryptoBox::new()?, IdentifierPrefix::default())?;
     assert_eq!(alice.get_state()?, None);
 
     // Init bob.
-    let mut bob = Keri::new(bobs_db, CryptoBox::new()?, IdentifierPrefix::default())?;
+    let mut bob = Keri::new(&db, CryptoBox::new()?, IdentifierPrefix::default())?;
     bob.incept()?;
-    assert_eq!(bob.get_state()?.unwrap().sn, 0);
+    let bob_state = bob.get_state()?;
+    assert_eq!(bob_state.unwrap().sn, 0);
 
     // Get alice's inception event.
-    let mut msg_to_bob = alice.incept()?.serialize()?;
+    let alice_incepted = alice.incept()?;
+    let mut msg_to_bob = alice_incepted.serialize()?;
 
     // Send it to bob.
     let mut msg_to_alice = bob.respond(&msg_to_bob)?;

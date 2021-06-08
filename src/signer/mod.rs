@@ -1,5 +1,5 @@
 use crate::{error::Error, keys::Key, prefix::SeedPrefix};
-use ed25519_dalek::{PublicKey, SecretKey, Keypair};
+use ed25519_dalek::{Keypair, PublicKey, SecretKey};
 use rand::rngs::OsRng;
 pub trait KeyManager {
     fn sign(&self, msg: &Vec<u8>) -> Result<Vec<u8>, Error>;
@@ -35,7 +35,7 @@ impl KeyManager for CryptoBox {
                 self.seeds = next_seeds.to_vec();
                 next_secret.derive_key_pair()?
             } else {
-                let kp = Keypair::generate(&mut OsRng{});
+                let kp = Keypair::generate(&mut OsRng {});
                 let vk = Key::new(kp.public.as_bytes().to_vec());
                 let sk = Key::new(kp.secret.as_bytes().to_vec());
                 (vk, sk)
@@ -56,8 +56,11 @@ impl KeyManager for CryptoBox {
 impl CryptoBox {
     pub fn new() -> Result<Self, Error> {
         let signer = Signer::new()?;
-        let kp = Keypair::generate(&mut OsRng{});
-        let (next_pub_key, next_priv_key) = (Key::new(kp.public.as_bytes().to_vec()), Key::new(kp.secret.as_bytes().to_vec()));
+        let kp = Keypair::generate(&mut OsRng {});
+        let (next_pub_key, next_priv_key) = (
+            Key::new(kp.public.as_bytes().to_vec()),
+            Key::new(kp.secret.as_bytes().to_vec()),
+        );
         Ok(CryptoBox {
             signer,
             next_pub_key,
@@ -69,14 +72,13 @@ impl CryptoBox {
     pub fn derive_from_seed(seeds: &[&str]) -> Result<Self, Error> {
         let (pub_key, priv_key) = match seeds.get(0) {
             Some(secret) => {
-                let secret = SecretKey::from_bytes(secret.as_bytes())
-                    .map_err(|_| Error::SemanticError("failed to convert provided seet to SecretKey".into()))?;
+                let secret = SecretKey::from_bytes(secret.as_bytes()).map_err(|_| {
+                    Error::SemanticError("failed to convert provided seet to SecretKey".into())
+                })?;
                 let public = PublicKey::from(&secret);
                 (public, secret)
             }
-            None => {
-               ed_new_public_private()
-            }
+            None => ed_new_public_private(),
         };
 
         let (next_pub_key, next_priv_key) = match seeds.get(1) {
@@ -86,7 +88,7 @@ impl CryptoBox {
             }
             None => {
                 let (vk, sk) = ed_new_public_private();
-                let vk  = Key::new(vk.to_bytes().to_vec());
+                let vk = Key::new(vk.to_bytes().to_vec());
                 let sk = Key::new(sk.to_bytes().to_vec());
                 (vk, sk)
             }
@@ -100,9 +102,9 @@ impl CryptoBox {
             .collect();
 
         Ok(CryptoBox {
-            signer: Signer { 
+            signer: Signer {
                 pub_key: Key::new(pub_key.to_bytes().to_vec()),
-                priv_key: Key::new(priv_key.to_bytes().to_vec())
+                priv_key: Key::new(priv_key.to_bytes().to_vec()),
             },
             next_pub_key,
             next_priv_key,
@@ -119,7 +121,7 @@ struct Signer {
 impl Signer {
     pub fn new() -> Result<Self, Error> {
         let ed = Keypair::generate(&mut OsRng);
-        let pub_key  = Key::new(ed.public.to_bytes().to_vec());
+        let pub_key = Key::new(ed.public.to_bytes().to_vec());
         let priv_key = Key::new(ed.secret.to_bytes().to_vec());
 
         Ok(Signer { pub_key, priv_key })
@@ -131,7 +133,6 @@ impl Signer {
 }
 
 fn ed_new_public_private() -> (PublicKey, SecretKey) {
-    let kp = Keypair::generate(&mut OsRng{});
+    let kp = Keypair::generate(&mut OsRng {});
     (kp.public, kp.secret)
 }
-

@@ -11,8 +11,7 @@ use chrono::prelude::*;
 use rkv::{
     backend::{BackendEnvironmentBuilder, SafeMode, SafeModeDatabase, SafeModeEnvironment},
     value::Type,
-    DataError, Manager, MultiStore, Rkv, SingleStore, StoreError, StoreOptions,
-    Value,
+    DataError, Manager, MultiStore, Rkv, SingleStore, StoreError, StoreOptions, Value,
 };
 use serde::Serialize;
 use std::path::Path;
