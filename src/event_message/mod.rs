@@ -1,6 +1,6 @@
 pub mod event_msg_builder;
-pub mod serialization_info;
 pub mod parse;
+pub mod serialization_info;
 
 use std::cmp::Ordering;
 
@@ -61,9 +61,9 @@ impl PartialOrd for TimestampedEventMessage {
             false => match self.event.event.sn > other.event.event.sn {
                 true => Ordering::Greater,
                 false => Ordering::Less,
-            }
+            },
         })
-   }
+    }
 }
 
 impl Ord for TimestampedEventMessage {
@@ -73,7 +73,7 @@ impl Ord for TimestampedEventMessage {
             false => match self.event.event.sn > other.event.event.sn {
                 true => Ordering::Greater,
                 false => Ordering::Less,
-            }
+            },
         }
     }
 }
@@ -108,7 +108,7 @@ impl TimestampedSignedEventMessage {
     pub fn new(event: SignedEventMessage) -> Self {
         Self {
             timestamp: Local::now(),
-            event
+            event,
         }
     }
 }
@@ -127,14 +127,18 @@ impl From<SignedEventMessage> for TimestampedSignedEventMessage {
 
 impl PartialOrd for TimestampedSignedEventMessage {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(match self.event.event_message.event.sn == other.event.event_message.event.sn {
-            true => Ordering::Equal,
-            false => match self.event.event_message.event.sn > other.event.event_message.event.sn {
-                true => Ordering::Greater,
-                false => Ordering::Less,
-            }
-        })
-   }
+        Some(
+            match self.event.event_message.event.sn == other.event.event_message.event.sn {
+                true => Ordering::Equal,
+                false => {
+                    match self.event.event_message.event.sn > other.event.event_message.event.sn {
+                        true => Ordering::Greater,
+                        false => Ordering::Less,
+                    }
+                }
+            },
+        )
+    }
 }
 
 impl Ord for TimestampedSignedEventMessage {
@@ -144,13 +148,12 @@ impl Ord for TimestampedSignedEventMessage {
             false => match self.event.event_message.event.sn > other.event.event_message.event.sn {
                 true => Ordering::Greater,
                 false => Ordering::Less,
-            }
+            },
         }
     }
 }
 
 impl Eq for TimestampedSignedEventMessage {}
-
 
 /// Signed Non-Transferrable Receipt
 ///
@@ -389,8 +392,8 @@ mod tests {
         derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
         event::{
             event_data::{inception::InceptionEvent, EventData},
-            sections::InceptionWitnessConfig,
             sections::KeyConfig,
+            sections::{key_config::SignatureThreshold, InceptionWitnessConfig},
         },
         keys::Key,
         prefix::{AttachedSignaturePrefix, IdentifierPrefix},
@@ -424,7 +427,11 @@ mod tests {
             prefix: IdentifierPrefix::Basic(pref0.clone()),
             sn: 0,
             event_data: EventData::Icp(InceptionEvent {
-                key_config: KeyConfig::new(vec![pref0.clone()], Some(nxt.clone()), Some(1)),
+                key_config: KeyConfig::new(
+                    vec![pref0.clone()],
+                    Some(nxt.clone()),
+                    Some(SignatureThreshold::Simple(1)),
+                ),
                 witness_config: InceptionWitnessConfig::default(),
                 inception_configuration: vec![],
                 data: vec![],
@@ -455,7 +462,7 @@ mod tests {
         assert_eq!(s0.last, ser);
         assert_eq!(s0.current.public_keys.len(), 1);
         assert_eq!(s0.current.public_keys[0], pref0);
-        assert_eq!(s0.current.threshold, 1);
+        assert_eq!(s0.current.threshold, SignatureThreshold::Simple(1));
         assert_eq!(s0.current.threshold_key_digest, Some(nxt));
         assert_eq!(s0.witnesses, vec![]);
         assert_eq!(s0.tally, 0);
@@ -508,7 +515,7 @@ mod tests {
             KeyConfig::new(
                 vec![sig_pref_0.clone(), enc_pref_0.clone()],
                 Some(nexter_pref.clone()),
-                Some(1),
+                Some(SignatureThreshold::default()),
             ),
             None,
             None,
@@ -539,7 +546,7 @@ mod tests {
         assert_eq!(s0.current.public_keys.len(), 2);
         assert_eq!(s0.current.public_keys[0], sig_pref_0);
         assert_eq!(s0.current.public_keys[1], enc_pref_0);
-        assert_eq!(s0.current.threshold, 1);
+        assert_eq!(s0.current.threshold, SignatureThreshold::default());
         assert_eq!(s0.current.threshold_key_digest, Some(nexter_pref));
         assert_eq!(s0.witnesses, vec![]);
         assert_eq!(s0.tally, 0);

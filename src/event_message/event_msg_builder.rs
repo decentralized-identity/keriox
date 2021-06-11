@@ -1,14 +1,14 @@
 use crate::{
     derivation::{basic::Basic, self_addressing::SelfAddressing},
     error::Error,
-    event::sections::nxt_commitment,
+    event::sections::key_config::nxt_commitment,
     event::{
         event_data::{
             delegated::{DelegatedInceptionEvent, DelegatedRotationEvent},
             interaction::InteractionEvent,
             rotation::RotationEvent,
         },
-        sections::{seal::LocationSeal, WitnessConfig},
+        sections::{key_config::SignatureThreshold, seal::LocationSeal, WitnessConfig},
         SerializationFormats,
     },
     event::{
@@ -29,7 +29,7 @@ pub struct EventMsgBuilder {
     event_type: EventType,
     prefix: IdentifierPrefix,
     sn: u64,
-    key_threshold: u64,
+    key_threshold: SignatureThreshold,
     keys: Vec<BasicPrefix>,
     next_keys: Vec<BasicPrefix>,
     prev_event: SelfAddressingPrefix,
@@ -81,7 +81,7 @@ impl EventMsgBuilder {
             prefix: IdentifierPrefix::default(),
             keys: vec![basic_pref],
             next_keys: vec![Basic::Ed25519.derive(npk)],
-            key_threshold: 1,
+            key_threshold: SignatureThreshold::Simple(1),
             sn: 1,
             prev_event: SelfAddressing::Blake3_256.derive(&[0u8; 32]),
             data: vec![],
@@ -122,8 +122,19 @@ impl EventMsgBuilder {
         }
     }
 
+    pub fn with_threshold(self, threshold: SignatureThreshold) -> Self {
+        EventMsgBuilder {
+            key_threshold: threshold,
+            ..self
+        }
+    }
+
     pub fn build(self) -> Result<EventMessage, Error> {
-        let next_key_hash = nxt_commitment(1, &self.next_keys, &SelfAddressing::Blake3_256);
+        let next_key_hash = nxt_commitment(
+            &self.key_threshold,
+            &self.next_keys,
+            &SelfAddressing::Blake3_256,
+        );
         let key_config = KeyConfig::new(self.keys, Some(next_key_hash), Some(self.key_threshold));
         let prefix =
             if self.prefix == IdentifierPrefix::default() && key_config.public_keys.len() == 1 {

@@ -1,9 +1,24 @@
-use serde::{Deserialize, Serialize};
+use std::str::FromStr;
+
+use fraction::Fraction;
+use fraction::One;
+use fraction::Zero;
+use serde::{
+    de::{self},
+    ser::SerializeSeq,
+    Deserialize, Deserializer, Serialize, Serializer,
+};
 use serde_hex::{Compact, SerHex};
+
+use crate::{
+    derivation::self_addressing::SelfAddressing,
+    error::Error,
+    prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfAddressingPrefix},
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct KeyConfig {
-    #[serde(rename = "kt", with = "SerHex::<Compact>")]
+    #[serde(rename = "kt")]
     pub threshold: SignatureThreshold,
 
     #[serde(rename = "k")]
@@ -20,7 +35,10 @@ impl KeyConfig {
         threshold: Option<SignatureThreshold>,
     ) -> Self {
         Self {
-            threshold: threshold.map_or_else(|| SignatureThreshold::Simple(public_keys.len() as u64 / 2 + 1, |t| t)),
+            threshold: threshold.map_or_else(
+                || SignatureThreshold::Simple(public_keys.len() as u64 / 2 + 1),
+                |t| t,
+            ),
             public_keys,
             threshold_key_digest,
         }
@@ -31,8 +49,16 @@ impl KeyConfig {
     /// Verifies the given sigs against the given message using the KeyConfigs
     /// Public Keys, according to the indexes in the sigs.
     pub fn verify(&self, message: &[u8], sigs: &[AttachedSignaturePrefix]) -> Result<bool, Error> {
+        let enough_sigs = match self.threshold {
+            SignatureThreshold::Simple(ref t) => (sigs.len() as u64) >= t.to_owned(),
+            SignatureThreshold::Weighted(ref t) => {
+                sigs.into_iter().fold(Zero::zero(), |acc: Fraction, sig| {
+                    acc + t[sig.index as usize].fraction
+                }) >= One::one()
+            }
+        };
         // ensure there's enough sigs
-        if (sigs.len() as u64) < self.threshold {
+        if !enough_sigs {
             Err(Error::NotEnoughSigsError)
         } else if
         // and that there are not too many
@@ -68,7 +94,7 @@ impl KeyConfig {
     /// to in the threshold_key_digest of this KeyConfig
     pub fn verify_next(&self, next: &KeyConfig) -> bool {
         match &self.threshold_key_digest {
-            Some(n) => n == &next.commit(n.derivation),
+            Some(n) => n == &next.commit(&n.derivation),
             None => false,
         }
     }
@@ -77,22 +103,86 @@ impl KeyConfig {
     ///
     /// Serializes the KeyConfig for creation or verification of a threshold
     /// key digest commitment
-    pub fn commit(&self, derivation: SelfAddressing) -> SelfAddressingPrefix {
-        nxt_commitment(self.threshold, &self.public_keys, derivation)
+    pub fn commit(&self, derivation: &SelfAddressing) -> SelfAddressingPrefix {
+        nxt_commitment(&self.threshold, &self.public_keys, derivation)
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct ThresholdFraction {
+    fraction: Fraction,
+}
+
+impl ThresholdFraction {
+    pub fn new(n: u64, d: u64) -> Self {
+        Self {
+            fraction: Fraction::new(n, d),
+        }
+    }
+}
+
+impl FromStr for ThresholdFraction {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let f: Vec<_> = s.split("/").collect();
+        if f.len() != 2 {
+            return Err(Error::SemanticError("Improper threshold fraction".into()));
+        }
+        let a = f[0].parse::<u64>()?;
+        let b = f[1].parse::<u64>()?;
+        Ok(ThresholdFraction {
+            fraction: Fraction::new(a, b),
+        })
+    }
+}
+impl<'de> Deserialize<'de> for ThresholdFraction {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        FromStr::from_str(&s).map_err(de::Error::custom)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum SignatureThreshold {
     #[serde(with = "SerHex::<Compact>")]
     Simple(u64),
-    Weighted(Vec<Fraction>)
+    #[serde(serialize_with = "serialize_weighted_threshold")]
+    Weighted(Vec<ThresholdFraction>),
 }
 
-pub impl SignatureThreshold {
+fn serialize_weighted_threshold<S>(x: &Vec<ThresholdFraction>, s: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut seq = s.serialize_seq(Some(x.len()))?;
+    x.iter().for_each(|frac| {
+        seq.serialize_element(&format!("{}", frac.fraction))
+            .unwrap_or(());
+    });
+    seq.end()
+}
+
+impl SignatureThreshold {
     fn simple(t: u64) -> Self {
         Self::Simple(t)
+    }
+    fn weighted(frac: Vec<(u64, u64)>) -> Self {
+        let fractions: Vec<ThresholdFraction> = frac
+            .into_iter()
+            .map(|(n, d)| ThresholdFraction::new(n, d))
+            .collect();
+        Self::Weighted(fractions)
+    }
+}
+
+impl Default for SignatureThreshold {
+    fn default() -> Self {
+        Self::Simple(0)
     }
 }
 
@@ -101,23 +191,29 @@ pub impl SignatureThreshold {
 /// Serializes a threshold and key set into the form
 /// required for threshold key digest creation
 pub fn nxt_commitment(
-    threshold: u64,
+    threshold: &SignatureThreshold,
     keys: &[BasicPrefix],
-    derivation: SelfAddressing,
+    derivation: &SelfAddressing,
 ) -> SelfAddressingPrefix {
-    keys.iter().fold(
-        derivation.derive(format!("{:x}", threshold).as_bytes()),
-        |acc, pk| {
+    let limen = match threshold {
+        SignatureThreshold::Simple(n) => format!("{:x}", n),
+        SignatureThreshold::Weighted(th) => th
+            .into_iter()
+            .map(|frac| format!("{}", frac.fraction))
+            .collect::<Vec<String>>()
+            .join(","),
+    };
+    keys.iter()
+        .fold(derivation.derive(limen.as_bytes()), |acc, pk| {
             SelfAddressingPrefix::new(
-                derivation,
+                derivation.to_owned(),
                 acc.derivative()
                     .iter()
                     .zip(derivation.derive(pk.to_str().as_bytes()).derivative())
                     .map(|(acc_byte, pk_byte)| acc_byte ^ pk_byte)
                     .collect(),
             )
-        },
-    )
+        })
 }
 
 mod empty_string_as_none {
@@ -151,7 +247,6 @@ mod empty_string_as_none {
 #[test]
 fn threshold() {
     // test data taken from kid0003
-    let sith = 2;
     let keys: Vec<BasicPrefix> = [
         "BrHLayDN-mXKv62DAjFLX1_Y5yEUe0vA9YPe_ihiKYHE",
         "BujP_71bmWFVcvFmkE9uS8BTZ54GIstZ20nj_UloF8Rk",
@@ -161,10 +256,48 @@ fn threshold() {
     .map(|k| k.parse().unwrap())
     .collect();
 
-    let nxt = nxt_commitment(sith, &keys, SelfAddressing::Blake3_256);
+    let sith = SignatureThreshold::Simple(2);
+    let nxt = nxt_commitment(&sith, &keys, &SelfAddressing::Blake3_256);
 
     assert_eq!(
         &nxt.to_str(),
         "ED8YvDrXvGuaIVZ69XsBVA5YN2pNTfQOFwgeloVHeWKs"
-    )
+    );
+
+    // test data taken from keripy
+    // (keripy/tests/core/test_weighted_threshold.py::test_weighted)
+    let sith = SignatureThreshold::weighted(vec![(1, 2), (1, 2), (1, 2)]);
+    let next_keys: Vec<BasicPrefix> = [
+        "DeonYM2bKnAwp6VZcuCXdX72kNFw56czlZ_Tc7XHHVGI",
+        "DQghKIy-2do9OkweSgazh3Ql1vCOt5bnc5QF8x50tRoU",
+        "DNAUn-5dxm6b8Njo01O0jlStMRCjo9FYQA2mfqFW1_JA",
+    ]
+    .iter()
+    .map(|x| x.parse().unwrap())
+    .collect();
+    let nxt = nxt_commitment(&sith, &next_keys, &SelfAddressing::Blake3_256);
+    assert_eq!(nxt.to_str(), "EhJGhyJQTpSlZ9oWfQT-lHNl1woMazLC42O89fRHocTI");
+}
+
+#[test]
+fn test_verify() -> Result<(), Error> {
+    use crate::event::event_data::EventData;
+    use crate::event_message::parse;
+    use crate::event_message::parse::Deserialized;
+    // test data taken from keripy
+    // (keripy/tests/core/test_weighted_threshold.py::test_weighted)
+    let ev = br#"{"v":"KERI10JSON00015b_","i":"EX0WJtv6vc0IWzOqa92Pv9v9pgs1f0BfIVrSch648Zf0","s":"0","t":"icp","kt":["1/2","1/2","1/2"],"k":["DK4OJI8JOr6oEEUMeSF_X-SbKysfwpKwW-ho5KARvH5c","D1RZLgYke0GmfZm-CH8AsW4HoTU4m-2mFgu8kbwp8jQU","DBVwzum-jPfuUXUcHEWdplB4YcoL3BWGXK0TMoF_NeFU"],"n":"EhJGhyJQTpSlZ9oWfQT-lHNl1woMazLC42O89fRHocTI","bt":"0","b":[],"c":[],"a":[]}-AADAAKWMK8k4Po2A0rBrUBjBom73DfTCNg_biwR-_LWm6DMHZHGDfCuOmEyR8sEdp7cPxhsavq4istIZ_QQ42yyUcDAABeTClYkN-yjbW3Kz3ot6MvAt5Se-jmcjhu-Cfsv4m_GKYgc_qwel1SbAcqF0TiY0EHFdjNKvIkg3q19KlhSbuBgACA6QMnsnZuy66xrZVg3c84mTodZCEvOFrAIDQtm8jeXeCTg7yFauoQECZyNIlUnnxVHuk2_Fqi5xK_Lu9Pt76Aw"#;
+    let signed_msg = parse::signed_message(ev).unwrap();
+    match signed_msg.1 {
+        Deserialized::Event(ref e) => {
+                if let EventData::Icp(icp) = e.to_owned().event.event.event.event_data {
+                    let kc = icp.key_config;
+                    let msg = e.clone().event.event.serialize()?;
+                    assert!(kc.verify(&msg, &e.signatures)?);
+                }
+        }
+        _ => (),
+    };
+
+    Ok(())
 }

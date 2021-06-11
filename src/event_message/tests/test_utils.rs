@@ -2,7 +2,7 @@ use super::event_msg_builder::{EventMsgBuilder, EventType};
 use crate::{
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
-    event::sections::nxt_commitment,
+    event::sections::{key_config::nxt_commitment, key_config::SignatureThreshold},
     keys::Key,
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
     state::IdentifierState,
@@ -65,7 +65,11 @@ fn test_update_identifier_state(
 
     let current_key_pref = Basic::Ed25519.derive(cur_pk.clone());
     let next_key_prefix = Basic::Ed25519.derive(next_pk.clone());
-    let next_dig = nxt_commitment(1, &[next_key_prefix.clone()], &SelfAddressing::Blake3_256);
+    let next_dig = nxt_commitment(
+        &SignatureThreshold::Simple(1),
+        &[next_key_prefix.clone()],
+        &SelfAddressing::Blake3_256,
+    );
 
     // Build event msg of given type.
     let event_msg = EventMsgBuilder::new(event_type.clone())?
@@ -113,7 +117,7 @@ fn test_update_identifier_state(
     assert_eq!(new_state.last, sed);
     assert_eq!(new_state.current.public_keys.len(), 1);
     assert_eq!(new_state.current.public_keys[0], current_key_pref);
-    assert_eq!(new_state.current.threshold, 1);
+    assert_eq!(new_state.current.threshold, SignatureThreshold::Simple(1));
     assert_eq!(new_state.current.threshold_key_digest, Some(next_dig));
     assert_eq!(new_state.witnesses, vec![]);
     assert_eq!(new_state.tally, 0);

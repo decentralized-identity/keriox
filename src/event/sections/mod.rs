@@ -6,8 +6,8 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
 
-pub mod seal;
 pub mod key_config;
+pub mod seal;
 
 pub use key_config::KeyConfig;
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
