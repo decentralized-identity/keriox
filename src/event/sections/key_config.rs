@@ -1,19 +1,14 @@
-use std::str::FromStr;
-
-use fraction::Fraction;
-use fraction::One;
-use fraction::Zero;
 use serde::{
-    de::{self},
-    Deserialize, Deserializer, Serialize, Serializer,
+    Deserialize, Serialize,
 };
-use serde_hex::{Compact, SerHex};
 
 use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
     prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfAddressingPrefix},
 };
+
+use super::threshold::SignatureThreshold;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct KeyConfig {
@@ -48,16 +43,8 @@ impl KeyConfig {
     /// Verifies the given sigs against the given message using the KeyConfigs
     /// Public Keys, according to the indexes in the sigs.
     pub fn verify(&self, message: &[u8], sigs: &[AttachedSignaturePrefix]) -> Result<bool, Error> {
-        let enough_sigs = match self.threshold {
-            SignatureThreshold::Simple(ref t) => (sigs.len() as u64) >= t.to_owned(),
-            SignatureThreshold::Weighted(ref t) => {
-                sigs.into_iter().fold(Zero::zero(), |acc: Fraction, sig| {
-                    acc + t[sig.index as usize].fraction
-                }) >= One::one()
-            }
-        };
         // ensure there's enough sigs
-        if !enough_sigs {
+        if !self.threshold.enough_signatures(sigs)? {
             Err(Error::NotEnoughSigsError)
         } else if
         // and that there are not too many
@@ -107,79 +94,6 @@ impl KeyConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct ThresholdFraction {
-    fraction: Fraction,
-}
-
-impl ThresholdFraction {
-    pub fn new(n: u64, d: u64) -> Self {
-        Self {
-            fraction: Fraction::new(n, d),
-        }
-    }
-}
-
-impl FromStr for ThresholdFraction {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let f: Vec<_> = s.split("/").collect();
-        if f.len() != 2 {
-            return Err(Error::SemanticError("Improper threshold fraction".into()));
-        }
-        let a = f[0].parse::<u64>()?;
-        let b = f[1].parse::<u64>()?;
-        Ok(ThresholdFraction {
-            fraction: Fraction::new(a, b),
-        })
-    }
-}
-impl<'de> Deserialize<'de> for ThresholdFraction {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        FromStr::from_str(&s).map_err(de::Error::custom)
-    }
-}
-
-impl Serialize for ThresholdFraction {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&format!("{}", self.fraction))
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[serde(untagged)]
-pub enum SignatureThreshold {
-    #[serde(with = "SerHex::<Compact>")]
-    Simple(u64),
-    Weighted(Vec<ThresholdFraction>),
-}
-
-impl SignatureThreshold {
-    fn simple(t: u64) -> Self {
-        Self::Simple(t)
-    }
-    fn weighted(frac: Vec<(u64, u64)>) -> Self {
-        let fractions: Vec<ThresholdFraction> = frac
-            .into_iter()
-            .map(|(n, d)| ThresholdFraction::new(n, d))
-            .collect();
-        Self::Weighted(fractions)
-    }
-}
-
-impl Default for SignatureThreshold {
-    fn default() -> Self {
-        Self::Simple(0)
-    }
-}
 
 /// Serialize For Commitment
 ///
@@ -194,7 +108,7 @@ pub fn nxt_commitment(
         SignatureThreshold::Simple(n) => format!("{:x}", n),
         SignatureThreshold::Weighted(th) => th
             .into_iter()
-            .map(|frac| format!("{}", frac.fraction))
+            .map(|frac| frac.to_string())
             .collect::<Vec<String>>()
             .join(","),
     };
@@ -261,7 +175,7 @@ fn test_next_commitment() {
 
     // test data taken from keripy
     // (keripy/tests/core/test_weighted_threshold.py::test_weighted)
-    // Set weighted threshold to "[1/2, 1/2, 1/2]"
+    // Set weighted threshold to [1/2, 1/2, 1/2]
     let sith = SignatureThreshold::weighted(vec![(1, 2), (1, 2), (1, 2)]);
     let next_keys: Vec<BasicPrefix> = [
         "DeonYM2bKnAwp6VZcuCXdX72kNFw56czlZ_Tc7XHHVGI",

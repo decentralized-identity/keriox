@@ -2,7 +2,7 @@ use super::event_msg_builder::{EventMsgBuilder, EventType};
 use crate::{
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
-    event::sections::{key_config::nxt_commitment, key_config::SignatureThreshold},
+    event::sections::{key_config::nxt_commitment, threshold::SignatureThreshold},
     keys::Key,
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
     state::IdentifierState,

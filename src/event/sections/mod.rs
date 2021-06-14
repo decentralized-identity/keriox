@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
 
 pub mod key_config;
+pub mod threshold;
 pub mod seal;
 
 pub use key_config::KeyConfig;

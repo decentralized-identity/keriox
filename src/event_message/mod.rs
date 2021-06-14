@@ -393,7 +393,7 @@ mod tests {
         event::{
             event_data::{inception::InceptionEvent, EventData},
             sections::KeyConfig,
-            sections::{key_config::SignatureThreshold, InceptionWitnessConfig},
+            sections::{threshold::SignatureThreshold, InceptionWitnessConfig},
         },
         keys::Key,
         prefix::{AttachedSignaturePrefix, IdentifierPrefix},

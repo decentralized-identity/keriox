@@ -8,7 +8,7 @@ use crate::{
             interaction::InteractionEvent,
             rotation::RotationEvent,
         },
-        sections::{key_config::SignatureThreshold, seal::LocationSeal, WitnessConfig},
+        sections::{threshold::SignatureThreshold, seal::LocationSeal, WitnessConfig},
         SerializationFormats,
     },
     event::{
