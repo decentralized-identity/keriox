@@ -5,7 +5,6 @@ use fraction::One;
 use fraction::Zero;
 use serde::{
     de::{self},
-    ser::SerializeSeq,
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use serde_hex::{Compact, SerHex};
@@ -108,7 +107,7 @@ impl KeyConfig {
     }
 }
 
-#[derive(Serialize, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ThresholdFraction {
     fraction: Fraction,
 }
@@ -146,25 +145,21 @@ impl<'de> Deserialize<'de> for ThresholdFraction {
     }
 }
 
+impl Serialize for ThresholdFraction {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&format!("{}", self.fraction))
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum SignatureThreshold {
     #[serde(with = "SerHex::<Compact>")]
     Simple(u64),
-    #[serde(serialize_with = "serialize_weighted_threshold")]
     Weighted(Vec<ThresholdFraction>),
-}
-
-fn serialize_weighted_threshold<S>(x: &Vec<ThresholdFraction>, s: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    let mut seq = s.serialize_seq(Some(x.len()))?;
-    x.iter().for_each(|frac| {
-        seq.serialize_element(&format!("{}", frac.fraction))
-            .unwrap_or(());
-    });
-    seq.end()
 }
 
 impl SignatureThreshold {
@@ -368,6 +363,7 @@ fn test_verify() -> Result<(), Error> {
     use crate::event::event_data::EventData;
     use crate::event_message::parse;
     use crate::event_message::parse::Deserialized;
+
     // test data taken from keripy
     // (keripy/tests/core/test_weighted_threshold.py::test_weighted)
     let ev = br#"{"v":"KERI10JSON00015b_","i":"EX0WJtv6vc0IWzOqa92Pv9v9pgs1f0BfIVrSch648Zf0","s":"0","t":"icp","kt":["1/2","1/2","1/2"],"k":["DK4OJI8JOr6oEEUMeSF_X-SbKysfwpKwW-ho5KARvH5c","D1RZLgYke0GmfZm-CH8AsW4HoTU4m-2mFgu8kbwp8jQU","DBVwzum-jPfuUXUcHEWdplB4YcoL3BWGXK0TMoF_NeFU"],"n":"EhJGhyJQTpSlZ9oWfQT-lHNl1woMazLC42O89fRHocTI","bt":"0","b":[],"c":[],"a":[]}-AADAAKWMK8k4Po2A0rBrUBjBom73DfTCNg_biwR-_LWm6DMHZHGDfCuOmEyR8sEdp7cPxhsavq4istIZ_QQ42yyUcDAABeTClYkN-yjbW3Kz3ot6MvAt5Se-jmcjhu-Cfsv4m_GKYgc_qwel1SbAcqF0TiY0EHFdjNKvIkg3q19KlhSbuBgACA6QMnsnZuy66xrZVg3c84mTodZCEvOFrAIDQtm8jeXeCTg7yFauoQECZyNIlUnnxVHuk2_Fqi5xK_Lu9Pt76Aw"#;

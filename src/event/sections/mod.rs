@@ -1,7 +1,5 @@
 use crate::{
-    derivation::self_addressing::SelfAddressing,
-    error::Error,
-    prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfAddressingPrefix},
+    prefix::BasicPrefix,
 };
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
