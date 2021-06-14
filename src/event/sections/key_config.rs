@@ -245,7 +245,7 @@ mod empty_string_as_none {
 }
 
 #[test]
-fn threshold() {
+fn test_next_commitment() {
     // test data taken from kid0003
     let keys: Vec<BasicPrefix> = [
         "BrHLayDN-mXKv62DAjFLX1_Y5yEUe0vA9YPe_ihiKYHE",
@@ -266,6 +266,7 @@ fn threshold() {
 
     // test data taken from keripy
     // (keripy/tests/core/test_weighted_threshold.py::test_weighted)
+    // Set weighted threshold to "[1/2, 1/2, 1/2]"
     let sith = SignatureThreshold::weighted(vec![(1, 2), (1, 2), (1, 2)]);
     let next_keys: Vec<BasicPrefix> = [
         "DeonYM2bKnAwp6VZcuCXdX72kNFw56czlZ_Tc7XHHVGI",
@@ -280,6 +281,89 @@ fn threshold() {
 }
 
 #[test]
+fn test_threshold() -> Result<(), Error> {
+    use crate::derivation::{basic::Basic, self_signing::SelfSigning};
+    use crate::keys::Key;
+    use ed25519_dalek::Keypair;
+    use rand::rngs::OsRng;
+
+    let (pub_keys, priv_keys): (Vec<BasicPrefix>, Vec<Key>) = [0, 1, 2]
+        .iter()
+        .map(|_| {
+            let kp = Keypair::generate(&mut OsRng);
+            (
+                Basic::Ed25519.derive(Key::new(kp.public.to_bytes().to_vec())),
+                Key::new(kp.secret.to_bytes().to_vec()),
+            )
+        })
+        .unzip();
+    let current_threshold = SignatureThreshold::weighted(vec![(1, 4), (1, 2), (1, 2)]);
+
+    let next_key_hash = {
+        let next_threshold = SignatureThreshold::weighted(vec![(1, 2), (1, 2)]);
+        let next_keys: Vec<BasicPrefix> = [1, 2]
+            .iter()
+            .map(|_| {
+                let kp = Keypair::generate(&mut OsRng);
+                Basic::Ed25519.derive(Key::new(kp.public.to_bytes().to_vec()))
+            })
+            .collect();
+        nxt_commitment(&next_threshold, &next_keys, &SelfAddressing::Blake3_256)
+    };
+    let key_config = KeyConfig::new(pub_keys, Some(next_key_hash), Some(current_threshold));
+
+    let msg_to_sign = "message to signed".as_bytes();
+
+    let mut signatures = vec![];
+    for i in 0..priv_keys.len() {
+        let sig = priv_keys[i].sign_ed(msg_to_sign)?;
+        signatures.push(AttachedSignaturePrefix::new(
+            SelfSigning::Ed25519Sha512,
+            sig,
+            i as u16,
+        ));
+    }
+
+    // All signatures.
+    let st = key_config.verify(
+        msg_to_sign,
+        &vec![
+            signatures[0].clone(),
+            signatures[1].clone(),
+            signatures[2].clone(),
+        ],
+    );
+    assert!(matches!(st, Ok(true)));
+
+    // Not enough signatures.
+    let st = key_config.verify(
+        msg_to_sign,
+        &vec![signatures[0].clone(), signatures[2].clone()],
+    );
+    assert!(matches!(st, Err(Error::NotEnoughSigsError)));
+
+    // Enough signatures.
+    let st = key_config.verify(
+        msg_to_sign,
+        &vec![signatures[1].clone(), signatures[2].clone()],
+    );
+    assert!(matches!(st, Ok(true)));
+
+    // The same signatures.
+    let st = key_config.verify(
+        msg_to_sign,
+        &vec![
+            signatures[0].clone(),
+            signatures[0].clone(),
+            signatures[0].clone(),
+        ],
+    );
+    assert!(matches!(st, Err(Error::NotEnoughSigsError)));
+
+    Ok(())
+}
+
+#[test]
 fn test_verify() -> Result<(), Error> {
     use crate::event::event_data::EventData;
     use crate::event_message::parse;
@@ -290,11 +374,11 @@ fn test_verify() -> Result<(), Error> {
     let signed_msg = parse::signed_message(ev).unwrap();
     match signed_msg.1 {
         Deserialized::Event(ref e) => {
-                if let EventData::Icp(icp) = e.to_owned().event.event.event.event_data {
-                    let kc = icp.key_config;
-                    let msg = e.clone().event.event.serialize()?;
-                    assert!(kc.verify(&msg, &e.signatures)?);
-                }
+            if let EventData::Icp(icp) = e.to_owned().event.event.event.event_data {
+                let kc = icp.key_config;
+                let msg = e.clone().event.event.serialize()?;
+                assert!(kc.verify(&msg, &e.signatures)?);
+            }
         }
         _ => (),
     };
