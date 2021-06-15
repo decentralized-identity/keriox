@@ -365,19 +365,14 @@ impl<'d> EventProcessor<'d> {
                 if let Ok(Some(event)) =
                     self.get_event_at_sn(&rct.body.event.prefix, rct.body.event.sn)
                 {
-                    match event.event.event_message.event.event_data.clone() {
-                        EventData::Rct(event_receipt) => {
-                            if event_receipt.receipted_event_digest.digest != receipt.receipted_event_digest.digest {
-                                return Err(Error::SemanticError("receipt digest missmatch event digest".into()));
-                            }
-                            let serialized_event = event.event.serialize()?;
-                            let tally = self.get_tally_at_sn(&rct.body.event.prefix, rct.body.event.sn)?;
-
-                            rct.verify(tally.unwrap(), &serialized_event)?;
-                            self.db.add_receipt_nt(rct, &id)?
-                        },
-                        _ => { return Err(Error::SemanticError("incorrect receipt structure".into())); }
+                    if !receipt.receipted_event_digest.verify_binding(&event.event.serialize()?) {
+                        return Err(Error::SemanticError("receipt digest missmatch event digest".into()));
                     }
+                    let serialized_event = event.event.serialize()?;
+                    let tally = self.get_tally_at_sn(&rct.body.event.prefix, rct.body.event.sn)?;
+
+                    rct.verify(tally.unwrap(), &serialized_event)?;
+                    self.db.add_receipt_nt(rct, &id)?
                 } else {
                     self.db.add_escrow_nt_receipt(rct, &id)?
                 }
