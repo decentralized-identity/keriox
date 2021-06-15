@@ -1,12 +1,10 @@
-use crate::{
-    prefix::BasicPrefix,
-};
+use crate::prefix::BasicPrefix;
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
 
 pub mod key_config;
-pub mod threshold;
 pub mod seal;
+pub mod threshold;
 
 pub use key_config::KeyConfig;
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
