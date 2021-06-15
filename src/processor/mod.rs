@@ -1,5 +1,3 @@
-use std::fs;
-
 use crate::{
     database::sled::SledEventDatabase,
     derivation::self_addressing::SelfAddressing,
@@ -13,7 +11,7 @@ use crate::{
         EventMessage,
     },
     event_message::{
-        parse::{signed_message, Deserialized, DeserializedEvent, DeserializedSignedEvent},
+        parse::{Deserialized, DeserializedEvent, DeserializedSignedEvent},
         SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         TimestampedSignedEventMessage,
     },
@@ -422,6 +420,18 @@ impl<'d> EventProcessor<'d> {
         self.process_transferable_receipts_escrow(pref, sn)?;
         self.process_outoforder_escrow(pref, sn)
     }
+
+    // received new event message with witnesses or without or whatever
+    // 1. We receive type of event (ICP/ROT/Rec ...)
+    // 2. If signed - verify signatures
+    // 2a. What to do with bogy events?
+    // 3. write to the DB
+
+    // validate witnessed event (ICP/ROT)
+    // 1. We have event of above type with sn
+    // 2. We search all the receipts with above sn
+    // 2a. Have receipt but not keys of witness - ignore
+    // 3. Count of receipts >= threshhold - valid || invalid
 
     fn process_outoforder_escrow(&self, pref: &IdentifierPrefix, sn: u64) -> Result<(), Error> {
         // Get receipt from escrow
