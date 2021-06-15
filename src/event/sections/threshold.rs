@@ -86,10 +86,19 @@ impl WeightedThreshold {
             WeightedThreshold::Multi(clauses) => clauses.enough_signatures(sigs),
         }
     }
-    pub fn to_limen(&self) -> String {
+
+    /// Serialize For Commitment
+    ///
+    /// Serializes a threshold into the form required 
+    /// for next keys commitment.
+    /// Example: 
+    ///     [["1/2", "1/2", "1/4", "1/4", "1/4"], ["1", "1"]] 
+    ///     is serialized to
+    ///     '1/2,1/2,1/4,1/4,1/4&1,1'
+    pub fn extract_threshold(&self) -> String {
         match self {
-            WeightedThreshold::Single(clause) => clause.to_limen(),
-            WeightedThreshold::Multi(clauses) => clauses.to_limen(),
+            WeightedThreshold::Single(clause) => clause.extract_threshold(),
+            WeightedThreshold::Multi(clauses) => clauses.extract_threshold(),
         }
     }
 }
@@ -150,7 +159,7 @@ impl ThresholdClause {
         }) >= One::one())
     }
 
-    pub fn to_limen(&self) -> String {
+    pub fn extract_threshold(&self) -> String {
         self.0
             .iter()
             .map(|fr| fr.to_string())
@@ -184,6 +193,7 @@ impl MultiClauses {
         let mut out = true;
         let mut start_index = 0u16;
         for clause in self.0.iter() {
+            // let 
             let end_index = start_index + clause.0.len() as u16;
             let signatures: Vec<AttachedSignaturePrefix> = sigs
                 .to_owned()
@@ -197,10 +207,10 @@ impl MultiClauses {
         Ok(out)
     }
 
-    pub fn to_limen(&self) -> String {
+    pub fn extract_threshold(&self) -> String {
         self.0
             .iter()
-            .map(|clause| clause.to_limen())
+            .map(|clause| clause.extract_threshold())
             .collect::<Vec<_>>()
             .join("&")
     }

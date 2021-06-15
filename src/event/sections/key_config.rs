@@ -101,12 +101,12 @@ pub fn nxt_commitment(
     keys: &[BasicPrefix],
     derivation: &SelfAddressing,
 ) -> SelfAddressingPrefix {
-    let limen = match threshold {
+    let extracted_threshold = match threshold {
         SignatureThreshold::Simple(n) => format!("{:x}", n),
-        SignatureThreshold::Weighted(thresh) => thresh.to_limen(),
+        SignatureThreshold::Weighted(thresh) => thresh.extract_threshold(),
     };
     keys.iter()
-        .fold(derivation.derive(limen.as_bytes()), |acc, pk| {
+        .fold(derivation.derive(extracted_threshold.as_bytes()), |acc, pk| {
             SelfAddressingPrefix::new(
                 derivation.to_owned(),
                 acc.derivative()
