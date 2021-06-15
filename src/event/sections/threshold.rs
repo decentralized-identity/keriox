@@ -1,9 +1,9 @@
 use std::{fmt, str::FromStr};
 
-use fraction::{Fraction, One, Zero};
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
-use serde_hex::{Compact, SerHex};
 use crate::{error::Error, prefix::AttachedSignaturePrefix};
+use fraction::{Fraction, One, Zero};
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use serde_hex::{Compact, SerHex};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ThresholdFraction {
@@ -29,14 +29,20 @@ impl FromStr for ThresholdFraction {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let f: Vec<_> = s.split("/").collect();
-        if f.len() != 2 {
-            return Err(Error::SemanticError("Improper threshold fraction".into()));
+        if f.len() > 2 {
+            Err(Error::SemanticError("Improper threshold fraction".into()))
+        } else if f.len() == 1 {
+            let a = f[0].parse::<u64>()?;
+            Ok(ThresholdFraction {
+                fraction: Fraction::new(a, 1u64),
+            })
+        } else {
+            let a = f[0].parse::<u64>()?;
+            let b = f[1].parse::<u64>()?;
+            Ok(ThresholdFraction {
+                fraction: Fraction::new(a, b),
+            })
         }
-        let a = f[0].parse::<u64>()?;
-        let b = f[1].parse::<u64>()?;
-        Ok(ThresholdFraction {
-            fraction: Fraction::new(a, b),
-        })
     }
 }
 impl<'de> Deserialize<'de> for ThresholdFraction {
