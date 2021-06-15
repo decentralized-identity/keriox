@@ -1,23 +1,11 @@
-use crate::{
-    database::sled::SledEventDatabase,
-    derivation::self_addressing::SelfAddressing,
-    error::Error,
-    event::{
-        event_data::EventData,
-        sections::{
+use crate::{database::sled::SledEventDatabase, derivation::self_addressing::SelfAddressing, error::Error, event::{EventMessage, event_data::EventData, sections::{
             seal::{EventSeal, LocationSeal, Seal},
             KeyConfig,
-        },
-        EventMessage,
-    },
-    event_message::{
+        }}, event_message::{
         parse::{Deserialized, DeserializedEvent, DeserializedSignedEvent},
         SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         TimestampedSignedEventMessage,
-    },
-    prefix::{IdentifierPrefix, SelfAddressingPrefix},
-    state::{EventSemantics, IdentifierState},
-};
+    }, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
 
 #[cfg(test)]
 mod tests;
@@ -371,17 +359,25 @@ impl<'d> EventProcessor<'d> {
     ) -> Result<Option<IdentifierState>, Error> {
         // check structure is correct
         match &rct.body.event.event_data {
-            EventData::Rct(_) => {
+            EventData::Rct(receipt) => {
                 // get event which is being receipted
                 let id = &rct.body.event.prefix.to_owned();
                 if let Ok(Some(event)) =
                     self.get_event_at_sn(&rct.body.event.prefix, rct.body.event.sn)
                 {
-                    let serialized_event = event.event.serialize()?;
-                    let tally = self.get_tally_at_sn(&rct.body.event.prefix, rct.body.event.sn)?;
+                    match event.event.event_message.event.event_data.clone() {
+                        EventData::Rct(event_receipt) => {
+                            if event_receipt.receipted_event_digest.digest != receipt.receipted_event_digest.digest {
+                                return Err(Error::SemanticError("receipt digest missmatch event digest".into()));
+                            }
+                            let serialized_event = event.event.serialize()?;
+                            let tally = self.get_tally_at_sn(&rct.body.event.prefix, rct.body.event.sn)?;
 
-                    rct.verify(tally.unwrap(), &serialized_event)?;
-                    self.db.add_receipt_nt(rct, &id)?
+                            rct.verify(tally.unwrap(), &serialized_event)?;
+                            self.db.add_receipt_nt(rct, &id)?
+                        },
+                        _ => { return Err(Error::SemanticError("incorrect receipt structure".into())); }
+                    }
                 } else {
                     self.db.add_escrow_nt_receipt(rct, &id)?
                 }
@@ -420,18 +416,6 @@ impl<'d> EventProcessor<'d> {
         self.process_transferable_receipts_escrow(pref, sn)?;
         self.process_outoforder_escrow(pref, sn)
     }
-
-    // received new event message with witnesses or without or whatever
-    // 1. We receive type of event (ICP/ROT/Rec ...)
-    // 2. If signed - verify signatures
-    // 2a. What to do with bogy events?
-    // 3. write to the DB
-
-    // validate witnessed event (ICP/ROT)
-    // 1. We have event of above type with sn
-    // 2. We search all the receipts with above sn
-    // 2a. Have receipt but not keys of witness - ignore
-    // 3. Count of receipts >= threshhold - valid || invalid
 
     fn process_outoforder_escrow(&self, pref: &IdentifierPrefix, sn: u64) -> Result<(), Error> {
         // Get receipt from escrow
