@@ -89,10 +89,10 @@ impl WeightedThreshold {
 
     /// Serialize For Commitment
     ///
-    /// Serializes a threshold into the form required 
+    /// Serializes a threshold into the form required
     /// for next keys commitment.
-    /// Example: 
-    ///     [["1/2", "1/2", "1/4", "1/4", "1/4"], ["1", "1"]] 
+    /// Example:
+    ///     [["1/2", "1/2", "1/4", "1/4", "1/4"], ["1", "1"]]
     ///     is serialized to
     ///     '1/2,1/2,1/4,1/4,1/4&1,1'
     pub fn extract_threshold(&self) -> String {
@@ -123,7 +123,7 @@ impl SignatureThreshold {
     pub fn enough_signatures(&self, sigs: &[AttachedSignaturePrefix]) -> Result<bool, Error> {
         match self {
             SignatureThreshold::Simple(ref t) => Ok((sigs.len() as u64) >= t.to_owned()),
-            SignatureThreshold::Weighted(ref thresh) => thresh.enough_signatures(sigs), 
+            SignatureThreshold::Weighted(ref thresh) => thresh.enough_signatures(sigs),
         }
     }
 }
@@ -151,11 +151,11 @@ impl ThresholdClause {
 
     pub fn enough_signatures(
         &self,
-        start_index: u64,
+        start_index: u16,
         sigs: &[AttachedSignaturePrefix],
     ) -> Result<bool, Error> {
         Ok(sigs.into_iter().fold(Zero::zero(), |acc: Fraction, sig| {
-            acc + self.0[(sig.index as u64 - start_index) as usize].fraction
+            acc + self.0[(sig.index - start_index) as usize].fraction
         }) >= One::one())
     }
 
@@ -190,21 +190,22 @@ impl MultiClauses {
     }
 
     pub fn enough_signatures(&self, sigs: &[AttachedSignaturePrefix]) -> Result<bool, Error> {
-        let mut out = true;
-        let mut start_index = 0u16;
-        for clause in self.0.iter() {
-            // let 
-            let end_index = start_index + clause.0.len() as u16;
-            let signatures: Vec<AttachedSignaturePrefix> = sigs
-                .to_owned()
-                .into_iter()
-                .filter(|sig| sig.index >= start_index && sig.index < end_index)
-                .collect();
-            out = out && clause.enough_signatures(start_index as u64, &signatures)?;
-            start_index = end_index;
-        }
-
-        Ok(out)
+        Ok(self
+            .0
+            .iter()
+            .fold(Ok((0, true)), |acc, clause| -> Result<_, Error> {
+                let (start, enough) = acc?;
+                let sigs: Vec<AttachedSignaturePrefix> = sigs
+                    .to_owned()
+                    .into_iter()
+                    .filter(|sig| sig.index >= start && sig.index < start + clause.0.len() as u16)
+                    .collect();
+                Ok((
+                    start + clause.0.len() as u16,
+                    enough && clause.enough_signatures(start, &sigs)?,
+                ))
+            })?
+            .1)
     }
 
     pub fn extract_threshold(&self) -> String {
