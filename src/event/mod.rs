@@ -9,7 +9,6 @@ use crate::error::Error;
 use crate::state::EventSemantics;
 use serde_hex::{Compact, SerHex};
 
-
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Event {
     #[serde(rename = "i")]
