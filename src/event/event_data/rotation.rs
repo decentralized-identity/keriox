@@ -27,7 +27,6 @@ impl EventSemantics for RotationEvent {
             let witnesses = if self.witness_config.prune.len() > 0
                 || self.witness_config.graft.len() > 0 {
                    let mut prunned = state.witnesses
-                        .clone()
                         .into_iter()
                         .filter(|e| !self.witness_config.prune.contains(e))
                         .collect::<Vec<BasicPrefix>>();
