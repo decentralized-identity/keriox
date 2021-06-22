@@ -125,6 +125,12 @@ impl From<SignedEventMessage> for TimestampedSignedEventMessage {
     }
 }
 
+impl<'elt> From<&'elt SignedEventMessage> for &'elt TimestampedSignedEventMessage {
+    fn from(event: &'elt SignedEventMessage) -> &'elt TimestampedSignedEventMessage {
+        &TimestampedSignedEventMessage::new(event.to_owned())
+    }
+}
+
 impl PartialOrd for TimestampedSignedEventMessage {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(
@@ -161,7 +167,7 @@ impl Eq for TimestampedSignedEventMessage {}
 /// Mostly intended for use by Witnesses.
 /// NOTE: This receipt has a unique structure to it's appended
 /// signatures
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SignedNontransferableReceipt {
     pub body: EventMessage,
     pub couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
@@ -173,7 +179,7 @@ pub struct SignedNontransferableReceipt {
 /// Identifiers. Provides both the signatures and a commitment to
 /// the latest establishment event of the receipt creator.
 /// Mostly intended for use by Validators
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SignedTransferableReceipt {
     pub body: EventMessage,
     pub validator_seal: AttachedEventSeal,

@@ -91,6 +91,11 @@ impl SledEventDatabase {
             self.escrowed_receipts_t.iter_values(self.identifiers.designated_key(id))
         }
 
+    pub fn remove_escrow_t_receipt(&self, id: &IdentifierPrefix, receipt: &SignedTransferableReceipt)
+        -> Result<(), Error> {
+            self.escrowed_receipts_t.remove(self.identifiers.designated_key(id), receipt)
+        }
+
     pub fn add_escrow_nt_receipt(&self, receipt: SignedNontransferableReceipt, id: &IdentifierPrefix)
         -> Result<(), Error> {
             self.escrowed_receipts_nt
@@ -102,6 +107,11 @@ impl SledEventDatabase {
             self.escrowed_receipts_nt.iter_values(self.identifiers.designated_key(id))
         }
 
+    pub fn remove_escrow_nt_receipt(&self, id: &IdentifierPrefix, receipt: &SignedNontransferableReceipt)
+        -> Result<(), Error> {
+            self.escrowed_receipts_nt.remove(self.identifiers.designated_key(id), receipt)
+        }
+
     pub fn add_outoforder_event(&self, event: SignedEventMessage, id: &IdentifierPrefix) -> Result<(), Error> {
         self.out_of_order_events.push(self.identifiers.designated_key(id), event.into())
     }
@@ -110,6 +120,11 @@ impl SledEventDatabase {
         -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
             self.out_of_order_events.iter_values(self.identifiers.designated_key(id))
         }
+    
+    pub fn remove_outoforder_event(&self, id: &IdentifierPrefix, event: &SignedEventMessage)
+        -> Result<(), Error> {
+        self.out_of_order_events.remove(self.identifiers.designated_key(id), event.into())
+    }
 
     pub fn add_partially_signed_event(&self, event: SignedEventMessage, id: &IdentifierPrefix) -> Result<(), Error> {
         self.partially_signed_events.push(self.identifiers.designated_key(id), event.into())
@@ -119,6 +134,11 @@ impl SledEventDatabase {
         -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
             self.partially_signed_events.iter_values(self.identifiers.designated_key(id))
         }
+
+    pub fn remove_partially_signed_event(&self, id: &IdentifierPrefix, event: &SignedEventMessage)
+        -> Result<(), Error> {
+            self.partially_signed_events.remove(self.identifiers.designated_key(id), event.into())
+    }
 
     pub fn add_likely_duplicious_event(&self, event: EventMessage, id: &IdentifierPrefix) -> Result<(), Error> {
         self.likely_duplicious_events.push(self.identifiers.designated_key(id), event.into())

@@ -241,7 +241,6 @@ impl<'d> EventProcessor<'d> {
         }
         .or_else(|e| {
             if let Error::EventOutOfOrderError = e {
-                // FIXME: should this be signed event instead?
                 self.db.add_outoforder_event(signed_event.clone(), &event.event.event.event.prefix)?
             };
             Err(e)
@@ -256,6 +255,19 @@ impl<'d> EventProcessor<'d> {
                     .and_then(|_result| {
                         // TODO should check if there are enough receipts and probably escrow
                         self.db.add_kel_finalized_event(signed_event.clone(), &event.event.event.event.prefix)?;
+                        // check if previous out of order events are now ordered
+
+                        if let Some(prev_out_of_order) = self.db.get_outoforder_events(&event.event.event.event.prefix) {
+                            prev_out_of_order.into_iter().map(|ooe| match ooe {
+                                EventData::Dip(dip) => 
+                                    if let Ok(_) = self.validate_seal(dip.seal, &ooe.event.event_message.event.event_data.) {
+                                        
+                                    },
+                                EventData::Drt(drt) => ,
+                                _ => () // should not be reachable
+                            });
+                        }
+
                         Ok(new_state)
                     }) {
                         Ok(state) => Ok(Some(state)),
