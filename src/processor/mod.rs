@@ -33,8 +33,12 @@ impl<'d> EventProcessor<'d> {
                 state = match state.clone().apply(&event.event) {
                     Ok(s) => s,
                     // will happen when a recovery has overridden some part of the KEL,
-                    // stop processing here
-                    Err(_) => break
+                    Err(e) => match e {
+                        // skip out of order events
+                        Error::EventOutOfOrderError => continue,
+                        // stop processing here
+                        _ => break
+                    }
                 };
             }
         } else {
@@ -56,7 +60,9 @@ impl<'d> EventProcessor<'d> {
         let mut state = IdentifierState::default();
         if let Some(events) = self.db.get_kel_finalized_events(id) {
             // TODO: testing approach if events come out sorted already (as they should coz of put sequence)
-            for event in events
+            let mut sorted_events = events.collect::<Vec<TimestampedSignedEventMessage>>();
+            sorted_events.sort();
+            for event in sorted_events.iter()
                 .filter(|e| e.event.event_message.event.sn <= sn) {
                     state = state.apply(&event.event.event_message)?;
                 }
@@ -231,6 +237,7 @@ impl<'d> EventProcessor<'d> {
         // Log event.
         let signed_event = SignedEventMessage::new(
                 &event.event.event, event.signatures.clone());
+        let id = &event.event.event.event.prefix;
         // If delegated event, check its delegator seal.
         match event.event.event.event.event_data.clone() {
             EventData::Dip(dip) =>
@@ -238,14 +245,9 @@ impl<'d> EventProcessor<'d> {
             EventData::Drt(drt) =>
                 self.validate_seal(drt.seal, &event.event.raw),
             _ => Ok(()),
-        }
-        .or_else(|e| {
-            if let Error::EventOutOfOrderError = e {
-                self.db.add_outoforder_event(signed_event.clone(), &event.event.event.event.prefix)?
-            };
-            Err(e)
-        })?;
-
+        }?;
+        // add event from the getgo and clean it up on failure later
+        self.db.add_kel_finalized_event(signed_event.clone(), id)?;
         self.apply_to_state(event.event.event.clone())
             .and_then(|new_state| {
                 // match on verification result
@@ -254,33 +256,21 @@ impl<'d> EventProcessor<'d> {
                     .verify(&event.event.raw, &event.signatures)
                     .and_then(|_result| {
                         // TODO should check if there are enough receipts and probably escrow
-                        self.db.add_kel_finalized_event(signed_event.clone(), &event.event.event.event.prefix)?;
-                        // check if previous out of order events are now ordered
-
-                        if let Some(prev_out_of_order) = self.db.get_outoforder_events(&event.event.event.event.prefix) {
-                            prev_out_of_order.into_iter().map(|ooe| match ooe {
-                                EventData::Dip(dip) => 
-                                    if let Ok(_) = self.validate_seal(dip.seal, &ooe.event.event_message.event.event_data.) {
-                                        
-                                    },
-                                EventData::Drt(drt) => ,
-                                _ => () // should not be reachable
-                            });
-                        }
-
                         Ok(new_state)
                     }) {
                         Ok(state) => Ok(Some(state)),
                         Err(e) => {
                             match e {
                                 Error::NotEnoughSigsError => 
-                                    self.db.add_partially_signed_event(signed_event, &event.event.event.event.prefix)?,
-                                Error::EventOutOfOrderError =>
-                                    self.db.add_outoforder_event(signed_event, &event.event.event.event.prefix)?,
+                                    self.db.add_partially_signed_event(signed_event.clone(), id)?,
+                                // should not happen anymore
+                                //Error::EventOutOfOrderError =>
                                 Error::EventDuplicateError =>
-                                    self.db.add_duplicious_event(signed_event, &event.event.event.event.prefix)?,
+                                    self.db.add_duplicious_event(signed_event.clone(), id)?,
                                 _ => (),
                             };
+                            // remove last added event
+                            self.db.remove_kel_finalized_event(id, &signed_event)?;
                             Err(e)
                         },
                     }

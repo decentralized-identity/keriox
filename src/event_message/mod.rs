@@ -125,9 +125,9 @@ impl From<SignedEventMessage> for TimestampedSignedEventMessage {
     }
 }
 
-impl<'elt> From<&'elt SignedEventMessage> for &'elt TimestampedSignedEventMessage {
-    fn from(event: &'elt SignedEventMessage) -> &'elt TimestampedSignedEventMessage {
-        &TimestampedSignedEventMessage::new(event.to_owned())
+impl From<&SignedEventMessage> for TimestampedSignedEventMessage {
+    fn from(event: &SignedEventMessage) -> TimestampedSignedEventMessage {
+        TimestampedSignedEventMessage::new(event.clone())
     }
 }
 
