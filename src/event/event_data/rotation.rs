@@ -1,9 +1,5 @@
 use super::super::sections::{seal::*, KeyConfig, WitnessConfig};
-use crate::{
-    error::Error,
-    prefix::SelfAddressingPrefix,
-    state::{EventSemantics, IdentifierState},
-};
+use crate::{error::Error, prefix::{BasicPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
 use serde::{Deserialize, Serialize};
 
 /// Rotation Event
@@ -27,9 +23,21 @@ pub struct RotationEvent {
 impl EventSemantics for RotationEvent {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         if state.current.verify_next(&self.key_config) {
+            // witness rotation processing
+            let witnesses = if self.witness_config.prune.len() > 0
+                || self.witness_config.graft.len() > 0 {
+                   let mut prunned = state.witnesses
+                        .into_iter()
+                        .filter(|e| !self.witness_config.prune.contains(e))
+                        .collect::<Vec<BasicPrefix>>();
+                    prunned
+                        .append(&mut self.witness_config.graft.clone());
+                    prunned
+                } else { state.witnesses.clone() };
             Ok(IdentifierState {
                 current: self.key_config.clone(),
                 tally: self.witness_config.tally,
+                witnesses,
                 ..state
             })
         } else {
