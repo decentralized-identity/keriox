@@ -58,10 +58,10 @@ where
 
         /// Removes value `T` if present
         ///
-        pub fn remove(&self, key: u64, value: T)
+        pub fn remove(&self, key: u64, value: &T)
             -> Result<(), Error> where T: PartialEq {
            if let Ok(Some(set)) = self.get(key) {
-                self.put(key, set.into_iter().filter(|e| e != &value).collect())
+                self.put(key, set.into_iter().filter(|e| e != value).collect())
             } else {
                 Ok(())
             } 
