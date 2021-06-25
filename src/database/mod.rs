@@ -62,7 +62,7 @@ pub trait EventDatabase {
             let parsed = message(&raw).unwrap().1;
             // apply it to the state
             // TODO avoid .clone()
-            state = match state.clone().apply(&parsed.event) {
+            state = match state.clone().apply(&parsed.event_message) {
                 Ok(s) => s,
                 // will happen when a recovery has overridden some part of the KEL,
                 // stop processing here
@@ -223,22 +223,22 @@ pub(crate) fn test_db<D: EventDatabase>(db: D) -> Result<(), D::Error> {
         _ => panic!(),
     };
 
-    let dig = SelfAddressing::Blake3_256.derive(deser.event.raw);
+    let dig = SelfAddressing::Blake3_256.derive(deser.deserialized_event.raw);
 
     db.log_event(
-        &deser.event.event.event.prefix,
+        &deser.deserialized_event.event_message.event.prefix,
         &dig,
-        deser.event.raw,
+        deser.deserialized_event.raw,
         &deser.signatures,
     )?;
 
-    db.finalise_event(&deser.event.event.event.prefix, 0, &dig)?;
+    db.finalise_event(&deser.deserialized_event.event_message.event.prefix, 0, &dig)?;
 
-    let written = db.last_event_at_sn(&deser.event.event.event.prefix, 0)?;
+    let written = db.last_event_at_sn(&deser.deserialized_event.event_message.event.prefix, 0)?;
 
-    assert_eq!(written, Some(deser.event.raw.to_vec()));
+    assert_eq!(written, Some(deser.deserialized_event.raw.to_vec()));
 
-    let kerl = db.get_kerl(&deser.event.event.event.prefix)?.unwrap();
+    let kerl = db.get_kerl(&deser.deserialized_event.event_message.event.prefix)?.unwrap();
     let deser_2 = match signed_message(&kerl).unwrap().1 {
         Deserialized::Event(e) => e,
         _ => panic!(),
