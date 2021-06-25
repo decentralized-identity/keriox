@@ -246,10 +246,10 @@ impl<'d> EventProcessor<'d> {
                 self.validate_seal(drt.seal, &event.event.raw),
             _ => Ok(()),
         }?;
-        // add event from the getgo and clean it up on failure later
-        self.db.add_kel_finalized_event(signed_event.clone(), id)?;
         self.apply_to_state(event.event.event.clone())
             .and_then(|new_state| {
+                // add event from the getgo and clean it up on failure later
+                self.db.add_kel_finalized_event(signed_event.clone(), id)?;
                 // match on verification result
                 match new_state
                     .current

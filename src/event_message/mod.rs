@@ -93,12 +93,20 @@ impl From<EventMessage> for TimestampedEventMessage {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignedEventMessage {
     pub event_message: EventMessage,
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
-#[derive(Serialize, Deserialize, PartialEq)]
+
+impl PartialEq for SignedEventMessage {
+    fn eq(&self, other: &Self) -> bool {
+        self.event_message == other.event_message
+        && self.signatures == other.signatures
+    }
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct TimestampedSignedEventMessage {
     pub timestamp: DateTime<Local>,
     pub event: SignedEventMessage,
@@ -128,6 +136,12 @@ impl From<SignedEventMessage> for TimestampedSignedEventMessage {
 impl From<&SignedEventMessage> for TimestampedSignedEventMessage {
     fn from(event: &SignedEventMessage) -> TimestampedSignedEventMessage {
         TimestampedSignedEventMessage::new(event.clone())
+    }
+}
+
+impl PartialEq for TimestampedSignedEventMessage {
+    fn eq(&self, other: &Self) -> bool {
+        self.event == other.event
     }
 }
 
