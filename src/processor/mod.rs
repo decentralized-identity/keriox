@@ -253,8 +253,9 @@ impl<'d> EventProcessor<'d> {
                 match new_state
                     .current
                     .verify(&event.deserialized_event.raw, &event.signatures)
-                    .and_then(|_result| {
+                    .and_then(|result| {
                         // TODO should check if there are enough receipts and probably escrow
+                        if !result { return Err(Error::FaultySignatureVerification); }
                         Ok(new_state)
                     }) {
                         Ok(state) => Ok(Some(state)),

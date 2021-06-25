@@ -60,7 +60,7 @@ impl KeyConfig {
             Ok(sigs
                 .iter()
                 .fold(Ok(true), |acc: Result<bool, Error>, sig| {
-                    Ok(acc?
+                    Ok(acc? == true
                         && self
                             .public_keys
                             .get(sig.index as usize)
