@@ -4,7 +4,6 @@ use super::{
 };
 use crate::{
     derivation::attached_signature_code::b64_to_num,
-    error::Error,
     event::{event_data::EventData, sections::seal::EventSeal},
     prefix::{
         parse::{attached_signature, basic_prefix, event_seal, self_signing_prefix},
@@ -14,9 +13,8 @@ use crate::{
 };
 use nom::{
     branch::*,
-    bytes::complete::tag,
     combinator::*,
-    error::{ErrorKind, ParseError},
+    error::ErrorKind,
     multi::*,
     sequence::*,
 };

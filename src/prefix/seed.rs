@@ -1,6 +1,6 @@
 use super::Prefix;
-use crate::{error::Error, keys::Key, prefix::BasicPrefix};
-use base64::{decode_config, URL_SAFE};
+use crate::{error::Error, keys::Key};
+use base64::decode_config;
 use core::str::FromStr;
 use ed25519_dalek::{PublicKey, SecretKey};
 use k256::ecdsa::{SigningKey, VerifyingKey};
@@ -84,6 +84,8 @@ impl Prefix for SeedPrefix {
 
 #[test]
 fn test_derive_keypair() -> Result<(), Error> {
+    use base64::URL_SAFE;
+
     // taken from KERIPY: tests/core/test_eventing.py#1512
     let seeds = vec![
         "ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc",
