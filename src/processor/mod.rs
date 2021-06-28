@@ -34,8 +34,9 @@ impl<'d> EventProcessor<'d> {
                     Ok(s) => s,
                     // will happen when a recovery has overridden some part of the KEL,
                     Err(e) => match e {
-                        // skip out of order events
-                        Error::EventOutOfOrderError => continue,
+                        // skip out of order and partially signed events
+                        Error::EventOutOfOrderError
+                            | Error::NotEnoughSigsError => continue,
                         // stop processing here
                         _ => break
                     }
@@ -261,8 +262,8 @@ impl<'d> EventProcessor<'d> {
                         Ok(state) => Ok(Some(state)),
                         Err(e) => {
                             match e {
-                                Error::NotEnoughSigsError => 
-                                    self.db.add_partially_signed_event(signed_event.clone(), id)?,
+                                // should not happen anymore
+                                // Error::NotEnoughSigsError => 
                                 // should not happen anymore
                                 //Error::EventOutOfOrderError =>
                                 Error::EventDuplicateError =>
