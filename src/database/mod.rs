@@ -209,42 +209,42 @@ pub trait EventDatabase {
     ) -> Result<bool, Self::Error>;
 }
 
-#[cfg(test)]
-pub(crate) fn test_db<D: EventDatabase>(db: D) -> Result<(), D::Error> {
-    use crate::{
-        derivation::self_addressing::SelfAddressing,
-        event_message::parse::{signed_message, Deserialized},
-    };
+// #[cfg(test)]
+// fn test_db<D: EventDatabase>(db: D) -> Result<(), D::Error> {
+//     use crate::{
+//         derivation::self_addressing::SelfAddressing,
+//         event_message::parse::{signed_message, Deserialized},
+//     };
 
-    // NOTE this is not actually a valid kel (sig indexes and prefix are wrong), just has the correct form
-    let signed = br#"{"v":"KERI10JSON000144_","i":"E005TfcIFvrzhJFxoGqebPHvtanxEwcfJOAYcUtCmhk8","s":"0","t":"icp","kt":"1","k":["D5UzOMC5Knhi5eA-Cr8ASuD8lUcZMcLtAhIZ33W5Z4hs","DEbposribdTgsnCSQgmVN6VKoc4Vpc-hs9rbskXQ2O2M","D46n6npISQETk7eGYnwe5Jq7USmEsckHeJRu2YoTCXhU"],"n":"E2zBfVYkE2uaGR5DmMVBbWsIdBIZVu5Ml6joenraD5Ho","bt":"0","b":[],"c":[],"a":[]}-AADAAKfgMIEsKlrXqUxUyw1Qq7gFrg9mNWcDAkQAXUW6Hppvt4NBdEbU_2Wy7Re0zp5zVvLjjq4hjPE5aXSeIlHh7DgABIkKK8jI0l_tor7EaIM2B65aLn9e6Y3Igwa9OjDqbiyqXdL1yHxga7nhJY80Ct0zXGhm7hgLzgB6d86EqfXWLCQACBPCeqK_WXY64EZ8E91Y2trI6MfZT-f2NmtHCmmKhvt7AmehPcvQSvrcQbogdNEBr749AbVG7glVsV8WitVR2DQ"#;
-    let deser = match signed_message(signed).unwrap().1 {
-        Deserialized::Event(e) => e,
-        _ => panic!(),
-    };
+//     // NOTE this is not actually a valid kel (sig indexes and prefix are wrong), just has the correct form
+//     let signed = br#"{"v":"KERI10JSON000144_","i":"E005TfcIFvrzhJFxoGqebPHvtanxEwcfJOAYcUtCmhk8","s":"0","t":"icp","kt":"1","k":["D5UzOMC5Knhi5eA-Cr8ASuD8lUcZMcLtAhIZ33W5Z4hs","DEbposribdTgsnCSQgmVN6VKoc4Vpc-hs9rbskXQ2O2M","D46n6npISQETk7eGYnwe5Jq7USmEsckHeJRu2YoTCXhU"],"n":"E2zBfVYkE2uaGR5DmMVBbWsIdBIZVu5Ml6joenraD5Ho","bt":"0","b":[],"c":[],"a":[]}-AADAAKfgMIEsKlrXqUxUyw1Qq7gFrg9mNWcDAkQAXUW6Hppvt4NBdEbU_2Wy7Re0zp5zVvLjjq4hjPE5aXSeIlHh7DgABIkKK8jI0l_tor7EaIM2B65aLn9e6Y3Igwa9OjDqbiyqXdL1yHxga7nhJY80Ct0zXGhm7hgLzgB6d86EqfXWLCQACBPCeqK_WXY64EZ8E91Y2trI6MfZT-f2NmtHCmmKhvt7AmehPcvQSvrcQbogdNEBr749AbVG7glVsV8WitVR2DQ"#;
+//     let deser = match signed_message(signed).unwrap().1 {
+//         Deserialized::Event(e) => e,
+//         _ => panic!(),
+//     };
 
-    let dig = SelfAddressing::Blake3_256.derive(deser.event.raw);
+//     let dig = SelfAddressing::Blake3_256.derive(deser.event.raw);
 
-    db.log_event(
-        &deser.event.event.event.prefix,
-        &dig,
-        deser.event.raw,
-        &deser.signatures,
-    )?;
+//     db.log_event(
+//         &deser.event.event.event.prefix,
+//         &dig,
+//         deser.event.raw,
+//         &deser.signatures,
+//     )?;
 
-    db.finalise_event(&deser.event.event.event.prefix, 0, &dig)?;
+//     db.finalise_event(&deser.event.event.event.prefix, 0, &dig)?;
 
-    let written = db.last_event_at_sn(&deser.event.event.event.prefix, 0)?;
+//     let written = db.last_event_at_sn(&deser.event.event.event.prefix, 0)?;
 
-    assert_eq!(written, Some(deser.event.raw.to_vec()));
+//     assert_eq!(written, Some(deser.event.raw.to_vec()));
 
-    let kerl = db.get_kerl(&deser.event.event.event.prefix)?.unwrap();
-    let deser_2 = match signed_message(&kerl).unwrap().1 {
-        Deserialized::Event(e) => e,
-        _ => panic!(),
-    };
+//     let kerl = db.get_kerl(&deser.event.event.event.prefix)?.unwrap();
+//     let deser_2 = match signed_message(&kerl).unwrap().1 {
+//         Deserialized::Event(e) => e,
+//         _ => panic!(),
+//     };
 
-    assert_eq!(deser, deser_2);
+//     assert_eq!(deser, deser_2);
 
-    Ok(())
-}
+//     Ok(())
+// }

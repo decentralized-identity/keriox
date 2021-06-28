@@ -4,7 +4,6 @@ use k256::ecdsa::{
     signature::{Signer as EcdsaSigner, Verifier as EcdsaVerifier},
     Signature as EcdsaSignature, SigningKey, VerifyingKey,
 };
-use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
@@ -79,6 +78,8 @@ impl Drop for Key {
 
 #[test]
 fn libsodium_to_ed25519_dalek_compat() {
+    use rand::rngs::OsRng;
+
     let kp = ed25519_dalek::Keypair::generate(&mut OsRng);
 
     let msg = b"are libsodium and dalek compatible?";
@@ -99,7 +100,7 @@ fn libsodium_to_ed25519_dalek_compat() {
     let sodium_sig = sign::sign(msg, &sodium_sk);
 
     assert!(sign::verify_detached(
-        &sign::ed25519::Signature::from_slice(&dalek_sig.to_bytes()).unwrap(),
+        &sign::ed25519::Signature::new(dalek_sig.to_bytes()),
         msg,
         &sodium_pk
     ));

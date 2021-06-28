@@ -1,15 +1,12 @@
 use super::EventProcessor;
 use crate::{
     database::sled::SledEventDatabase,
-    derivation::self_addressing::SelfAddressing,
     error::Error,
-    event::{event_data::EventData, sections::seal::LocationSeal},
-    event_message::parse::message,
 };
 use crate::{
     event_message::{
         parse,
-        parse::{signed_event_stream, signed_message, Deserialized},
+        parse::{signed_event_stream, Deserialized},
     },
     prefix::IdentifierPrefix,
 };
@@ -70,11 +67,15 @@ fn test_process() -> Result<(), Error> {
     };
 
     // Process interaction event.
-    event_processor.process(deserialized_ixn)?.unwrap();
+    event_processor.process(deserialized_ixn.clone())?.unwrap();
 
     // Check if processed event is in db.
     let ixn_from_db = event_processor.get_event_at_sn(&id, 2).unwrap().unwrap();
-    assert_eq!(ixn_from_db.event.serialize().unwrap(), ixn_raw);
+    match deserialized_ixn {
+        Deserialized::Event(evt) =>
+            assert_eq!(ixn_from_db.event.event_message.event, evt.event.event.event),
+        _ => assert!(false)
+    }
 
     // Construct partially signed interaction event.
     let ixn_raw_2 = br#"{"v":"KERI10JSON000098_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"3","t":"ixn","p":"ElB_2LYB2i5wus2Dscnmc6e302HK-pgxLIe7iJhftzl0","a":[]}-AADAA18DLkJf2G--KOpRW2aD6ZAXR4koYdj0_OzEfDF5PFP3Y5vx8MSY3UwRBN97AT1pIkDVGqVbBg6nFi-0Bg5RTBQABZq5Kn6sML7NRTEyFKfyHez1YQJ4gzSqGsf1nyOxrXl5h0gwJllyNwTCzQhoyVT2fFAKtt9N_vaP9f90wB2ugCAACLsZcJWVrb1hL7EqL0wuzdtEJOSr-5-7EL0ae_nzvfCO6fw4q0PjgzCgFtoeDbAqUQbhzjfaybDwF9z9MVelWBg"#;
