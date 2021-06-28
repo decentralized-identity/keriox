@@ -110,12 +110,18 @@ impl<'d> EventProcessor<'d> {
     /// Get KERL for Prefix
     ///
     /// Returns the current validated KEL for a given Prefix
-    /// FIXME: add recipe messages into the mix when those are in SLED db
     pub fn get_kerl(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Error> {
        match self.db.get_kel_finalized_events(id) {
-           Some(events) => 
-               Ok(Some(events.map(|event| event.event.serialize().unwrap_or_default())
-                .fold(vec!(), |mut accum, serialized_event| { accum.extend(serialized_event); accum }))),
+           Some(events) => {
+                let mut collected = events.map(|event| event.event.serialize().unwrap_or_default())
+                    .fold(vec!(), |mut accum, serialized_event| { accum.extend(serialized_event); accum });
+                if let Some(receipts) = self.db.get_receipts_t(id) {
+                        receipts
+                        .map(|r| collected.extend(r.serialize().unwrap_or_default()))
+                        .for_each(drop);
+                }
+               Ok(Some(collected))
+           },
             None => Ok(None)
        }
     }
