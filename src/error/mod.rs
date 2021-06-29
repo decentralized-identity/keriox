@@ -68,6 +68,10 @@ pub enum Error {
     #[error("Storage error")]
     StorageError,
 
+    #[cfg(feature = "async")]
+    #[error("Zero send error")]
+    ZeroSendError,
+
     #[error(transparent)]
     Ed25519DalekSignatureError(#[from] ed25519_dalek::SignatureError),
 

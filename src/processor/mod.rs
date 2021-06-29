@@ -8,6 +8,8 @@ use crate::{database::sled::SledEventDatabase, derivation::self_addressing::Self
 
 #[cfg(test)]
 mod tests;
+#[feature("async")]
+pub mod async_processing;
 
 pub struct EventProcessor<'d> {
     db: &'d SledEventDatabase,
