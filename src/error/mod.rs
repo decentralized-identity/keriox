@@ -7,7 +7,7 @@ use serde_json;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum Error {
+pub enum Error <'a> {
     #[error("Error during Serialization: {0}")]
     SerializationError(String),
 

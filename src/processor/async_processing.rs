@@ -13,7 +13,7 @@ use crate::{
 };
 use pin_project_lite::pin_project;
 
-pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
+pub type Result<T> = std::result::Result<T, String>;
 
 pub async fn process<R, W>(reader: &mut R, writer: &mut W) -> Result<()>
     where
@@ -32,27 +32,27 @@ pub async fn process<R, W>(reader: &mut R, writer: &mut W) -> Result<()>
         }
 
         impl<R, W> Future for Processor<R, W>
-        where
-            R: BufRead,
-            W: Write + Unpin {
+            where
+                R: BufRead,
+                W: Write + Unpin {
             type Output = Result<()>;
 
             fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-                let this = self.project();
+                let mut this = self.project();
                 loop {
-                    let buffer = futures_core::ready!(this.reader.as_mut().poll_fill_buf(cx))?;
+                    let buffer = futures_core::ready!(this.reader.as_mut().poll_fill_buf(cx)).map_err(|e| e.to_string())?;
                     if buffer.is_empty() {
-                        futures_core::ready!(this.writer.as_mut().poll_flush(cx))?;
+                        futures_core::ready!(this.writer.as_mut().poll_flush(cx)).map_err(|e| e.to_string())?;
                         return Poll::Ready(Ok(()));
                     }
 
-                    let message = message(buffer)?;
-                    let new_state = this.state.as_mut().apply(&message.1.event)?;
+                    let message = message(buffer).map_err(|e| e.to_string())?;
+                    let new_state = this.state.clone().apply(&message.1.event).map_err(|e| e.to_string())?;
                     *this.state.as_mut() = new_state;
                     // TODO: what should be returned on successful message processing?
-                    let i = futures_core::ready!(this.writer.as_mut().poll_write(cx, &1i32.to_ne_bytes()))?;
+                    let i = futures_core::ready!(this.writer.as_mut().poll_write(cx, &1i32.to_ne_bytes())).map_err(|e| e.to_string())?;
                     if i == 0 {
-                        return Poll::Ready(Err(Box::new(Error::ZeroSendError)));
+                        return Poll::Ready(Err(Box::new(Error::ZeroSendError).to_string()));
                     }
                     this.reader.as_mut().consume(buffer.len());
                 }
