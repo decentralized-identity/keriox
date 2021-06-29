@@ -16,10 +16,10 @@ use pin_project_lite::pin_project;
 pub type Result<T> = std::result::Result<T, String>;
 
 pub async fn process<R, W>(reader: &mut R, writer: &mut W) -> Result<()>
-    where
-        R: Read + Unpin + ?Sized,
-        W: Write + Unpin + ?Sized {
-
+where
+    R: Read + Unpin + ?Sized,
+    W: Write + Unpin + ?Sized
+{
         pin_project! {
             struct Processor<R, W> {
                 #[pin]
@@ -32,15 +32,17 @@ pub async fn process<R, W>(reader: &mut R, writer: &mut W) -> Result<()>
         }
 
         impl<R, W> Future for Processor<R, W>
-            where
-                R: BufRead,
-                W: Write + Unpin {
+        where
+            R: BufRead,
+            W: Write + Unpin
+        {
             type Output = Result<()>;
 
             fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
                 let mut this = self.project();
                 loop {
                     let buffer = futures_core::ready!(this.reader.as_mut().poll_fill_buf(cx)).map_err(|e| e.to_string())?;
+                    let amt = buffer.len();
                     if buffer.is_empty() {
                         futures_core::ready!(this.writer.as_mut().poll_flush(cx)).map_err(|e| e.to_string())?;
                         return Poll::Ready(Ok(()));
@@ -54,7 +56,7 @@ pub async fn process<R, W>(reader: &mut R, writer: &mut W) -> Result<()>
                     if i == 0 {
                         return Poll::Ready(Err(Box::new(Error::ZeroSendError).to_string()));
                     }
-                    this.reader.as_mut().consume(buffer.len());
+                    this.reader.as_mut().consume(amt);
                 }
             }
         }
