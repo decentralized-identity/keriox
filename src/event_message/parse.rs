@@ -1,7 +1,4 @@
-use super::{
-    AttachedSignaturePrefix, EventMessage, SignedEventMessage, SignedNontransferableReceipt,
-    SignedTransferableReceipt,
-};
+use super::{AttachedSignaturePrefix, EventMessage, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, serialization_info::SerializationInfo};
 use crate::{
     derivation::attached_signature_code::b64_to_num,
     event::{event_data::EventData, sections::seal::EventSeal},
@@ -94,6 +91,34 @@ fn mgpk_message(s: &[u8]) -> nom::IResult<&[u8], DeserializedEvent> {
 
 pub fn message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], DeserializedEvent> {
     alt((json_message, cbor_message, mgpk_message))(s).map(|d| (d.0, d.1))
+}
+
+// TESTED: OK
+fn json_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
+    match serde_json::from_slice(data) {
+        Ok(vi) => Ok((data, vi)),
+        _ => Err(nom::Err::Error((data, ErrorKind::IsNot)))
+    }
+}
+
+// TODO: Requires testing
+fn cbor_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
+    match serde_cbor::from_slice(data) {
+        Ok(vi) => Ok((data, vi)),
+        _ => Err(nom::Err::Error((data, ErrorKind::IsNot)))
+    }
+}
+
+// TODO: Requires testing
+fn mgpk_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
+    match serde_mgpk::from_slice(data) {
+        Ok(vi) => Ok((data, vi)),
+        _ => Err(nom::Err::Error((data, ErrorKind::IsNot)))
+    }
+}
+
+pub fn version<'a>(data: &'a [u8]) -> nom::IResult<&[u8], SerializationInfo> {
+    alt((json_version, cbor_version, mgpk_version))(data).map(|d| (d.0, d.1))
 }
 
 /// extracts the count from the sig count code
@@ -329,4 +354,11 @@ fn test_stream3() {
     assert!(signed_message(stream).is_ok());
     let result = signed_event_stream_validate(stream);
     assert!(!result.is_ok());
+}
+
+#[test]
+fn test_version_parse() {
+    let json = br#""KERI10JSON00014b_""#;
+    let json_result = version(json);
+    assert!(json_result.is_ok());
 }

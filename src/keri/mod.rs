@@ -45,18 +45,18 @@ impl<'d, K: KeyManager> Keri<'d, K> {
             ])
             .build()?;
 
-        let sigged = icp.sign(vec![AttachedSignaturePrefix::new(
+        let signed = icp.sign(vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
             self.key_manager.sign(&icp.serialize()?)?,
             0,
         )]);
 
         self.processor
-            .process(signed_message(&sigged.serialize()?).unwrap().1)?;
+            .process(signed_message(&signed.serialize()?).unwrap().1)?;
 
         self.prefix = icp.event.prefix;
 
-        Ok(sigged)
+        Ok(signed)
     }
 
     pub fn rotate(&mut self) -> Result<SignedEventMessage, Error> {
