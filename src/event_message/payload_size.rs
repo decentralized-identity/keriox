@@ -50,6 +50,30 @@ pub(crate) enum PayloadType {
     IAAF,
     #[serde(rename = "1AAG")]
     IAAG,
+    #[serde(rename = "-A")]
+    MA,
+    #[serde(rename = "-B")]
+    MB,
+    #[serde(rename = "-C")]
+    MC,
+    #[serde(rename = "-D")]
+    MD,
+    #[serde(rename = "-E")]
+    ME,
+    #[serde(rename = "-F")]
+    MF,
+    #[serde(rename = "-U")]
+    MU,
+    #[serde(rename = "-V")]
+    MV,
+    #[serde(rename = "-W")]
+    MW,
+    #[serde(rename = "-X")]
+    MX,
+    #[serde(rename = "-Y")]
+    MY,
+    #[serde(rename = "-Z")]
+    MZ,
     // TODO: Indexed signatures
 }
 
@@ -65,7 +89,7 @@ impl PayloadType {
             | Self::G
             | Self::H
             | Self::I
-            | Self::J => 88,
+            | Self::J => 44,
             Self::K | Self::L => 76,
             Self::M => 4,
             Self::OA => 24,
@@ -80,6 +104,46 @@ impl PayloadType {
             Self::IAAC | Self::IAAD => 80,
             Self::IAAE => 156,
             Self::IAAG => 36,
+            Self::MA | Self::MB => 88,
+            _ => 0 // TODO: fill proper sizes
+        }
+    }
+
+    pub(crate) fn master_code_size(&self) -> usize {
+        match self {
+            Self::A
+            | Self::B
+            | Self::C
+            | Self::D
+            | Self::E
+            | Self::F
+            | Self::G
+            | Self::H
+            | Self::I 
+            | Self::J
+            | Self::K
+            | Self::L
+            | Self::M => 1,
+            Self::OA
+            | Self::OB
+            | Self::OC
+            | Self::OD
+            | Self::OE
+            | Self::OF
+            | Self::OH => 2,
+            Self::MA
+            | Self::MB
+            | Self::MC
+            | Self::MD
+            | Self::ME
+            | Self::MF
+            | Self::MU
+            | Self::MV
+            | Self::MW
+            | Self::MX
+            | Self::MY
+            | Self::MZ => 4,
+            _ => 0
         }
     }
 }
@@ -116,6 +180,18 @@ impl TryFrom<&str> for PayloadType {
            "1AAE" => Ok(Self::IAAE),
            "1AAF" => Ok(Self::IAAF),
            "1AAG" => Ok(Self::IAAG),
+           "-A" => Ok(Self::MA),
+           "-B" => Ok(Self::MB),
+           "-C" => Ok(Self::MC),
+           "-D" => Ok(Self::MD),
+           "-E" => Ok(Self::ME),
+           "-F" => Ok(Self::MF),
+           "-U" => Ok(Self::MU),
+           "-V" => Ok(Self::MV),
+           "-W" => Ok(Self::MW),
+           "-X" => Ok(Self::MX),
+           "-Y" => Ok(Self::MY),
+           "-Z" => Ok(Self::MZ),
            _ => Err(Error::ImproperPrefixType)
        }
     }

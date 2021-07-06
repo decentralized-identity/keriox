@@ -3,7 +3,6 @@ use std::{
     pin::Pin,
     path::Path,
     convert::TryFrom,
-    time::Duration,
 };
 use arrayref::array_ref;
 use pin_project_lite::pin_project;
@@ -98,21 +97,18 @@ where
                             // details: https://github.com/decentralized-identity/keri/blob/master/kids/kid0001Comment.md#framing-codes
                             if bitpat!(_ _ _ _ _ 0 0 1)(buffer[msg_length + 1])
                             || bitpat!(_ _ _ _ _ 0 1 0)(buffer[msg_length + 1]) {
-                                if amt < msg_length + 4 { continue; } // not enough data to read framing code
+                                if amt < msg_length + 2 { continue; } // not enough data to read framing code
+                                let master_code = PayloadType::try_from(&slice_to_string(array_ref!(buffer, msg_length, 2))?[..])
+                                    .map_err(|e| e.to_string())?;
                                 let attachment_size = {
-                                    // TODO: starts with 0 = two char code, 1 = 4 char code
-                                    let code = match String::from_utf8(array_ref!(buffer, msg_length, 4).to_vec()) {
-                                        Ok(c) => c,
-                                        Err(e) => return Poll::Ready(Err(e.to_string()))
-                                    };
+                                    // TODO: figure out how to get rid of this parsing
+                                    let code = slice_to_string(array_ref!(buffer, msg_length, 4))?;
                                     let count = sig_count(code.as_bytes())
                                         .map_err(|e| e.to_string())?.1;
-                                    let size = PayloadType::try_from(&code[1..2])
-                                        .map_err(|e| e.to_string())?.size();
-                                    count as usize * size
+                                    count as usize * master_code.size()
                                 };
                                 // parse base64 crypto attachments
-                                msg_length += attachment_size + 4; // code length too
+                                msg_length += attachment_size + master_code.master_code_size(); // code length too
                             } else if bitpat!(_ _ _ _ _ 1 1 1)(*this.first_byte) {
                                 // parse binary crypto attachments
                                 msg_length += binary_attachments_len();
@@ -154,5 +150,10 @@ where
 
 fn binary_attachments_len() -> usize {
     todo!()
+}
+
+fn slice_to_string(data: &[u8]) -> Result<String> {
+    String::from_utf8(data.to_vec())
+        .map_err(|e| e.to_string())
 }
 
