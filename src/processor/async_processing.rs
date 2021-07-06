@@ -101,8 +101,8 @@ where
                                 let master_code = PayloadType::try_from(&slice_to_string(array_ref!(buffer, msg_length, 2))?[..])
                                     .map_err(|e| e.to_string())?;
                                 let attachment_size = {
-                                    // TODO: figure out how to get rid of this parsing
-                                    let code = slice_to_string(array_ref!(buffer, msg_length, 4))?;
+                                    let code = slice_to_string(&buffer[msg_length..msg_length + master_code.master_code_size()])?;
+                                    println!("{}", &code);
                                     let count = sig_count(code.as_bytes())
                                         .map_err(|e| e.to_string())?.1;
                                     count as usize * master_code.size()
