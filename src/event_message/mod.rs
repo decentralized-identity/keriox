@@ -1,6 +1,7 @@
 pub mod event_msg_builder;
 pub mod parse;
 pub mod serialization_info;
+pub(crate) mod payload_size;
 
 use std::cmp::Ordering;
 
