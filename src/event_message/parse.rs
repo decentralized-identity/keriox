@@ -117,12 +117,13 @@ fn mgpk_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
     }
 }
 
-pub fn version<'a>(data: &'a [u8]) -> nom::IResult<&[u8], SerializationInfo> {
+pub(crate) fn version<'a>(data: &'a [u8]) -> nom::IResult<&[u8], SerializationInfo> {
     alt((json_version, cbor_version, mgpk_version))(data).map(|d| (d.0, d.1))
 }
 
 /// extracts the count from the sig count code
-fn sig_count(s: &[u8]) -> nom::IResult<&[u8], u16> {
+// FIXME: is this working for all types of sigs?
+pub(crate) fn sig_count(s: &[u8]) -> nom::IResult<&[u8], u16> {
     let (rest, t) = tuple((
         map_parser(
             nom::bytes::complete::take(2u8),
