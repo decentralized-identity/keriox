@@ -109,7 +109,7 @@ impl PayloadType {
         }
     }
 
-    pub(crate) fn master_code_size(&self) -> usize {
+    pub(crate) fn master_code_size(&self, qb2: bool) -> usize {
         match self {
             Self::A
             | Self::B
@@ -142,7 +142,7 @@ impl PayloadType {
             | Self::MW
             | Self::MX
             | Self::MY
-            | Self::MZ => 4,
+            | Self::MZ => if qb2 {3} else {4},
             _ => 0
         }
     }

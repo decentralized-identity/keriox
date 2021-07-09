@@ -1,9 +1,4 @@
-use std::{
-    future::Future,
-    pin::Pin,
-    path::Path,
-    convert::TryFrom,
-};
+use std::{convert::TryFrom, future::Future, pin::Pin, sync::Arc};
 use arrayref::array_ref;
 use pin_project_lite::pin_project;
 use async_std::{
@@ -19,20 +14,18 @@ use async_std::{
     },
 };
 use crate::{
-    database::sled::SledEventDatabase,
     event_message::{
         parse::{version, sig_count},
         payload_size::PayloadType,
     },
     keri::Keri,
-    prefix::IdentifierPrefix,
     signer::CryptoBox,
 };
 use bitpat::bitpat;
 
 pub type Result<T> = std::result::Result<T, String>;
 
-pub async fn process<'a, R, W>(reader: &mut R, writer: &mut W, first_byte: u8) -> Result<()>
+pub async fn process<'a, R, W>(keri: Arc<Keri<'a, CryptoBox>>, reader: &mut R, writer: &mut W, first_byte: u8) -> Result<()>
 where
     R: Read + Unpin + ?Sized,
     W: Write + Unpin + ?Sized
@@ -44,7 +37,7 @@ where
                 #[pin]
                 writer: W,
                 #[pin]
-                keri: Keri<'a, CryptoBox>,
+                keri: Arc<Keri<'a, CryptoBox>>,
                 first_byte: u8,
                 processed: usize
             }
@@ -101,14 +94,13 @@ where
                                 let master_code = PayloadType::try_from(&slice_to_string(array_ref!(buffer, msg_length, 2))?[..])
                                     .map_err(|e| e.to_string())?;
                                 let attachment_size = {
-                                    let code = slice_to_string(&buffer[msg_length..msg_length + master_code.master_code_size()])?;
-                                    println!("{}", &code);
+                                    let code = slice_to_string(&buffer[msg_length..msg_length + master_code.master_code_size(false)])?;
                                     let count = sig_count(code.as_bytes())
                                         .map_err(|e| e.to_string())?.1;
                                     count as usize * master_code.size()
                                 };
-                                // parse base64 crypto attachments
-                                msg_length += attachment_size + master_code.master_code_size(); // code length too
+                                // include base64 crypto attachments and master code length
+                                msg_length += attachment_size + master_code.master_code_size(false);
                             } else if bitpat!(_ _ _ _ _ 1 1 1)(*this.first_byte) {
                                 // parse binary crypto attachments
                                 msg_length += binary_attachments_len();
@@ -117,9 +109,8 @@ where
                         // parse arrived message
                         println!("cutting: {}..{}", *this.processed, *this.processed + msg_length);
                         let sliced_message = &buffer[*this.processed..*this.processed + msg_length];
-                        println!("{}", String::from_utf8(sliced_message.to_vec()).unwrap()); // TODO: remove
                         // and generate response
-                        let response = this.keri.as_mut().respond(sliced_message).map_err(|e| e.to_string())?;
+                        let response = this.keri.respond(sliced_message).map_err(|e| e.to_string())?;
                         // stream it back
                         futures_core::ready!(this.writer.as_mut().poll_write(cx, &response))
                             .map_err(|e| e.to_string())?;
@@ -134,10 +125,10 @@ where
             }
         }
 
-        let path = Path::new("./keri.db");
-        let db = SledEventDatabase::new(path).map_err(|e| e.to_string())?;
-        let cb = CryptoBox::new().map_err(|e| e.to_string())?;
-        let keri = Keri::new(&db, cb, IdentifierPrefix::default()).map_err(|e| e.to_string())?;
+        // let path = Path::new("./keri.db");
+        // let db = SledEventDatabase::new(path).map_err(|e| e.to_string())?;
+        // let cb = CryptoBox::new().map_err(|e| e.to_string())?;
+        // let keri = Keri::new(&db, cb, IdentifierPrefix::default()).map_err(|e| e.to_string())?;
         let processor = Processor {
             reader: BufReader::new(reader),
             writer,
