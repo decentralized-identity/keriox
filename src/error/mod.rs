@@ -6,6 +6,8 @@ use serde_cbor;
 use serde_json;
 use thiserror::Error;
 
+pub mod serializer_error;
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("Error during Serialization: {0}")]
@@ -77,4 +79,7 @@ pub enum Error {
 
     #[error(transparent)]
     SledError(#[from] sled::Error),
+
+    // #[error(transparent)]
+    // SerdeSerError(#[from] Box<dyn serde::ser::Error>),
 }
