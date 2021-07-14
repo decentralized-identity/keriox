@@ -1,6 +1,7 @@
 pub mod event_msg_builder;
 pub mod parse;
 pub mod serialization_info;
+pub mod serializer;
 pub(crate) mod payload_size;
 
 use std::cmp::Ordering;
@@ -20,7 +21,7 @@ use crate::{
     state::{EventSemantics, IdentifierState},
 };
 use chrono::{DateTime, Local};
-use serde::{Deserialize, Serialize};
+use serde::{Serialize, Deserialize};
 use serialization_info::*;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -97,8 +98,25 @@ impl From<EventMessage> for TimestampedEventMessage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignedEventMessage {
     pub event_message: EventMessage,
+    #[serde(skip)]
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
+
+// impl Serialize for SignedEventMessage {
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: serde::Serializer {
+//         let is_hr = serializer.is_human_readable();
+//         let mut message = serializer.serialize_struct("SignedEventMessage", 1)?;
+//         message.serialize_field("eventMessage", &self.event_message)?;
+//         message.end()?;
+//         if  is_hr {
+//             serializer.serialize_str("")
+//         } else {
+//             serializer.serialize_bytes(b"")
+//         }
+//     }
+// }
 
 impl PartialEq for SignedEventMessage {
     fn eq(&self, other: &Self) -> bool {
