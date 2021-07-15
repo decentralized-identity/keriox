@@ -9,6 +9,8 @@ use crate::{
 #[cfg(feature = "lmdb")]
 pub mod lmdb;
 
+#[cfg(feature = "sled-db")]
+pub mod sled;
 /// Event Database
 ///
 /// An Abstract model of state for Key Events,
@@ -70,6 +72,11 @@ pub trait EventDatabase {
 
         Ok(Some(state))
     }
+
+    /// Get KERL for Prefix
+    ///
+    /// Returns the current validated KERL for a given Prefix
+    fn get_kerl(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Self::Error>;
 
     /// Get Children of Prefix
     ///
@@ -193,32 +200,51 @@ pub trait EventDatabase {
         signer: &IdentifierPrefix,
         sig: &AttachedSignaturePrefix,
     ) -> Result<(), Self::Error>;
+
+    fn has_receipt(
+        &self,
+        pref: &IdentifierPrefix,
+        sn: u64,
+        validator: &IdentifierPrefix,
+    ) -> Result<bool, Self::Error>;
 }
 
-pub(crate) fn test_db<D: EventDatabase>(db: D) -> Result<(), D::Error> {
-    use crate::{
-        derivation::self_addressing::SelfAddressing, event::event_data::EventData,
-        event_message::parse::message,
-    };
+// #[cfg(test)]
+// fn test_db<D: EventDatabase>(db: D) -> Result<(), D::Error> {
+//     use crate::{
+//         derivation::self_addressing::SelfAddressing,
+//         event_message::parse::{signed_message, Deserialized},
+//     };
 
-    let raw = r#"{"v":"KERI10JSON000144_","i":"E005TfcIFvrzhJFxoGqebPHvtanxEwcfJOAYcUtCmhk8","s":"0","t":"icp","kt":"1","k":["D5UzOMC5Knhi5eA-Cr8ASuD8lUcZMcLtAhIZ33W5Z4hs","DEbposribdTgsnCSQgmVN6VKoc4Vpc-hs9rbskXQ2O2M","D46n6npISQETk7eGYnwe5Jq7USmEsckHeJRu2YoTCXhU"],"n":"E2zBfVYkE2uaGR5DmMVBbWsIdBIZVu5Ml6joenraD5Ho","wt":"0","w":[],"c":[]}extra data"#;
-    let sigs: Vec<AttachedSignaturePrefix> = [
-        "AAKfgMIEsKlrXqUxUyw1Qq7gFrg9mNWcDAkQAXUW6Hppvt4NBdEbU_2Wy7Re0zp5zVvLjjq4hjPE5aXSeIlHh7Dg",
-        "AAIkKK8jI0l_tor7EaIM2B65aLn9e6Y3Igwa9OjDqbiyqXdL1yHxga7nhJY80Ct0zXGhm7hgLzgB6d86EqfXWLCQ",
-        "AABPCeqK_WXY64EZ8E91Y2trI6MfZT-f2NmtHCmmKhvt7AmehPcvQSvrcQbogdNEBr749AbVG7glVsV8WitVR2DQ",
-    ]
-    .iter()
-    .map(|raw| raw.parse().unwrap())
-    .collect();
+//     // NOTE this is not actually a valid kel (sig indexes and prefix are wrong), just has the correct form
+//     let signed = br#"{"v":"KERI10JSON000144_","i":"E005TfcIFvrzhJFxoGqebPHvtanxEwcfJOAYcUtCmhk8","s":"0","t":"icp","kt":"1","k":["D5UzOMC5Knhi5eA-Cr8ASuD8lUcZMcLtAhIZ33W5Z4hs","DEbposribdTgsnCSQgmVN6VKoc4Vpc-hs9rbskXQ2O2M","D46n6npISQETk7eGYnwe5Jq7USmEsckHeJRu2YoTCXhU"],"n":"E2zBfVYkE2uaGR5DmMVBbWsIdBIZVu5Ml6joenraD5Ho","bt":"0","b":[],"c":[],"a":[]}-AADAAKfgMIEsKlrXqUxUyw1Qq7gFrg9mNWcDAkQAXUW6Hppvt4NBdEbU_2Wy7Re0zp5zVvLjjq4hjPE5aXSeIlHh7DgABIkKK8jI0l_tor7EaIM2B65aLn9e6Y3Igwa9OjDqbiyqXdL1yHxga7nhJY80Ct0zXGhm7hgLzgB6d86EqfXWLCQACBPCeqK_WXY64EZ8E91Y2trI6MfZT-f2NmtHCmmKhvt7AmehPcvQSvrcQbogdNEBr749AbVG7glVsV8WitVR2DQ"#;
+//     let deser = match signed_message(signed).unwrap().1 {
+//         Deserialized::Event(e) => e,
+//         _ => panic!(),
+//     };
 
-    let message = message(raw.as_bytes()).unwrap().1.event;
-    let dig = SelfAddressing::Blake3_256.derive(raw.as_bytes());
+//     let dig = SelfAddressing::Blake3_256.derive(deser.event.raw);
 
-    db.log_event(&message.event.prefix, &dig, raw.as_bytes(), &sigs)?;
-    db.finalise_event(&message.event.prefix, 0, &dig)?;
+//     db.log_event(
+//         &deser.event.event.event.prefix,
+//         &dig,
+//         deser.event.raw,
+//         &deser.signatures,
+//     )?;
 
-    let written = db.last_event_at_sn(&message.event.prefix, 0)?;
+//     db.finalise_event(&deser.event.event.event.prefix, 0, &dig)?;
 
-    assert_eq!(written, Some(raw.as_bytes().to_vec()));
-    Ok(())
-}
+//     let written = db.last_event_at_sn(&deser.event.event.event.prefix, 0)?;
+
+//     assert_eq!(written, Some(deser.event.raw.to_vec()));
+
+//     let kerl = db.get_kerl(&deser.event.event.event.prefix)?.unwrap();
+//     let deser_2 = match signed_message(&kerl).unwrap().1 {
+//         Deserialized::Event(e) => e,
+//         _ => panic!(),
+//     };
+
+//     assert_eq!(deser, deser_2);
+
+//     Ok(())
+// }

@@ -1,12 +1,12 @@
 use super::DerivationCode;
-use crate::{error::Error, prefix::BasicPrefix};
+use crate::{error::Error, keys::Key, prefix::BasicPrefix};
 use core::str::FromStr;
-pub use ursa::keys::PublicKey;
+use serde::{Deserialize, Serialize};
 
 /// Basic Derivations
 ///
 /// Basic prefix derivation is just a public key (2.3.1)
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum Basic {
     ECDSAsecp256k1NT,
     ECDSAsecp256k1,
@@ -19,7 +19,7 @@ pub enum Basic {
 }
 
 impl Basic {
-    pub fn derive(&self, public_key: PublicKey) -> BasicPrefix {
+    pub fn derive(&self, public_key: Key) -> BasicPrefix {
         BasicPrefix::new(*self, public_key)
     }
 }

@@ -1,27 +1,31 @@
-use super::{
-    AttachedSignaturePrefix, EventMessage, SignedEventMessage, SignedNontransferableReceipt,
-};
+use super::{AttachedSignaturePrefix, EventMessage, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, serialization_info::SerializationInfo};
 use crate::{
     derivation::attached_signature_code::b64_to_num,
-    error::Error,
-    event::event_data::EventData,
+    event::{event_data::EventData, sections::seal::EventSeal},
     prefix::{
-        parse::{attached_signature, basic_prefix, self_signing_prefix},
+        parse::{attached_signature, basic_prefix, event_seal, self_signing_prefix},
         BasicPrefix, SelfSigningPrefix,
     },
     state::IdentifierState,
-    util::dfs_serializer,
 };
-use nom::{branch::*, combinator::*, error::ErrorKind, multi::*, sequence::*};
-use serde_transcode::transcode;
+use nom::{
+    branch::*,
+    combinator::*,
+    error::ErrorKind,
+    multi::*,
+    sequence::*,
+};
+use rmp_serde as serde_mgpk;
+use serde::Deserialize;
+use std::io::Cursor;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DeserializedEvent<'a> {
     pub event: EventMessage,
     pub raw: &'a [u8],
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DeserializedSignedEvent<'a> {
     pub event: DeserializedEvent<'a>,
     pub signatures: Vec<AttachedSignaturePrefix>,
@@ -37,10 +41,10 @@ impl From<DeserializedSignedEvent<'_>> for SignedEventMessage {
 pub enum Deserialized<'a> {
     // Event verification requires raw bytes, so use DesrializedSignedEvent
     Event(DeserializedSignedEvent<'a>),
-    // Vrc's dont need raw bytes and have a normal structure, use SignedEventMessage
-    Vrc(SignedEventMessage),
-    // Rct's have an alternative appended signature structure, use SignedNontransferableReceipt
-    Rct(SignedNontransferableReceipt),
+    // Rct's have an alternative appended signature structure,
+    // use SignedNontransferableReceipt and SignedTransferableReceipt
+    NontransferableRct(SignedNontransferableReceipt),
+    TransferableRct(SignedTransferableReceipt),
 }
 
 fn json_message(s: &[u8]) -> nom::IResult<&[u8], DeserializedEvent> {
@@ -49,7 +53,7 @@ fn json_message(s: &[u8]) -> nom::IResult<&[u8], DeserializedEvent> {
         Some(Ok(event)) => Ok((
             &s[stream.byte_offset()..],
             DeserializedEvent {
-                event: event,
+                event,
                 raw: &s[..stream.byte_offset()],
             },
         )),
@@ -63,7 +67,7 @@ fn cbor_message(s: &[u8]) -> nom::IResult<&[u8], DeserializedEvent> {
         Some(Ok(event)) => Ok((
             &s[stream.byte_offset()..],
             DeserializedEvent {
-                event: event,
+                event,
                 raw: &s[..stream.byte_offset()],
             },
         )),
@@ -71,58 +75,55 @@ fn cbor_message(s: &[u8]) -> nom::IResult<&[u8], DeserializedEvent> {
     }
 }
 
+fn mgpk_message(s: &[u8]) -> nom::IResult<&[u8], DeserializedEvent> {
+    let mut deser = serde_mgpk::Deserializer::new(Cursor::new(s));
+    match Deserialize::deserialize(&mut deser) {
+        Ok(event) => Ok((
+            &s[deser.get_ref().position() as usize..],
+            DeserializedEvent {
+                event,
+                raw: &s[..deser.get_ref().position() as usize],
+            },
+        )),
+        _ => Err(nom::Err::Error((s, ErrorKind::IsNot))),
+    }
+}
+
 pub fn message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], DeserializedEvent> {
-    alt((json_message, cbor_message))(s).map(|d| (d.0, d.1))
+    alt((json_message, cbor_message, mgpk_message))(s).map(|d| (d.0, d.1))
 }
 
-fn json_sed_block(s: &[u8]) -> Result<Vec<u8>, Error> {
-    let mut res = Vec::with_capacity(128);
-    transcode(
-        &mut serde_json::Deserializer::from_slice(s),
-        &mut dfs_serializer::Serializer::new(&mut res),
-    )?;
-    Ok(res)
-}
-
-fn cbor_sed_block(s: &[u8]) -> Result<Vec<u8>, Error> {
-    let mut res = Vec::with_capacity(128);
-    transcode(
-        &mut serde_json::Deserializer::from_slice(s),
-        &mut dfs_serializer::Serializer::new(&mut res),
-    )?;
-    Ok(res)
-}
-
-fn json_sed(s: &[u8]) -> nom::IResult<&[u8], Vec<u8>> {
-    let mut stream = serde_json::Deserializer::from_slice(s).into_iter::<EventMessage>();
-    match stream.next() {
-        Some(Ok(_)) => Ok((
-            &s[stream.byte_offset()..],
-            json_sed_block(&s[..stream.byte_offset()])
-                .map_err(|_| nom::Err::Error((&s[..stream.byte_offset()], ErrorKind::IsNot)))?,
-        )),
-        _ => Err(nom::Err::Error((s, ErrorKind::IsNot))),
+// TESTED: OK
+fn json_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
+    match serde_json::from_slice(data) {
+        Ok(vi) => Ok((data, vi)),
+        _ => Err(nom::Err::Error((data, ErrorKind::IsNot)))
     }
 }
 
-fn cbor_sed(s: &[u8]) -> nom::IResult<&[u8], Vec<u8>> {
-    let mut stream = serde_cbor::Deserializer::from_slice(s).into_iter::<EventMessage>();
-    match stream.next() {
-        Some(Ok(_)) => Ok((
-            &s[stream.byte_offset()..],
-            cbor_sed_block(&s[..stream.byte_offset()])
-                .map_err(|_| nom::Err::Error((s, ErrorKind::IsNot)))?,
-        )),
-        _ => Err(nom::Err::Error((s, ErrorKind::IsNot))),
+// TODO: Requires testing
+fn cbor_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
+    match serde_cbor::from_slice(data) {
+        Ok(vi) => Ok((data, vi)),
+        _ => Err(nom::Err::Error((data, ErrorKind::IsNot)))
     }
 }
 
-pub fn sed(s: &[u8]) -> nom::IResult<&[u8], Vec<u8>> {
-    alt((json_sed, cbor_sed))(s)
+// TODO: Requires testing
+fn mgpk_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
+    match serde_mgpk::from_slice(data) {
+        Ok(vi) => Ok((data, vi)),
+        _ => Err(nom::Err::Error((data, ErrorKind::IsNot)))
+    }
+}
+
+pub(crate) fn version<'a>(data: &'a [u8]) -> nom::IResult<&[u8], SerializationInfo> {
+    alt((json_version, cbor_version, mgpk_version))(data).map(|d| (d.0, d.1))
 }
 
 /// extracts the count from the sig count code
-fn sig_count(s: &[u8]) -> nom::IResult<&[u8], u16> {
+// FIXME: is this working for all types of sigs?
+pub(crate) fn sig_count(s: &[u8]) -> nom::IResult<&[u8], u16> {
     let (rest, t) = tuple((
         map_parser(
             nom::bytes::complete::take(2u8),
@@ -153,31 +154,40 @@ fn couplets(s: &[u8]) -> nom::IResult<&[u8], Vec<(BasicPrefix, SelfSigningPrefix
     )(rest)
 }
 
+fn transferable_receipt_attachement(
+    s: &[u8],
+) -> nom::IResult<&[u8], (EventSeal, Vec<AttachedSignaturePrefix>)> {
+    tuple((event_seal, signatures))(s)
+}
+
 pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], Deserialized> {
     let (rest, e) = message(s)?;
     match e.event.event.event_data {
         EventData::Rct(_) => {
-            let (extra, couplets) = couplets(rest)?;
-            Ok((
-                extra,
-                Deserialized::Rct(SignedNontransferableReceipt {
-                    body: e.event,
-                    couplets,
-                }),
-            ))
-        }
-        EventData::Vrc(_) => {
-            let (extra, signatures) = signatures(rest)?;
-            Ok((
-                extra,
-                Deserialized::Vrc(SignedEventMessage {
-                    event_message: e.event,
-                    signatures,
-                }),
-            ))
+            if let Ok((rest, couplets)) = couplets(rest) {
+                Ok((
+                    rest,
+                    Deserialized::NontransferableRct(SignedNontransferableReceipt {
+                        body: e.event,
+                        couplets,
+                    }),
+                ))
+            } else {
+                transferable_receipt_attachement(&rest[1..]).map(|(rest, attachement)| {
+                    (
+                        rest,
+                        Deserialized::TransferableRct(SignedTransferableReceipt::new(
+                            &e.event,
+                            attachement.0,
+                            attachement.1,
+                        )),
+                    )
+                })
+            }
         }
         _ => {
             let (extra, signatures) = signatures(rest)?;
+
             Ok((
                 extra,
                 Deserialized::Event(DeserializedSignedEvent {
@@ -235,6 +245,9 @@ fn test_sigs() {
         Ok(("".as_bytes(), vec![AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, vec![0u8; 64], 0)]))
     );
 
+    assert!(signatures("-AABAA0Q7bqPvenjWXo_YIikMBKOg-pghLKwBi1Plm0PEqdv67L1_c6dq9bll7OFnoLp0a74Nw1cBGdjIPcu-yAllHAw".as_bytes()).is_ok());
+    // -AABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+
     assert_eq!(
         signatures("-AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAextra data".as_bytes()),
         Ok(("extra data".as_bytes(), vec![
@@ -254,17 +267,19 @@ fn test_sigs() {
 
 #[test]
 fn test_event() {
+    let stream = br#"{"v":"KERI10JSON0000ed_","i":"E7WIS0e4Tx1PcQW5Um5s3Mb8uPSzsyPODhByXzgvmAdQ","s":"0","t":"icp","kt":"1","k":["Dpt7mGZ3y5UmhT1NLExb1IW8vMJ8ylQW3K44LfkTgAqE"],"n":"Erpltchg7BUv21Qz3ZXhOhVu63m7S7YbPb21lSeGYd90","bt":"0","b":[],"c":[],"a":[]}"#;
+    let event = message(stream);
+    assert!(event.is_ok());
+    assert_eq!(event.unwrap().1.event.serialize().unwrap(), stream);
+
     // Inception event.
-    let stream = r#"{"v":"KERI10JSON00011c_","i":"EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM","s":"0","t":"icp","kt":"1","k":["DaU6JR2nmwyZ-i0d8JZAoTNZH3ULvYAfSVPzhzS6b5CM"],"n":"EZ-i0d8JZAoTNZH3ULvaU6JR2nmwyYAfSVPzhzS6b5CM","wt":"1","w":["DTNZH3ULvaU6JR2nmwyYAfSVPzhzS6bZ-i0d8JZAo5CM"],"c":["EO"]}"#.as_bytes();
+    let stream = r#"{"v":"KERI10JSON00011c_","i":"EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM","s":"0","t":"icp","kt":"1","k":["DaU6JR2nmwyZ-i0d8JZAoTNZH3ULvYAfSVPzhzS6b5CM"],"n":"EZ-i0d8JZAoTNZH3ULvaU6JR2nmwyYAfSVPzhzS6b5CM","bt":"1","b":["DTNZH3ULvaU6JR2nmwyYAfSVPzhzS6bZ-i0d8JZAo5CM"],"c":["EO"],"a":[]}"#.as_bytes();
     let event = message(stream);
     assert!(event.is_ok());
     assert_eq!(event.unwrap().1.event.serialize().unwrap(), stream);
 
     // Rotation event.
-    let stream =  r#"{"v":"KERI10JSON00011c_","i":"EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM","s":"1","t":"rot","p":"EULvaU6JR2nmwyZ-i0d8JZAoTNZH3YAfSVPzhzS6b5CM","kt":"1","k":["DaU6JR2nmwyZ-i0d8JZAoTNZH3ULvYAfSVPzhzS6b5CM"],"n":"EYAfSVPzhzZ-i0d8JZAoTNZH3ULvaU6JR2nmwyS6b5CM","wt":"1","wr":["DH3ULvaU6JR2nmwyYAfSVPzhzS6bZ-i0d8TNZJZAo5CM"],"wa":["DTNZH3ULvaU6JR2nmwyYAfSVPzhzS6bZ-i0d8JZAo5CM"],"a":[{"i":"EJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8","d":"ELvaU6Z-i0d8JJR2nmwyYAZAoTNZH3UfSVPzhzS6b5CM"}]}"#.as_bytes();
-    // TODO Event seal doesn't contain sn, see issue #74 in dif/keri.
-    // Replace with the following line.
-    // let stream = r#"{"v":"KERI10JSON00011c_","i":"EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM","s":"1","t":"rot","p":"EULvaU6JR2nmwyZ-i0d8JZAoTNZH3YAfSVPzhzS6b5CM","kt":"1","k":["DaU6JR2nmwyZ-i0d8JZAoTNZH3ULvYAfSVPzhzS6b5CM"],"n":"EYAfSVPzhzZ-i0d8JZAoTNZH3ULvaU6JR2nmwyS6b5CM","wt":"1","wr":["DH3ULvaU6JR2nmwyYAfSVPzhzS6bZ-i0d8TNZJZAo5CM"],"wa":["DTNZH3ULvaU6JR2nmwyYAfSVPzhzS6bZ-i0d8JZAo5CM"],"a":[{"i":"EJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8","s":"0","d":"ELvaU6Z-i0d8JJR2nmwyYAZAoTNZH3UfSVPzhzS6b5CM"}]}"#.as_bytes();
+    let stream = r#"{"v":"KERI10JSON00011c_","i":"EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM","s":"1","t":"rot","p":"EULvaU6JR2nmwyZ-i0d8JZAoTNZH3YAfSVPzhzS6b5CM","kt":"1","k":["DaU6JR2nmwyZ-i0d8JZAoTNZH3ULvYAfSVPzhzS6b5CM"],"n":"EYAfSVPzhzZ-i0d8JZAoTNZH3ULvaU6JR2nmwyS6b5CM","bt":"1","br":["DH3ULvaU6JR2nmwyYAfSVPzhzS6bZ-i0d8TNZJZAo5CM"],"ba":["DTNZH3ULvaU6JR2nmwyYAfSVPzhzS6bZ-i0d8JZAo5CM"],"a":[{"i":"EJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8","s":"0","d":"ELvaU6Z-i0d8JJR2nmwyYAZAoTNZH3UfSVPzhzS6b5CM"}]}"#.as_bytes();
     let event = message(stream);
     assert!(event.is_ok());
     assert_eq!(event.unwrap().1.event.serialize().unwrap(), stream);
@@ -276,31 +291,30 @@ fn test_event() {
     assert_eq!(event.unwrap().1.event.serialize().unwrap(), stream);
 
     // Interaction event with seal.
-    let stream = r#"{"v":"KERI10JSON00011c_","i":"EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM","s":"2","t":"ixn","p":"EULvaU6JR2nmwyZ-i0d8JZAoTNZH3YAfSVPzhzS6b5CM","a":[{"i":"EJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8","d":"ELvaU6Z-i0d8JJR2nmwyYAZAoTNZH3UfSVPzhzS6b5CM"}]}"#.as_bytes();
-    // TODO Event seal doesn't contain sn, see issue #74 in dif/keri.
-    // Replace with the following line.
-    // let stream = r#"{"v":"KERI10JSON00011c_","i":"EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM","s":"2","t":"ixn","p":"EULvaU6JR2nmwyZ-i0d8JZAoTNZH3YAfSVPzhzS6b5CM","a":[{"i":"EJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8","s":"1","d":"ELvaU6Z-i0d8JJR2nmwyYAZAoTNZH3UfSVPzhzS6b5CM"}]}"#.as_bytes();
+    let stream = r#"{"v":"KERI10JSON00011c_","i":"EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM","s":"2","t":"ixn","p":"EULvaU6JR2nmwyZ-i0d8JZAoTNZH3YAfSVPzhzS6b5CM","a":[{"i":"EJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8","s":"1","d":"ELvaU6Z-i0d8JJR2nmwyYAZAoTNZH3UfSVPzhzS6b5CM"}]}"#.as_bytes();
     let event = message(stream);
     assert!(event.is_ok());
     assert_eq!(event.unwrap().1.event.serialize().unwrap(), stream);
 
-    // Delegated inception event.
-    let stream = r#"{"v":"KERI10JSON00011c_","i":"EJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8","s":"0","t":"dip","kt":"1","k":["DaU6JR2nmwyZ-i0d8JZAoTNZH3ULvYAfSVPzhzS6b5CM"],"n":"EZ-i0d8JZAoTNZH3ULvaU6JR2nmwyYAfSVPzhzS6b5CM","wt":"1","w":["DTNZH3ULvaU6JR2nmwyYAfSVPzhzS6bZ-i0d8JZAo5CM"],"c":["DND"],"da":{"i":"EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM","s":"1","t":"rot","p":"E8JZAoTNZH3ULZ-i0dvaU6JR2nmwyYAfSVPzhzS6b5CM"}}"#.as_bytes();
-    let event = message(stream);
-    assert!(event.is_ok());
-    assert_eq!(event.unwrap().1.event.serialize().unwrap(), stream);
+    // TODO fix the test after updating delegation.
+    // (https://github.com/decentralized-identity/keri/issues/146)
+    // // Delegated inception event.
+    // let stream = r#"{"v":"KERI10JSON000121_","i":"EZUY3a0vbBLqUtC1d9ZrutSeg1nlMPVuDfxUi4LpE03g","s":"0","t":"dip","kt":"1","k":["DHgZa-u7veNZkqk2AxCnxrINGKfQ0bRiaf9FdA_-_49A"],"n":"EcBCalw7Oe2ohLDra2ovwlv72PrlQZdQdaoSZ1Vvk5P4","bt":"0","b":[],"c":[],"a":[],"di":"ENdHxtdjCQUM-TVO8CgJAKb8ykXsFe4u9epTUQFCL7Yd"}"#.as_bytes();
+    // let event = message(stream);
+    // assert!(event.is_ok());
+    // assert_eq!(event.unwrap().1.event.serialize().unwrap(), stream);
 
-    // Delegated rotation event.
-    let stream = r#"{"v":"KERI10JSON00011c_","i":"EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM","s":"1","t":"drt","p":"EULvaU6JR2nmwyZ-i0d8JZAoTNZH3YAfSVPzhzS6b5CM","kt":"1","k":["DaU6JR2nmwyZ-i0d8JZAoTNZH3ULvYAfSVPzhzS6b5CM"],"n":"EYAfSVPzhzZ-i0d8JZAoTNZH3ULvaU6JR2nmwyS6b5CM","wt":"1","wr":["DH3ULvaU6JR2nmwyYAfSVPzhzS6bZ-i0d8TNZJZAo5CM"],"wa":["DTNZH3ULvaU6JR2nmwyYAfSVPzhzS6bZ-i0d8JZAo5CM"],"a":[],"da":{"i":"EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM","s":"1","t":"ixn","p":"E8JZAoTNZH3ULZ-i0dvaU6JR2nmwyYAfSVPzhzS6b5CM"}}"#.as_bytes();
-    let event = message(stream);
-    assert!(event.is_ok());
-    assert_eq!(event.unwrap().1.event.serialize().unwrap(), stream);
+    // // Delegated rotation event.
+    // let stream = r#"{"v":"KERI10JSON00011c_","i":"EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM","s":"1","t":"drt","p":"EULvaU6JR2nmwyZ-i0d8JZAoTNZH3YAfSVPzhzS6b5CM","kt":"1","k":["DaU6JR2nmwyZ-i0d8JZAoTNZH3ULvYAfSVPzhzS6b5CM"],"n":"EYAfSVPzhzZ-i0d8JZAoTNZH3ULvaU6JR2nmwyS6b5CM","bt":"1","br":["DH3ULvaU6JR2nmwyYAfSVPzhzS6bZ-i0d8TNZJZAo5CM"],"ba":["DTNZH3ULvaU6JR2nmwyYAfSVPzhzS6bZ-i0d8JZAo5CM"],"a":[],"da":{"i":"EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM","s":"1","t":"ixn","p":"E8JZAoTNZH3ULZ-i0dvaU6JR2nmwyYAfSVPzhzS6b5CM"}}"#.as_bytes();
+    // let event = message(stream);
+    // assert!(event.is_ok());
+    // assert_eq!(event.unwrap().1.event.serialize().unwrap(), stream);
 }
 
 #[test]
 fn test_stream1() {
-    // taken from KERIPY: tests/core/test_eventing.py#906
-    let stream = r#"{"v":"KERI10JSON0000e6_","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"0","t":"icp","kt":"1","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"n":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","wt":"0","w":[],"c":[]}-AABAAyIoOoziM1_fGb-1gKWY_LtlKiZIwuaJ5iPkYflmqOxxBn6MspbvCcLf8bF_uAgxCVLG1W4IMEhvDi_8rPORgDw"#.as_bytes();
+    // taken from KERIPY: tests/core/test_eventing.py::test_kevery#1998
+    let stream = br#"{"v":"KERI10JSON0000ed_","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"0","t":"icp","kt":"1","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"n":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","bt":"0","b":[],"c":[],"a":[]}-AABAAmagesCSY8QhYYHCJXEWpsGD62qoLt2uyT0_Mq5lZPR88JyS5UrwFKFdcjPqyKc_SKaKDJhkGWCk07k_kVkjyCA"#;
 
     let parsed = signed_message(stream).unwrap().1;
 
@@ -320,17 +334,23 @@ fn test_stream1() {
 
 #[test]
 fn test_stream2() {
-    // generated by KERIOX
-    let stream = r#"{"v":"KERI10JSON0000e6_","i":"Eu6mi6Mns13JuBnzsIf5InVa5VXKAT8NVzU8ze4BXbfE","s":"0","t":"icp","kt":"1","k":["DMen5nG7mAzmocZzPcxCiSCovBj-88SL2orv7NoQrq_c"],"n":"EiEo8G36FrkLz51YD1oHsqyBhEUNNB8NqH-cmYrqiKBo","wt":"0","w":[],"c":[]}-AABAAT5UoXR_kTOqpasER2UljDiljyXvUCvWsS1yieRocdbHiuA6ihwpVE0F2kgFbdYBqg4KknGpb90pNUAc-yEOrBA"#.as_bytes();
-
+    // taken from KERIPY: tests/core/test_eventing.py::test_multisig_digprefix#2244
+    let stream = br#"{"v":"KERI10JSON00014b_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"0","t":"icp","kt":"2","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"E9izzBkXX76sqt0N-tfLzJeRqj0W56p4pDQ_ZqNCDpyw","bt":"0","b":[],"c":[],"a":[]}-AADAAhcaP-l0DkIKlJ87iIVcDx-m0iKPdSArEu63b-2cSEn9wXVGNpWw9nfwxodQ9G8J3q_Pm-AWfDwZGD9fobWuHBAAB6mz7zP0xFNBEBfSKG4mjpPbeOXktaIyX8mfsEa1A3Psf7eKxSrJ5Woj3iUB2AhhLg412-zkk795qxsK2xfdxBAACj5wdW-EyUJNgW0LHePQcSFNxW3ZyPregL4H2FoOrsPxLa3MZx6xYTh6i7YRMGY50ezEjV81hkI1Yce75M_bPCQ"#;
     assert!(signed_message(stream).is_ok());
     assert!(signed_event_stream_validate(stream).is_ok())
 }
 
 #[test]
+fn test_signed_trans_receipt() {
+    let trans_receipt_event = r#"{"v":"KERI10JSON000091_","i":"E7WIS0e4Tx1PcQW5Um5s3Mb8uPSzsyPODhByXzgvmAdQ","s":"0","t":"rct","d":"ErDNDBG7x2xYAH2i4AOnhVe44RS3lC1mRRdkyolFFHJk"}-FABENlofRlu2VPul-tjDObk6bTia2deG6NMqeFmsXhAgFvA0AAAAAAAAAAAAAAAAAAAAAAAE_MT0wsz-_ju_DVK_SaMaZT9ZE7pP4auQYeo2PDaw9FI-AABAA0Q7bqPvenjWXo_YIikMBKOg-pghLKwBi1Plm0PEqdv67L1_c6dq9bll7OFnoLp0a74Nw1cBGdjIPcu-yAllHAw"#;
+    let msg = signed_message(trans_receipt_event.as_bytes());
+    assert!(msg.is_ok())
+}
+
+#[test]
 fn test_stream3() {
     // should fail to verify with incorrect signature
-    let stream = r#"{"v":"KERI10JSON00012a_","i":"E4_CHZxqydVAvJEI7beqk3TZwUR92nQydi1nI8UqUTxk","s":"0","t":"icp","kt":"1","k":["DLfozZ0uGvLED22X3K8lX6ciwhl02jdjt1DQ_EHnJro0","C6KROFI5gWRXhAiIMiHLCDa-Oj09kmVMr2btCE96k_3g"],"n":"E99mhvP0pLkGtxymQkspRqcdoIFOqdigCf_F3rpg7rfk","wt":"0","w":[],"c":[]}-AABAAlxZyoxbADu-x9Ho6EC7valjC4bNn7muWvqC_uAEBd1P9xIeOSxmcYdhyvBg1-o-25ebv66Q3Td5bZ730wqLjBA"#.as_bytes();
+    let stream = br#"{"v":"KERI10JSON00012a_","i":"E4_CHZxqydVAvJEI7beqk3TZwUR92nQydi1nI8UqUTxk","s":"0","t":"icp","kt":"1","k":["DLfozZ0uGvLED22X3K8lX6ciwhl02jdjt1DQ_EHnJro0","C6KROFI5gWRXhAiIMiHLCDa-Oj09kmVMr2btCE96k_3g"],"n":"E99mhvP0pLkGtxymQkspRqcdoIFOqdigCf_F3rpg7rfk","bt":"0","b":[],"c":[],"a":[]}-AABAAlxZyoxbADu-x9Ho6EC7valjC4bNn7muWvqC_uAEBd1P9xIeOSxmcYdhyvBg1-o-25ebv66Q3Td5bZ730wqLjBA"#;
 
     assert!(signed_message(stream).is_ok());
     let result = signed_event_stream_validate(stream);
@@ -338,9 +358,8 @@ fn test_stream3() {
 }
 
 #[test]
-fn test_sed_extraction() {
-    let stream = r#"{"vs":"KERI10JSON000159_","pre":"ECui-E44CqN2U7uffCikRCp_YKLkPrA4jsTZ_A0XRLzc","sn":"0","ilk":"icp","sith":"2","keys":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"nxt":"Evhf3437ZRRnVhT0zOxo_rBX_GxpGoAnLuzrVlDK8ZdM","toad":"0","wits":[],"cnfg":[]}"#.as_bytes();
-
-    // sed transcoding is not required until arbitrary content events are used
-    // assert!(sed(stream.as_bytes()).is_ok())
+fn test_version_parse() {
+    let json = br#""KERI10JSON00014b_""#;
+    let json_result = version(json);
+    assert!(json_result.is_ok());
 }

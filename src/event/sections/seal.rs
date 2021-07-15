@@ -2,7 +2,7 @@ use crate::prefix::{IdentifierPrefix, SelfAddressingPrefix};
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum Seal {
     Location(LocationSeal),
@@ -11,28 +11,31 @@ pub enum Seal {
     Root(RootSeal),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct DigestSeal {
     #[serde(rename = "d")]
     pub dig: SelfAddressingPrefix,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct RootSeal {
     #[serde(rename = "rd")]
     pub tree_root: SelfAddressingPrefix,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct EventSeal {
     #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
+
+    #[serde(rename = "s", with = "SerHex::<Compact>")]
+    pub sn: u64,
 
     #[serde(rename = "d")]
     pub event_digest: SelfAddressingPrefix,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct LocationSeal {
     #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
@@ -47,7 +50,7 @@ pub struct LocationSeal {
     pub prior_digest: SelfAddressingPrefix,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct DelegatingEventSeal {
     #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
@@ -59,7 +62,7 @@ pub struct DelegatingEventSeal {
 #[test]
 fn test_seal_deserialization() {
     // Event seal
-    let seal_str = r#"{"i":"Ek7M173EvQZ6kLjyorCwZK4XWwyNcSi6u7lz5-M6MyFE","d":"EeBPcw30IVCylYANEGOg3V8f4nBYMspEpqNaq2Y8_knw"}"#;
+    let seal_str = r#"{"i":"Ek7M173EvQZ6kLjyorCwZK4XWwyNcSi6u7lz5-M6MyFE","s":"1","d":"EeBPcw30IVCylYANEGOg3V8f4nBYMspEpqNaq2Y8_knw"}"#;
     let seal: Seal = serde_json::from_str(seal_str).unwrap();
     assert!(matches!(seal, Seal::Event(_)));
     assert_eq!(serde_json::to_string(&seal).unwrap(), seal_str);

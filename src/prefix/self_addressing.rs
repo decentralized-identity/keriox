@@ -2,7 +2,7 @@ use super::Prefix;
 use crate::derivation::{self_addressing::SelfAddressing, DerivationCode};
 use crate::error::Error;
 use base64::decode_config;
-use core::str::FromStr;
+use core::{fmt, str::FromStr};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, PartialEq, Clone)]
@@ -29,11 +29,12 @@ impl FromStr for SelfAddressingPrefix {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let code = SelfAddressing::from_str(s)?;
-
+        let c_len = code.code_len();
+        let p_len = code.prefix_b64_len();
         if s.len() == code.prefix_b64_len() {
             Ok(Self::new(
                 code,
-                decode_config(&s[code.code_len()..code.prefix_b64_len()], base64::URL_SAFE)?,
+                decode_config(&s[c_len..p_len], base64::URL_SAFE)?,
             ))
         } else {
             Err(Error::SemanticError(format!(
@@ -45,11 +46,17 @@ impl FromStr for SelfAddressingPrefix {
 }
 
 impl Prefix for SelfAddressingPrefix {
-    fn derivative(&self) -> &[u8] {
-        &self.digest
+    fn derivative(&self) -> Vec<u8> {
+        self.digest.to_owned()
     }
     fn derivation_code(&self) -> String {
         self.derivation.to_str()
+    }
+}
+
+impl fmt::Display for SelfAddressingPrefix {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_str())
     }
 }
 

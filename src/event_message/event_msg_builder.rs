@@ -1,16 +1,14 @@
-use std::str::FromStr;
-
 use crate::{
     derivation::{basic::Basic, self_addressing::SelfAddressing},
     error::Error,
-    event::sections::nxt_commitment,
+    event::sections::key_config::nxt_commitment,
     event::{
         event_data::{
             delegated::{DelegatedInceptionEvent, DelegatedRotationEvent},
             interaction::InteractionEvent,
             rotation::RotationEvent,
         },
-        sections::{seal::LocationSeal, WitnessConfig},
+        sections::{threshold::SignatureThreshold, seal::LocationSeal, WitnessConfig},
         SerializationFormats,
     },
     event::{
@@ -20,15 +18,18 @@ use crate::{
         sections::KeyConfig,
         Event, EventMessage,
     },
+    keys::Key,
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
-    signer::CryptoBox,
 };
+use ed25519_dalek::Keypair;
+use rand::rngs::OsRng;
+use std::str::FromStr;
 
 pub struct EventMsgBuilder {
     event_type: EventType,
     prefix: IdentifierPrefix,
     sn: u64,
-    key_threshold: u64,
+    key_threshold: SignatureThreshold,
     keys: Vec<BasicPrefix>,
     next_keys: Vec<BasicPrefix>,
     prev_event: SelfAddressingPrefix,
@@ -61,8 +62,12 @@ impl EventType {
 
 impl EventMsgBuilder {
     pub fn new(event_type: EventType) -> Result<Self, Error> {
-        let key_manager = CryptoBox::new().unwrap();
-        let basic_pref = Basic::Ed25519.derive(key_manager.public_key());
+        let mut rng = OsRng {};
+        let kp = Keypair::generate(&mut rng);
+        let nkp = Keypair::generate(&mut rng);
+        let pk = Key::new(kp.public.to_bytes().to_vec());
+        let npk = Key::new(nkp.public.to_bytes().to_vec());
+        let basic_pref = Basic::Ed25519.derive(pk);
         let dummy_loc_seal = LocationSeal {
             prefix: IdentifierPrefix::from_str("EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM")?,
             sn: 2,
@@ -75,8 +80,8 @@ impl EventMsgBuilder {
             event_type,
             prefix: IdentifierPrefix::default(),
             keys: vec![basic_pref],
-            next_keys: vec![Basic::Ed25519.derive(key_manager.next_pub_key.clone())],
-            key_threshold: 1,
+            next_keys: vec![Basic::Ed25519.derive(npk)],
+            key_threshold: SignatureThreshold::Simple(1),
             sn: 1,
             prev_event: SelfAddressing::Blake3_256.derive(&[0u8; 32]),
             data: vec![],
@@ -117,9 +122,20 @@ impl EventMsgBuilder {
         }
     }
 
+    pub fn with_threshold(self, threshold: SignatureThreshold) -> Self {
+        EventMsgBuilder {
+            key_threshold: threshold,
+            ..self
+        }
+    }
+
     pub fn build(self) -> Result<EventMessage, Error> {
-        let next_key_hash = nxt_commitment(1, &self.next_keys, SelfAddressing::Blake3_256);
-        let key_config = KeyConfig::new(self.keys, next_key_hash, Some(self.key_threshold));
+        let next_key_hash = nxt_commitment(
+            &self.key_threshold,
+            &self.next_keys,
+            &SelfAddressing::Blake3_256,
+        );
+        let key_config = KeyConfig::new(self.keys, Some(next_key_hash), Some(self.key_threshold));
         let prefix =
             if self.prefix == IdentifierPrefix::default() && key_config.public_keys.len() == 1 {
                 IdentifierPrefix::Basic(key_config.clone().public_keys[0].clone())
@@ -133,14 +149,16 @@ impl EventMsgBuilder {
                     key_config: key_config,
                     witness_config: InceptionWitnessConfig::default(),
                     inception_configuration: vec![],
+                    data: vec![],
                 };
+
                 match prefix {
                     IdentifierPrefix::Basic(_) => Event {
                         prefix: prefix,
                         sn: 0,
                         event_data: EventData::Icp(icp_event),
                     }
-                    .to_message(SerializationFormats::JSON)?,
+                    .to_message(self.format)?,
                     IdentifierPrefix::SelfAddressing(_) => {
                         icp_event.incept_self_addressing(self.derivation, self.format)?
                     }
@@ -173,6 +191,7 @@ impl EventMsgBuilder {
                     key_config: key_config,
                     witness_config: InceptionWitnessConfig::default(),
                     inception_configuration: vec![],
+                    data: vec![],
                 };
                 DelegatedInceptionEvent {
                     inception_data: icp_data,

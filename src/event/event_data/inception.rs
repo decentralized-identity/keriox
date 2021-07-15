@@ -1,11 +1,11 @@
 use super::{
     super::sections::{InceptionWitnessConfig, KeyConfig},
-    EventData,
+    DummyEvent, EventData,
 };
 use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
-    event::Event,
+    event::{sections::seal::Seal, Event},
     event_message::{serialization_info::SerializationFormats, EventMessage},
     prefix::IdentifierPrefix,
     state::{EventSemantics, IdentifierState},
@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 /// Inception Event
 ///
 /// Describes the inception (icp) event data,
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct InceptionEvent {
     #[serde(flatten)]
     pub key_config: KeyConfig,
@@ -25,6 +25,9 @@ pub struct InceptionEvent {
 
     #[serde(rename = "c")]
     pub inception_configuration: Vec<String>,
+
+    #[serde(rename = "a")]
+    pub data: Vec<Seal>,
 }
 
 impl InceptionEvent {
@@ -37,6 +40,7 @@ impl InceptionEvent {
             key_config,
             witness_config: witness_config.map_or_else(|| InceptionWitnessConfig::default(), |w| w),
             inception_configuration: inception_config.map_or_else(|| vec![], |c| c),
+            data: vec![],
         }
     }
 
@@ -50,13 +54,11 @@ impl InceptionEvent {
         derivation: SelfAddressing,
         format: SerializationFormats,
     ) -> Result<EventMessage, Error> {
-        let prefix = IdentifierPrefix::SelfAddressing(derivation.derive(
-            &EventMessage::get_inception_data(&self, derivation, format)?,
-        ));
-
         EventMessage::new(
             Event {
-                prefix,
+                prefix: IdentifierPrefix::SelfAddressing(derivation.derive(
+                    &DummyEvent::derive_inception_data(self.clone(), &derivation, format)?,
+                )),
                 sn: 0,
                 event_data: EventData::Icp(self),
             },

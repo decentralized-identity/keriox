@@ -1,10 +1,10 @@
-use crate::util::dfs_serializer;
 use base64::DecodeError;
 use core::num::ParseIntError;
+use ed25519_dalek;
+use rmp_serde as serde_mgpk;
 use serde_cbor;
 use serde_json;
 use thiserror::Error;
-use ursa::CryptoError;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -23,10 +23,10 @@ pub enum Error {
         source: serde_cbor::Error,
     },
 
-    #[error("DFS Serialization error")]
-    DFSSerializationError {
+    #[error("MessagePack Serialization error")]
+    MsgPackSerializationError {
         #[from]
-        source: dfs_serializer::Error,
+        source: serde_mgpk::encode::Error,
     },
 
     #[error("Error parsing numerical value: {source}")]
@@ -47,11 +47,14 @@ pub enum Error {
     #[error("Not enough signatures while verifing")]
     NotEnoughSigsError,
 
-    #[error("validation error")]
-    CryptoError(CryptoError),
-
     #[error("Deserialization error")]
     DeserializationError,
+
+    #[error("Identifier is not indexed into the DB")]
+    NotIndexedError,
+
+    #[error("Identifier ID is already present in the DB")]
+    IdentifierPresentError,
 
     #[error("Base64 Decoding error")]
     Base64DecodingError {
@@ -64,4 +67,14 @@ pub enum Error {
 
     #[error("Storage error")]
     StorageError,
+
+    #[cfg(feature = "async")]
+    #[error("Zero send error")]
+    ZeroSendError,
+
+    #[error(transparent)]
+    Ed25519DalekSignatureError(#[from] ed25519_dalek::SignatureError),
+
+    #[error(transparent)]
+    SledError(#[from] sled::Error),
 }

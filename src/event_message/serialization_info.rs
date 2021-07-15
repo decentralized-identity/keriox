@@ -1,5 +1,6 @@
 use crate::error::Error;
 use core::str::FromStr;
+use rmp_serde as serde_mgpk;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Copy)]
@@ -14,9 +15,7 @@ impl SerializationFormats {
         match self {
             Self::JSON => serde_json::to_vec(message).map_err(|e| e.into()),
             Self::CBOR => serde_cbor::to_vec(message).map_err(|e| e.into()),
-            Self::MGPK => Err(Error::SerializationError(
-                "MessagePack unimplemented".to_string(),
-            )),
+            Self::MGPK => serde_mgpk::to_vec(message).map_err(|e| e.into()),
         }
     }
 
@@ -42,7 +41,7 @@ impl FromStr for SerializationFormats {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SerializationInfo {
     pub major_version: u8,
     pub minor_version: u8,

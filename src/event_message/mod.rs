@@ -1,21 +1,29 @@
+pub mod event_msg_builder;
+pub mod parse;
+pub mod serialization_info;
+pub(crate) mod payload_size;
+
+use std::cmp::Ordering;
+
 use crate::{
-    derivation::{attached_signature_code::get_sig_count, self_addressing::SelfAddressing},
+    derivation::attached_signature_code::get_sig_count,
     error::Error,
-    event::event_data::delegated::DelegatedInceptionEvent,
     event::{
-        event_data::{inception::InceptionEvent, EventData},
+        event_data::{DummyEvent, EventData},
+        sections::seal::EventSeal,
         Event,
     },
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
+    prefix::{
+        attached_seal::AttachedEventSeal, AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix,
+        Prefix, SelfSigningPrefix,
+    },
     state::{EventSemantics, IdentifierState},
-    util::dfs_serializer,
 };
-pub mod serialization_info;
+use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use serialization_info::*;
-pub mod parse;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct EventMessage {
     /// Serialization Information
     ///
@@ -32,16 +40,165 @@ pub struct EventMessage {
     // pub extra: HashMap<String, Value>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq)]
+pub struct TimestampedEventMessage {
+    pub timestamp: DateTime<Local>,
+    pub event: EventMessage,
+}
+
+impl TimestampedEventMessage {
+    pub fn new(event: EventMessage) -> Self {
+        Self {
+            timestamp: Local::now(),
+            event,
+        }
+    }
+}
+
+impl PartialOrd for TimestampedEventMessage {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(match self.event.event.sn == other.event.event.sn {
+            true => Ordering::Equal,
+            false => match self.event.event.sn > other.event.event.sn {
+                true => Ordering::Greater,
+                false => Ordering::Less,
+            },
+        })
+    }
+}
+
+impl Ord for TimestampedEventMessage {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.event.event.sn == other.event.event.sn {
+            true => Ordering::Equal,
+            false => match self.event.event.sn > other.event.event.sn {
+                true => Ordering::Greater,
+                false => Ordering::Less,
+            },
+        }
+    }
+}
+
+impl Eq for TimestampedEventMessage {}
+
+impl From<TimestampedEventMessage> for EventMessage {
+    fn from(event: TimestampedEventMessage) -> EventMessage {
+        event.event
+    }
+}
+
+/// WARNING: timestamp will change on conversion to current time
+impl From<EventMessage> for TimestampedEventMessage {
+    fn from(event: EventMessage) -> TimestampedEventMessage {
+        TimestampedEventMessage::new(event)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignedEventMessage {
     pub event_message: EventMessage,
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
 
-#[derive(Debug, Clone)]
+impl PartialEq for SignedEventMessage {
+    fn eq(&self, other: &Self) -> bool {
+        self.event_message == other.event_message
+        && self.signatures == other.signatures
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct TimestampedSignedEventMessage {
+    pub timestamp: DateTime<Local>,
+    pub event: SignedEventMessage,
+}
+
+impl TimestampedSignedEventMessage {
+    pub fn new(event: SignedEventMessage) -> Self {
+        Self {
+            timestamp: Local::now(),
+            event,
+        }
+    }
+}
+
+impl From<TimestampedSignedEventMessage> for SignedEventMessage {
+    fn from(event: TimestampedSignedEventMessage) -> SignedEventMessage {
+        event.event
+    }
+}
+
+impl From<SignedEventMessage> for TimestampedSignedEventMessage {
+    fn from(event: SignedEventMessage) -> TimestampedSignedEventMessage {
+        TimestampedSignedEventMessage::new(event)
+    }
+}
+
+impl From<&SignedEventMessage> for TimestampedSignedEventMessage {
+    fn from(event: &SignedEventMessage) -> TimestampedSignedEventMessage {
+        TimestampedSignedEventMessage::new(event.clone())
+    }
+}
+
+impl PartialEq for TimestampedSignedEventMessage {
+    fn eq(&self, other: &Self) -> bool {
+        self.event == other.event
+    }
+}
+
+impl PartialOrd for TimestampedSignedEventMessage {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(
+            match self.event.event_message.event.sn == other.event.event_message.event.sn {
+                true => Ordering::Equal,
+                false => {
+                    match self.event.event_message.event.sn > other.event.event_message.event.sn {
+                        true => Ordering::Greater,
+                        false => Ordering::Less,
+                    }
+                }
+            },
+        )
+    }
+}
+
+impl Ord for TimestampedSignedEventMessage {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.event.event_message.event.sn == other.event.event_message.event.sn {
+            true => Ordering::Equal,
+            false => match self.event.event_message.event.sn > other.event.event_message.event.sn {
+                true => Ordering::Greater,
+                false => Ordering::Less,
+            },
+        }
+    }
+}
+
+impl Eq for TimestampedSignedEventMessage {}
+
+/// Signed Non-Transferrable Receipt
+///
+/// A receipt created by an Identifier of a non-transferrable type.
+/// Mostly intended for use by Witnesses.
+/// NOTE: This receipt has a unique structure to it's appended
+/// signatures
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SignedNontransferableReceipt {
     pub body: EventMessage,
     pub couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
+}
+
+/// Signed Transferrable Receipt
+///
+/// Event Receipt which is suitable for creation by Transferable
+/// Identifiers. Provides both the signatures and a commitment to
+/// the latest establishment event of the receipt creator.
+/// Mostly intended for use by Validators
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SignedTransferableReceipt {
+    pub body: EventMessage,
+    pub validator_seal: AttachedEventSeal,
+    pub signatures: Vec<AttachedSignaturePrefix>,
 }
 
 impl EventMessage {
@@ -63,66 +220,6 @@ impl EventMessage {
 
     pub fn serialization(&self) -> SerializationFormats {
         self.serialization_info.kind
-    }
-
-    /// Get Inception Data
-    ///
-    /// Strips prefix and version string length info from an event
-    /// used for verifying identifier binding for self-addressing and self-certifying
-    pub fn get_inception_data(
-        icp: &InceptionEvent,
-        code: SelfAddressing,
-        format: SerializationFormats,
-    ) -> Result<Vec<u8>, Error> {
-        // use dummy prefix to get correct size info
-        // TODO: dynamically size dummy derivative, non-32 byte prefixes will fail
-        let icp_event_data = Event {
-            prefix: IdentifierPrefix::SelfAddressing(code.derive(&[0u8; 32])),
-            sn: 0,
-            event_data: EventData::Icp(icp.clone()),
-        };
-        Ok(dfs_serializer::to_vec(&Self {
-            serialization_info: icp_event_data
-                .clone()
-                .to_message(format)
-                .unwrap()
-                .serialization_info,
-            event: Event {
-                // default prefix serializes to empty string
-                prefix: IdentifierPrefix::default(),
-                ..icp_event_data
-            },
-        })?)
-    }
-
-    /// Get Delegated Inception Data
-    ///
-    /// Strips prefix and version string length info from an event
-    /// used for verifying identifier binding for self-addressing and self-certifying
-    pub fn get_delegated_inception_data(
-        dip: &DelegatedInceptionEvent,
-        code: SelfAddressing,
-        format: SerializationFormats,
-    ) -> Result<Vec<u8>, Error> {
-        // use dummy prefix to get correct size info
-        // TODO: dynamically size dummy derivative, non-32 byte prefixes will fail
-        let dip_event_data = Event {
-            prefix: IdentifierPrefix::SelfAddressing(code.derive(&[0u8; 32])),
-            sn: 0,
-            event_data: EventData::Dip(dip.clone()),
-        };
-        Ok(dfs_serializer::to_vec(&Self {
-            serialization_info: dip_event_data
-                .clone()
-                .to_message(format)
-                .unwrap()
-                .serialization_info,
-            event: Event {
-                // default prefix serializes to empty string
-                prefix: IdentifierPrefix::default(),
-                ..dip_event_data
-            },
-        })?)
     }
 
     /// Serialize
@@ -149,6 +246,35 @@ impl SignedEventMessage {
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         Ok([
             self.event_message.serialize()?,
+            get_sig_count(self.signatures.len() as u16)
+                .as_bytes()
+                .to_vec(),
+            self.signatures
+                .iter()
+                .map(|sig| sig.to_str().as_bytes().to_vec())
+                .fold(vec![], |acc, next| [acc, next].concat()),
+        ]
+        .concat())
+    }
+}
+
+impl SignedTransferableReceipt {
+    pub fn new(
+        message: &EventMessage,
+        event_seal: EventSeal,
+        sigs: Vec<AttachedSignaturePrefix>,
+    ) -> Self {
+        Self {
+            body: message.clone(),
+            validator_seal: AttachedEventSeal::new(event_seal),
+            signatures: sigs,
+        }
+    }
+
+    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
+        Ok([
+            self.body.serialize()?,
+            self.validator_seal.serialize()?,
             get_sig_count(self.signatures.len() as u16)
                 .as_bytes()
                 .to_vec(),
@@ -253,16 +379,21 @@ pub fn verify_identifier_binding(icp_event: &EventMessage) -> Result<bool, Error
         EventData::Icp(icp) => match &icp_event.event.prefix {
             IdentifierPrefix::Basic(bp) => Ok(icp.key_config.public_keys.len() == 1
                 && bp == icp.key_config.public_keys.first().unwrap()),
-            IdentifierPrefix::SelfAddressing(sap) => Ok(sap.verify_binding(
-                &EventMessage::get_inception_data(icp, sap.derivation, icp_event.serialization())?,
-            )),
+            // TODO update with new inception process
+            IdentifierPrefix::SelfAddressing(sap) => {
+                Ok(sap.verify_binding(&DummyEvent::derive_inception_data(
+                    icp.clone(),
+                    &sap.derivation,
+                    icp_event.serialization(),
+                )?))
+            }
             IdentifierPrefix::SelfSigning(_ssp) => todo!(),
         },
         EventData::Dip(dip) => match &icp_event.event.prefix {
             IdentifierPrefix::SelfAddressing(sap) => Ok(sap.verify_binding(
-                &EventMessage::get_delegated_inception_data(
-                    dip,
-                    sap.derivation,
+                &DummyEvent::derive_delegated_inception_data(
+                    dip.clone(),
+                    &sap.derivation,
                     icp_event.serialization(),
                 )?,
             )),
@@ -274,37 +405,36 @@ pub fn verify_identifier_binding(icp_event: &EventMessage) -> Result<bool, Error
 
 #[cfg(test)]
 mod tests {
-    mod event_msg_builder;
     mod test_utils;
+
     use self::{event_msg_builder::EventType, test_utils::test_mock_event_sequence};
     use super::*;
     use crate::{
         derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
         event::{
-            event_data::{inception::InceptionEvent, interaction::InteractionEvent, EventData},
-            sections::InceptionWitnessConfig,
+            event_data::{inception::InceptionEvent, EventData},
             sections::KeyConfig,
+            sections::{threshold::SignatureThreshold, InceptionWitnessConfig},
         },
-        prefix::{AttachedSignaturePrefix, IdentifierPrefix, SelfAddressingPrefix},
+        keys::Key,
+        prefix::{AttachedSignaturePrefix, IdentifierPrefix},
     };
-    use serde_json;
-    use ursa::{
-        kex::{x25519, KeyExchangeScheme},
-        signatures::{ed25519, SignatureScheme},
-    };
+    use ed25519_dalek::Keypair;
+    use rand::rngs::OsRng;
 
     #[test]
     fn basic_create() -> Result<(), Error> {
         // hi Ed!
-        let ed = ed25519::Ed25519Sha512::new();
+        let kp0 = Keypair::generate(&mut OsRng);
+        let kp1 = Keypair::generate(&mut OsRng);
 
         // get two ed25519 keypairs
-        let (pub_key0, priv_key0) = ed
-            .keypair(Option::None)
-            .map_err(|e| Error::CryptoError(e))?;
-        let (pub_key1, _priv_key1) = ed
-            .keypair(Option::None)
-            .map_err(|e| Error::CryptoError(e))?;
+        let pub_key0 = Key::new(kp0.public.to_bytes().to_vec());
+        let priv_key0 = Key::new(kp0.secret.to_bytes().to_vec());
+        let (pub_key1, _priv_key1) = (
+            Key::new(kp1.public.to_bytes().to_vec()),
+            Key::new(kp1.secret.to_bytes().to_vec()),
+        );
 
         // initial signing key prefix
         let pref0 = Basic::Ed25519.derive(pub_key0);
@@ -318,9 +448,14 @@ mod tests {
             prefix: IdentifierPrefix::Basic(pref0.clone()),
             sn: 0,
             event_data: EventData::Icp(InceptionEvent {
-                key_config: KeyConfig::new(vec![pref0.clone()], nxt.clone(), Some(1)),
+                key_config: KeyConfig::new(
+                    vec![pref0.clone()],
+                    Some(nxt.clone()),
+                    Some(SignatureThreshold::Simple(1)),
+                ),
                 witness_config: InceptionWitnessConfig::default(),
                 inception_configuration: vec![],
+                data: vec![],
             }),
         };
 
@@ -330,9 +465,7 @@ mod tests {
         let ser = icp_m.serialize()?;
 
         // sign
-        let sig = ed
-            .sign(&ser, &priv_key0)
-            .map_err(|e| Error::CryptoError(e))?;
+        let sig = priv_key0.sign_ed(&ser)?;
         let attached_sig = AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig, 0);
 
         assert!(pref0.verify(&ser, &attached_sig.signature)?);
@@ -350,8 +483,8 @@ mod tests {
         assert_eq!(s0.last, ser);
         assert_eq!(s0.current.public_keys.len(), 1);
         assert_eq!(s0.current.public_keys[0], pref0);
-        assert_eq!(s0.current.threshold, 1);
-        assert_eq!(s0.current.threshold_key_digest, nxt);
+        assert_eq!(s0.current.threshold, SignatureThreshold::Simple(1));
+        assert_eq!(s0.current.threshold_key_digest, Some(nxt));
         assert_eq!(s0.witnesses, vec![]);
         assert_eq!(s0.tally, 0);
         assert_eq!(s0.delegates, vec![]);
@@ -362,28 +495,34 @@ mod tests {
     #[test]
     fn self_addressing_create() -> Result<(), Error> {
         // hi Ed!
-        let ed = ed25519::Ed25519Sha512::new();
+        let kp0 = Keypair::generate(&mut OsRng);
+        let kp1 = Keypair::generate(&mut OsRng);
+        let kp2 = Keypair::generate(&mut OsRng);
 
-        let (sig_key_0, sig_priv_0) = ed
-            .keypair(Option::None)
-            .map_err(|e| Error::CryptoError(e))?;
-        let (sig_key_1, sig_priv_1) = ed
-            .keypair(Option::None)
-            .map_err(|e| Error::CryptoError(e))?;
+        // get two ed25519 keypairs
+        let pub_key0 = Key::new(kp0.public.to_bytes().to_vec());
+        let priv_key0 = Key::new(kp0.secret.to_bytes().to_vec());
+        let (pub_key1, sig_key_1) = (
+            Key::new(kp1.public.to_bytes().to_vec()),
+            Key::new(kp1.secret.to_bytes().to_vec()),
+        );
 
         // hi X!
-        let x = x25519::X25519Sha256::new();
+        // let x = XChaCha20Poly1305::new((&priv_key0.into_bytes()[..]).into());
 
         // get two X25519 keypairs
-        let (enc_key_0, enc_priv_0) = x.keypair(Option::None).map_err(|e| Error::CryptoError(e))?;
-        let (enc_key_1, enc_priv_1) = x.keypair(Option::None).map_err(|e| Error::CryptoError(e))?;
+        let (enc_key_0, _enc_priv_0) = (Key::new(kp2.public.to_bytes().to_vec()), sig_key_1);
+        let (enc_key_1, _enc_priv_1) = (
+            Key::new(kp2.public.to_bytes().to_vec()),
+            Key::new(kp2.secret.to_bytes().to_vec()),
+        );
 
         // initial key set
-        let sig_pref_0 = Basic::Ed25519.derive(sig_key_0);
+        let sig_pref_0 = Basic::Ed25519.derive(pub_key0);
         let enc_pref_0 = Basic::X25519.derive(enc_key_0);
 
         // next key set
-        let sig_pref_1 = Basic::Ed25519.derive(sig_key_1);
+        let sig_pref_1 = Basic::Ed25519.derive(pub_key1);
         let enc_pref_1 = Basic::X25519.derive(enc_key_1);
 
         // next key set pre-commitment
@@ -396,8 +535,8 @@ mod tests {
         let icp = InceptionEvent::new(
             KeyConfig::new(
                 vec![sig_pref_0.clone(), enc_pref_0.clone()],
-                nexter_pref.clone(),
-                Some(1),
+                Some(nexter_pref.clone()),
+                Some(SignatureThreshold::default()),
             ),
             None,
             None,
@@ -408,9 +547,8 @@ mod tests {
         let serialized = icp.serialize()?;
 
         // sign
-        let sig = ed
-            .sign(&serialized, &sig_priv_0)
-            .map_err(|e| Error::CryptoError(e))?;
+        let sk = priv_key0;
+        let sig = sk.sign_ed(&serialized)?;
         let attached_sig = AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig, 0);
 
         assert!(sig_pref_0.verify(&serialized, &attached_sig.signature)?);
@@ -429,8 +567,8 @@ mod tests {
         assert_eq!(s0.current.public_keys.len(), 2);
         assert_eq!(s0.current.public_keys[0], sig_pref_0);
         assert_eq!(s0.current.public_keys[1], enc_pref_0);
-        assert_eq!(s0.current.threshold, 1);
-        assert_eq!(s0.current.threshold_key_digest, nexter_pref);
+        assert_eq!(s0.current.threshold, SignatureThreshold::default());
+        assert_eq!(s0.current.threshold_key_digest, Some(nexter_pref));
         assert_eq!(s0.witnesses, vec![]);
         assert_eq!(s0.tally, 0);
         assert_eq!(s0.delegates, vec![]);

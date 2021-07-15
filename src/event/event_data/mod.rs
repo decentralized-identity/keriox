@@ -4,22 +4,27 @@ pub mod interaction;
 pub mod receipt;
 pub mod rotation;
 
-use crate::error::Error;
-use crate::state::{EventSemantics, IdentifierState};
+use crate::{
+    derivation::{self_addressing::SelfAddressing, DerivationCode},
+    error::Error,
+    event_message::serialization_info::{SerializationFormats, SerializationInfo},
+    state::{EventSemantics, IdentifierState},
+};
 use serde::{Deserialize, Serialize};
+use serde_hex::{Compact, SerHex};
 
-use self::{
+pub use self::{
     delegated::{DelegatedInceptionEvent, DelegatedRotationEvent},
     inception::InceptionEvent,
     interaction::InteractionEvent,
-    receipt::{ReceiptNonTransferable, ReceiptTransferable},
+    receipt::Receipt,
     rotation::RotationEvent,
 };
 
 /// Event Data
 ///
 /// Event Data conveys the semantic content of a KERI event.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(tag = "t", rename_all = "lowercase")]
 pub enum EventData {
     Icp(InceptionEvent),
@@ -27,8 +32,7 @@ pub enum EventData {
     Ixn(InteractionEvent),
     Dip(DelegatedInceptionEvent),
     Drt(DelegatedRotationEvent),
-    Rct(ReceiptNonTransferable),
-    Vrc(ReceiptTransferable),
+    Rct(Receipt),
 }
 
 impl EventSemantics for EventData {
@@ -40,7 +44,73 @@ impl EventSemantics for EventData {
             Self::Dip(e) => e.apply_to(state),
             Self::Drt(e) => e.apply_to(state),
             Self::Rct(e) => e.apply_to(state),
-            Self::Vrc(e) => e.apply_to(state),
         }
+    }
+}
+
+/// Dummy Event
+///
+/// Used only to encapsulate the prefix derivation process for inception and delegated inception
+#[derive(Serialize, Debug, Clone)]
+pub(crate) struct DummyEvent {
+    #[serde(rename = "v")]
+    serialization_info: SerializationInfo,
+    #[serde(rename = "i")]
+    prefix: String,
+    #[serde(rename = "s", with = "SerHex::<Compact>")]
+    sn: u8,
+    #[serde(flatten)]
+    data: EventData,
+}
+
+impl DummyEvent {
+    pub fn derive_inception_data(
+        icp: InceptionEvent,
+        derivation: &SelfAddressing,
+        format: SerializationFormats,
+    ) -> Result<Vec<u8>, Error> {
+        Self::derive_data(EventData::Icp(icp), derivation, format)
+    }
+
+    pub fn derive_delegated_inception_data(
+        dip: DelegatedInceptionEvent,
+        derivation: &SelfAddressing,
+        format: SerializationFormats,
+    ) -> Result<Vec<u8>, Error> {
+        Self::derive_data(EventData::Dip(dip), derivation, format)
+    }
+
+    fn derive_data(
+        data: EventData,
+        derivation: &SelfAddressing,
+        format: SerializationFormats,
+    ) -> Result<Vec<u8>, Error> {
+        Ok(Self {
+            serialization_info: SerializationInfo::new(
+                format,
+                Self {
+                    serialization_info: SerializationInfo::new(format, 0),
+                    prefix: Self::dummy_prefix(derivation),
+                    sn: 0,
+                    data: data.clone(),
+                }
+                .serialize()?
+                .len(),
+            ),
+            prefix: Self::dummy_prefix(derivation),
+            sn: 0,
+            data: data,
+        }
+        .serialize()?)
+    }
+
+    fn serialize(&self) -> Result<Vec<u8>, Error> {
+        self.serialization_info.kind.encode(&self)
+    }
+
+    fn dummy_prefix(derivation: &SelfAddressing) -> String {
+        std::iter::repeat("#")
+            .take(derivation.code_len() + derivation.derivative_b64_len())
+            .collect::<String>()
     }
 }

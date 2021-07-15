@@ -1,6 +1,6 @@
 use super::EventDatabase;
 use crate::{
-    error::Error,
+    derivation::attached_signature_code::get_sig_count,
     prefix::{
         AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
         SelfSigningPrefix,
@@ -9,9 +9,7 @@ use crate::{
 use bincode;
 use chrono::prelude::*;
 use rkv::{
-    backend::{
-        BackendDatabase, BackendEnvironment, SafeMode, SafeModeDatabase, SafeModeEnvironment,
-    },
+    backend::{BackendEnvironmentBuilder, SafeMode, SafeModeDatabase, SafeModeEnvironment},
     value::Type,
     DataError, Manager, MultiStore, Rkv, SingleStore, StoreError, StoreOptions, Value,
 };
@@ -55,13 +53,29 @@ impl From<SequenceIndex<'_>> for Vec<u8> {
 }
 
 impl LmdbEventDatabase {
+    /// New
+    ///
+    /// Will create or open an event DB at given path
     pub fn new<'p, P>(path: P) -> Result<Self, StoreError>
     where
         P: Into<&'p Path>,
     {
+        let p: &'p Path = path.into();
+        match Self::open(p) {
+            Ok(db) => Ok(db),
+            Err(_) => Self::create(p),
+        }
+    }
+
+    pub fn create<'p, P>(path: P) -> Result<Self, StoreError>
+    where
+        P: Into<&'p Path>,
+    {
         let mut m = Manager::<SafeModeEnvironment>::singleton().write()?;
+        let mut backend = Rkv::environment_builder::<SafeMode>();
+        &backend.set_max_dbs(12).set_make_dir_if_needed(true);
         let created_arc =
-            m.get_or_create_with_capacity(path, 12, Rkv::with_capacity::<SafeMode>)?;
+            m.get_or_create_from_builder(path, backend, Rkv::from_builder::<SafeMode>)?;
         let env = created_arc.read()?;
 
         Ok(Self {
@@ -77,6 +91,34 @@ impl LmdbEventDatabase {
             out_of_order_events: env.open_multi("ooes", StoreOptions::create())?,
             likely_duplicitous_events: env.open_multi("ldes", StoreOptions::create())?,
             duplicitous_events: env.open_multi("dels", StoreOptions::create())?,
+            env: created_arc.clone(),
+        })
+    }
+
+    pub fn open<'p, P>(path: P) -> Result<Self, StoreError>
+    where
+        P: Into<&'p Path>,
+    {
+        let mut m = Manager::<SafeModeEnvironment>::singleton().write()?;
+        let mut backend = Rkv::environment_builder::<SafeMode>();
+        &backend.set_max_dbs(12).set_make_dir_if_needed(false);
+        let created_arc =
+            m.get_or_create_from_builder(path, backend, Rkv::from_builder::<SafeMode>)?;
+        let env = created_arc.read()?;
+
+        Ok(Self {
+            events: env.open_single("evts", StoreOptions::default())?,
+            datetime_stamps: env.open_single("dtss", StoreOptions::default())?,
+            signatures: env.open_multi("sigs", StoreOptions::default())?,
+            receipts_nt: env.open_multi("rcts", StoreOptions::default())?,
+            escrowed_receipts_nt: env.open_multi("ures", StoreOptions::default())?,
+            receipts_t: env.open_multi("vrcs", StoreOptions::default())?,
+            escrowed_receipts_t: env.open_multi("vres", StoreOptions::default())?,
+            key_event_logs: env.open_multi("kels", StoreOptions::default())?,
+            partially_signed_events: env.open_multi("pses", StoreOptions::default())?,
+            out_of_order_events: env.open_multi("ooes", StoreOptions::default())?,
+            likely_duplicitous_events: env.open_multi("ldes", StoreOptions::default())?,
+            duplicitous_events: env.open_multi("dels", StoreOptions::default())?,
             env: created_arc.clone(),
         })
     }
@@ -143,6 +185,122 @@ impl EventDatabase for LmdbEventDatabase {
         }
     }
 
+    fn has_receipt(
+        &self,
+        pref: &IdentifierPrefix,
+        sn: u64,
+        validator_id: &IdentifierPrefix,
+    ) -> Result<bool, Self::Error> {
+        let lock = self.env.read()?;
+        let reader = lock.read()?;
+        let seq_index: Vec<u8> = SequenceIndex(pref, sn).into();
+
+        let dig: SelfAddressingPrefix = match self.key_event_logs.get(&reader, &seq_index)?.last() {
+            Some(v) => match v?.1 {
+                Value::Blob(b) => {
+                    bincode::deserialize(b).map_err(|e| DataError::DecodingError {
+                        value_type: Type::Blob,
+                        err: e,
+                    })?
+                }
+                _ => {
+                    return Err(StoreError::DataError(DataError::UnexpectedType {
+                        expected: Type::Blob,
+                        actual: Type::from_tag(0u8)?,
+                    }))
+                }
+            },
+            None => return Ok(false),
+        };
+
+        let dig_index: Vec<u8> = ContentIndex(pref, &dig).into();
+
+        let has_vrc = self
+            .receipts_t
+            .get(&reader, &dig_index)?
+            .filter_map(Result::ok)
+            .map(|e| match e.1 {
+                Value::Blob(b) => bincode::deserialize(b)
+                    .map_err(|e| DataError::DecodingError {
+                        value_type: Type::Blob,
+                        err: e,
+                    })
+                    .unwrap(),
+                _ => {
+                    vec![]
+                }
+            })
+            .any(|e: Vec<u8>| e == validator_id.to_str().as_bytes());
+        Ok(has_vrc)
+    }
+
+    fn get_kerl(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Self::Error> {
+        let mut buf = Vec::<u8>::new();
+
+        let lock = self.env.read()?;
+        let reader = lock.read()?;
+
+        for sn in 0.. {
+            let seq_index: Vec<u8> = SequenceIndex(id, sn).into();
+            let dig: SelfAddressingPrefix =
+                match self.key_event_logs.get(&reader, &seq_index)?.last() {
+                    Some(v) => match v?.1 {
+                        Value::Blob(b) => {
+                            bincode::deserialize(b).map_err(|e| DataError::DecodingError {
+                                value_type: Type::Blob,
+                                err: e,
+                            })?
+                        }
+                        _ => {
+                            return Err(StoreError::DataError(DataError::UnexpectedType {
+                                expected: Type::Blob,
+                                actual: Type::from_tag(0u8)?,
+                            }))
+                        }
+                    },
+                    None if sn == 0 => return Ok(None),
+                    None => return Ok(Some(buf)),
+                };
+
+            let dig_index: Vec<u8> = ContentIndex(id, &dig).into();
+
+            buf.extend(match self.events.get(&reader, &dig_index)? {
+                Some(v) => match v {
+                    Value::Blob(b) => b,
+                    _ => Err(StoreError::DataError(DataError::UnexpectedType {
+                        expected: Type::Blob,
+                        actual: Type::from_tag(0u8)?,
+                    }))?,
+                },
+                None => &[],
+            });
+
+            let mut sigs = Vec::new();
+
+            for sig_res in self.signatures.get(&reader, &dig_index)? {
+                match sig_res?.1 {
+                    Value::Blob(sig_bytes) => {
+                        // TODO I wonder if we can skip this deserialize/reserialize process
+                        sigs.push(sig_bytes.to_owned());
+                    }
+                    _ => {
+                        return Err(StoreError::DataError(DataError::UnexpectedType {
+                            expected: Type::Blob,
+                            actual: Type::from_tag(0u8)?,
+                        }))
+                    }
+                }
+            }
+
+            buf.extend(get_sig_count(sigs.len() as u16).as_bytes());
+            buf.extend(sigs.into_iter().flatten());
+
+            // TODO also attach witness receipts!!
+        }
+
+        Ok(Some(buf))
+    }
+
     fn log_event(
         &self,
         pref: &IdentifierPrefix,
@@ -160,11 +318,8 @@ impl EventDatabase for LmdbEventDatabase {
 
         // insert signatures for event
         for sig in sigs.iter() {
-            self.signatures.put(
-                &mut writer,
-                &key,
-                &Value::Blob(&bincode::serialize(&sig).unwrap()),
-            )?;
+            self.signatures
+                .put(&mut writer, &key, &Value::Blob(&sig.to_str().as_bytes()))?;
         }
 
         // insert event itself
