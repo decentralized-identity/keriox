@@ -4,7 +4,7 @@ use crate::{database::sled::SledEventDatabase, derivation::self_addressing::Self
         }}, event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedSignedEventMessage, parse::{
             Deserialized,
             DeserializedSignedEvent
-            }}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
+            }, payload_size::PayloadType}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
 
 #[cfg(test)]
 mod tests;
@@ -245,7 +245,7 @@ impl<'d> EventProcessor<'d> {
     ) -> Result<Option<IdentifierState>, Error> {
         // Log event.
         let signed_event = SignedEventMessage::new(
-                &event.event.event, event.signatures.clone());
+                &event.event.event, PayloadType::MA, event.signatures.clone());
         let id = &event.event.event.event.prefix;
         // If delegated event, check its delegator seal.
         match event.event.event.event.event_data.clone() {

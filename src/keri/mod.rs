@@ -1,24 +1,7 @@
-use crate::{
-    database::sled::SledEventDatabase,
-    derivation::basic::Basic,
-    derivation::self_addressing::SelfAddressing,
-    derivation::self_signing::SelfSigning,
-    error::Error,
-    event::sections::seal::{DigestSeal, Seal},
-    event::{event_data::EventData, Event, EventMessage, SerializationFormats},
-    event::{event_data::Receipt, sections::seal::EventSeal},
-    event_message::parse::signed_message,
-    event_message::{
+use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivation::self_addressing::SelfAddressing, derivation::self_signing::SelfSigning, error::Error, event::sections::seal::{DigestSeal, Seal}, event::{event_data::EventData, Event, EventMessage, SerializationFormats}, event::{event_data::Receipt, sections::seal::EventSeal}, event_message::{parse::signed_message, payload_size::PayloadType}, event_message::{
         event_msg_builder::{EventMsgBuilder, EventType},
         parse::{signed_event_stream, Deserialized},
-    },
-    event_message::{SignedEventMessage, SignedTransferableReceipt},
-    prefix::AttachedSignaturePrefix,
-    prefix::IdentifierPrefix,
-    processor::EventProcessor,
-    signer::KeyManager,
-    state::IdentifierState,
-};
+    }, event_message::{SignedEventMessage, SignedTransferableReceipt}, prefix::AttachedSignaturePrefix, prefix::IdentifierPrefix, processor::EventProcessor, signer::KeyManager, state::IdentifierState};
 mod test;
 pub struct Keri<'d, K: KeyManager> {
     prefix: IdentifierPrefix,
@@ -45,7 +28,7 @@ impl<'d, K: KeyManager> Keri<'d, K> {
             ])
             .build()?;
 
-        let signed = icp.sign(vec![AttachedSignaturePrefix::new(
+        let signed = icp.sign(PayloadType::MA, vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
             self.key_manager.sign(&icp.serialize()?)?,
             0,
@@ -63,7 +46,7 @@ impl<'d, K: KeyManager> Keri<'d, K> {
         self.key_manager.rotate()?;
 
         let rot = self.make_rotation()?;
-        let rot = rot.sign(vec![AttachedSignaturePrefix::new(
+        let rot = rot.sign(PayloadType::MA, vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
             self.key_manager.sign(&rot.serialize()?)?,
             0,
@@ -112,7 +95,7 @@ impl<'d, K: KeyManager> Keri<'d, K> {
             .with_seal(seal_list)
             .build()?;
 
-        let ixn = ev.sign(vec![AttachedSignaturePrefix::new(
+        let ixn = ev.sign(PayloadType::MA, vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
             self.key_manager.sign(&ev.serialize()?)?,
             0,

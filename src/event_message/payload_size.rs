@@ -5,8 +5,8 @@ use std::convert::TryFrom;
 // Payload sizes pre unit
 // according to:
 // https://github.com/decentralized-identity/keri/blob/master/kids/kid0001.md#base64-master-code-table
-#[derive(Serialize, Deserialize)]
-pub(crate) enum PayloadType {
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+pub enum PayloadType {
     A,
     B,
     C,

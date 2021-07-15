@@ -21,8 +21,11 @@ use crate::{
     state::{EventSemantics, IdentifierState},
 };
 use chrono::{DateTime, Local};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize, ser::SerializeStruct};
 use serialization_info::*;
+use serializer::to_string;
+
+use self::payload_size::PayloadType;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct EventMessage {
@@ -95,28 +98,28 @@ impl From<EventMessage> for TimestampedEventMessage {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+// KERI serializer should be used to serialize this
+#[derive(Debug, Clone, Deserialize)]
 pub struct SignedEventMessage {
     pub event_message: EventMessage,
+    #[serde(skip_serializing)]
+    pub payload_type: PayloadType, 
     #[serde(skip)]
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
 
-// impl Serialize for SignedEventMessage {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: serde::Serializer {
-//         let is_hr = serializer.is_human_readable();
-//         let mut message = serializer.serialize_struct("SignedEventMessage", 1)?;
-//         message.serialize_field("eventMessage", &self.event_message)?;
-//         message.end()?;
-//         if  is_hr {
-//             serializer.serialize_str("")
-//         } else {
-//             serializer.serialize_bytes(b"")
-//         }
-//     }
-// }
+impl Serialize for SignedEventMessage {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer {
+        let mut em = serializer.serialize_struct("EventMessage", 2)?;
+        em.serialize_field("", &self.event_message)?;
+        let code = self.calc_master_code();
+        em.serialize_field(Box::leak(code.into_boxed_str()) , &serde_json::to_string(&self.signatures)
+            .map_err(|e| serde::ser::Error::custom(&e.to_string()))?)?;
+        em.end()
+    }
+}
 
 impl PartialEq for SignedEventMessage {
     fn eq(&self, other: &Self) -> bool {
@@ -248,31 +251,28 @@ impl EventMessage {
         self.serialization().encode(self)
     }
 
-    pub fn sign(&self, sigs: Vec<AttachedSignaturePrefix>) -> SignedEventMessage {
-        SignedEventMessage::new(self, sigs)
+    pub fn sign(&self, payload_type: PayloadType, sigs: Vec<AttachedSignaturePrefix>) -> SignedEventMessage {
+        SignedEventMessage::new(self, payload_type, sigs)
     }
 }
 
 impl SignedEventMessage {
-    pub fn new(message: &EventMessage, sigs: Vec<AttachedSignaturePrefix>) -> Self {
+    pub fn new(message: &EventMessage, payload_type: PayloadType, sigs: Vec<AttachedSignaturePrefix>) -> Self {
         Self {
             event_message: message.clone(),
+            payload_type,
             signatures: sigs,
         }
     }
 
+    pub fn calc_master_code(&self) -> String {
+        format!("{}{}", 
+            serde_json::to_string(&self.payload_type).unwrap(),
+            base64::encode(&self.signatures.len().to_be_bytes()))
+    }
+
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        Ok([
-            self.event_message.serialize()?,
-            get_sig_count(self.signatures.len() as u16)
-                .as_bytes()
-                .to_vec(),
-            self.signatures
-                .iter()
-                .map(|sig| sig.to_str().as_bytes().to_vec())
-                .fold(vec![], |acc, next| [acc, next].concat()),
-        ]
-        .concat())
+        Ok(to_string(&self)?.as_bytes().to_vec())
     }
 }
 
@@ -488,7 +488,7 @@ mod tests {
 
         assert!(pref0.verify(&ser, &attached_sig.signature)?);
 
-        let signed_event = icp_m.sign(vec![attached_sig]);
+        let signed_event = icp_m.sign(PayloadType::MA, vec![attached_sig]);
 
         let s_ = IdentifierState::default();
 
@@ -571,7 +571,7 @@ mod tests {
 
         assert!(sig_pref_0.verify(&serialized, &attached_sig.signature)?);
 
-        let signed_event = icp.sign(vec![attached_sig]);
+        let signed_event = icp.sign(PayloadType::MA, vec![attached_sig]);
 
         let s_ = IdentifierState::default();
 

@@ -1,4 +1,4 @@
-use super::{AttachedSignaturePrefix, EventMessage, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, serialization_info::SerializationInfo};
+use super::{AttachedSignaturePrefix, EventMessage, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, payload_size::PayloadType, serialization_info::SerializationInfo};
 use crate::{
     derivation::attached_signature_code::b64_to_num,
     event::{event_data::EventData, sections::seal::EventSeal},
@@ -31,9 +31,10 @@ pub struct DeserializedSignedEvent<'a> {
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
 
+// FIXME: detect payload type
 impl From<DeserializedSignedEvent<'_>> for SignedEventMessage {
     fn from(de: DeserializedSignedEvent) -> SignedEventMessage {
-        SignedEventMessage::new(&de.event.event, de.signatures)
+        SignedEventMessage::new(&de.event.event, PayloadType::MA, de.signatures)
     }
 }
 

@@ -80,6 +80,6 @@ pub enum Error {
     #[error(transparent)]
     SledError(#[from] sled::Error),
 
-    // #[error(transparent)]
-    // SerdeSerError(#[from] Box<dyn serde::ser::Error>),
+    #[error(transparent)]
+    SerdeSerError(#[from] serializer_error::Error),
 }
