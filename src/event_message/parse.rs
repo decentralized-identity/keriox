@@ -344,6 +344,26 @@ fn test_stream2() {
     let stream = br#"{"v":"KERI10JSON00014b_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"0","t":"icp","kt":"2","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"E9izzBkXX76sqt0N-tfLzJeRqj0W56p4pDQ_ZqNCDpyw","bt":"0","b":[],"c":[],"a":[]}-AADAAhcaP-l0DkIKlJ87iIVcDx-m0iKPdSArEu63b-2cSEn9wXVGNpWw9nfwxodQ9G8J3q_Pm-AWfDwZGD9fobWuHBAAB6mz7zP0xFNBEBfSKG4mjpPbeOXktaIyX8mfsEa1A3Psf7eKxSrJ5Woj3iUB2AhhLg412-zkk795qxsK2xfdxBAACj5wdW-EyUJNgW0LHePQcSFNxW3ZyPregL4H2FoOrsPxLa3MZx6xYTh6i7YRMGY50ezEjV81hkI1Yce75M_bPCQ"#;
     assert!(signed_message(stream).is_ok());
     assert!(signed_event_stream_validate(stream).is_ok());
+    
+    let parsed = signed_message(stream).unwrap().1;
+
+    match parsed {
+        Deserialized::Event(signed_event) => {
+            assert_eq!(
+                signed_event.event.raw.len(),
+                signed_event.event.event_message.serialization_info.size
+            );
+
+            assert!(signed_message(stream).is_ok());
+            assert!(signed_event_stream_validate(stream).is_ok());
+            let signed_event: SignedEventMessage = signed_event.into();
+            let serialized_again = signed_event.serialize();
+            assert!(serialized_again.is_ok());
+            let stringified = String::from_utf8(serialized_again.unwrap()).unwrap();
+            assert_eq!(stream, stringified.as_bytes())
+        }
+        _ => assert!(false),
+    }
 }
 
 #[test]
