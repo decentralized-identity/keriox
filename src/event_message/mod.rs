@@ -98,7 +98,7 @@ pub struct SignedEventMessage {
     pub event_message: EventMessage,
     #[serde(skip_serializing)]
     pub payload_type: PayloadType, 
-    #[serde(skip)]
+    #[serde(skip_serializing)]
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
 
@@ -106,13 +106,23 @@ impl Serialize for SignedEventMessage {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer {
-        let mut em = serializer.serialize_struct("EventMessage", 2)?;
-        em.serialize_field("", &self.event_message)?;
-        let str_sigs = &self.signatures.iter().fold(String::default(), |accum, sig| accum + &sig.to_str());
-        let code = self.calc_master_code(&str_sigs[..1]);
-            // .map_err(|e| serde::ser::Error::custom(&e.to_string()))?;
-        em.serialize_field("-" , &format!("{}{}", Box::leak(code.into_boxed_str()), str_sigs))?;
-        em.end()
+        // if JSON - we pack qb64 KERI
+        if serializer.is_human_readable() {
+            let mut em = serializer.serialize_struct("EventMessage", 2)?;
+            em.serialize_field("", &self.event_message)?;
+            let str_sigs = &self.signatures.iter().fold(String::default(), |accum, sig| accum + &sig.to_str());
+            let code = self.calc_master_code(&str_sigs[..1]);
+                // .map_err(|e| serde::ser::Error::custom(&e.to_string()))?;
+            em.serialize_field("-" , &format!("{}{}", Box::leak(code.into_boxed_str()), str_sigs))?;
+            em.end()
+        // . else - we pack as it is for DB / CBOR purpose
+        } else {
+            let mut em = serializer.serialize_struct("SignedEventMessage", 3)?;
+            em.serialize_field("event_message", &self.event_message)?;
+            em.serialize_field("payload_type", &self.payload_type)?;
+            em.serialize_field("signatures", &self.signatures)?;
+            em.end()
+        }
     }
 }
 

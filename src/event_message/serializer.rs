@@ -160,7 +160,6 @@ impl<'a> ser::Serializer for &'a mut KeriJsonSerializer {
         Ok(())
     }
 
-    // do nothing for KERI attachments
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
         self.output += "[";
         Ok(self)
