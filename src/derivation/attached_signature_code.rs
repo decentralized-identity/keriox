@@ -95,14 +95,23 @@ pub fn b64_to_num(b64: &[u8]) -> Result<u16, Error> {
 
 pub fn num_to_b64(num: u16) -> String {
     match num {
-        n if n < 63 => {
-            encode_config(&[num.to_be_bytes()[1] << 2], base64::URL_SAFE)[..1].to_string()
-        }
-        n if n < 4095 => encode_config(num.to_be_bytes(), base64::URL_SAFE)[..2].to_string(),
-        _ => encode_config(num.to_be_bytes(), base64::URL_SAFE),
+        n if n < 63 => 
+            encode_config([num.to_be_bytes()[1] << 2], base64::URL_SAFE_NO_PAD)[..1].to_string(),
+        n if n < 4095 => 
+            encode_config(num.to_be_bytes(), base64::URL_SAFE_NO_PAD)[..2].to_string(),
+        _ => encode_config(num.to_be_bytes(), base64::URL_SAFE_NO_PAD),
     }
 }
 
 pub fn get_sig_count(num: u16) -> String {
-    ["-AA", &num_to_b64(num)].join("")
+    ["-A", &num_to_b64(num)].join("")
+}
+
+#[test]
+fn num_to_b64_test() {
+    assert_eq!("A", num_to_b64(0));
+    assert_eq!("B", num_to_b64(1));
+    assert_eq!("C", num_to_b64(2));
+    assert_eq!("D", num_to_b64(3));
+    assert_eq!("AE", num_to_b64(64));
 }

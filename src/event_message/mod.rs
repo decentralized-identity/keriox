@@ -6,20 +6,14 @@ pub(crate) mod payload_size;
 
 use std::cmp::Ordering;
 
-use crate::{
-    derivation::attached_signature_code::get_sig_count,
-    error::Error,
-    event::{
+use crate::{derivation::attached_signature_code::{get_sig_count, num_to_b64}, error::Error, event::{
         event_data::{DummyEvent, EventData},
         sections::seal::EventSeal,
         Event,
-    },
-    prefix::{
+    }, prefix::{
         attached_seal::AttachedEventSeal, AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix,
         Prefix, SelfSigningPrefix,
-    },
-    state::{EventSemantics, IdentifierState},
-};
+    }, state::{EventSemantics, IdentifierState}};
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize, ser::SerializeStruct};
 use serialization_info::*;
@@ -114,9 +108,10 @@ impl Serialize for SignedEventMessage {
         S: serde::Serializer {
         let mut em = serializer.serialize_struct("EventMessage", 2)?;
         em.serialize_field("", &self.event_message)?;
-        let code = self.calc_master_code();
-        em.serialize_field(Box::leak(code.into_boxed_str()) , &serde_json::to_string(&self.signatures)
-            .map_err(|e| serde::ser::Error::custom(&e.to_string()))?)?;
+        let str_sigs = &self.signatures.iter().fold(String::default(), |accum, sig| accum + &sig.to_str());
+        let code = self.calc_master_code(&str_sigs[..1]);
+            // .map_err(|e| serde::ser::Error::custom(&e.to_string()))?;
+        em.serialize_field("-" , &format!("{}{}", Box::leak(code.into_boxed_str()), str_sigs))?;
         em.end()
     }
 }
@@ -265,10 +260,11 @@ impl SignedEventMessage {
         }
     }
 
-    pub fn calc_master_code(&self) -> String {
-        format!("{}{}", 
-            serde_json::to_string(&self.payload_type).unwrap(),
-            base64::encode(&self.signatures.len().to_be_bytes()))
+    pub fn calc_master_code(&self, derivation: &str) -> String {
+        format!("{}{}{}", 
+            &self.payload_type.to_string(),
+            derivation,
+            num_to_b64(self.signatures.len() as u16))
     }
 
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {

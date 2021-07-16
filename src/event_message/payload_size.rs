@@ -1,6 +1,6 @@
 use serde::{Serialize, Deserialize};
 use crate::error::Error;
-use std::convert::TryFrom;
+use std::{convert::TryFrom, fmt::Display};
 
 // Payload sizes pre unit
 // according to:
@@ -194,5 +194,52 @@ impl TryFrom<&str> for PayloadType {
            "-Z" => Ok(Self::MZ),
            _ => Err(Error::ImproperPrefixType)
        }
+    }
+}
+
+impl Display for PayloadType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::A => f.write_str("A"),
+            Self::B => f.write_str("B"),
+            Self::C => f.write_str("C"),
+            Self::D => f.write_str("D"),
+            Self::E => f.write_str("D"),
+            Self::F => f.write_str("F"),
+            Self::G => f.write_str("G"),
+            Self::H => f.write_str("H"),
+            Self::I => f.write_str("I"),
+            Self::J => f.write_str("J"),
+            Self::K => f.write_str("K"),
+            Self::L => f.write_str("L"),
+            Self::M => f.write_str("M"),
+            Self::OA => f.write_str("0A"),
+            Self::OB => f.write_str("0B"),
+            Self::OC => f.write_str("0C"),
+            Self::OD => f.write_str("0D"),
+            Self::OE => f.write_str("0E"),
+            Self::OF => f.write_str("0F"),
+            Self::OG => f.write_str("0G"),
+            Self::OH => f.write_str("0H"),
+            Self::IAAA => f.write_str("1AAA"),
+            Self::IAAB => f.write_str("1AAB"),
+            Self::IAAC => f.write_str("1AAC"),
+            Self::IAAD => f.write_str("1AAD"),
+            Self::IAAE => f.write_str("1AAE"),
+            Self::IAAF => f.write_str("1AAF"),
+            Self::IAAG => f.write_str("1AAG"),
+            Self::MA => f.write_str("-A"),
+            Self::MB => f.write_str("-B"),
+            Self::MC => f.write_str("-C"),
+            Self::MD => f.write_str("-D"),
+            Self::ME => f.write_str("-E"),
+            Self::MF => f.write_str("-F"),
+            Self::MU => f.write_str("-U"),
+            Self::MV => f.write_str("-V"),
+            Self::MW => f.write_str("-W"),
+            Self::MX => f.write_str("-X"),
+            Self::MY => f.write_str("-Y"),
+            Self::MZ => f.write_str("-Z")
+        }
     }
 }

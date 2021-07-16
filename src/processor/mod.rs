@@ -245,17 +245,17 @@ impl<'d> EventProcessor<'d> {
     ) -> Result<Option<IdentifierState>, Error> {
         // Log event.
         let signed_event = SignedEventMessage::new(
-                &event.event.event, PayloadType::MA, event.signatures.clone());
-        let id = &event.event.event.event.prefix;
+                &event.event.event_message, PayloadType::MA, event.signatures.clone());
+        let id = &event.event.event_message.event.prefix;
         // If delegated event, check its delegator seal.
-        match event.event.event.event.event_data.clone() {
+        match event.event.event_message.event.event_data.clone() {
             EventData::Dip(dip) =>
                 self.validate_seal(dip.seal, &event.event.raw),
             EventData::Drt(drt) =>
                 self.validate_seal(drt.seal, &event.event.raw),
             _ => Ok(()),
         }?;
-        self.apply_to_state(event.event.event.clone())
+        self.apply_to_state(event.event.event_message.clone())
             .and_then(|new_state| {
                 // add event from the getgo and clean it up on failure later
                 self.db.add_kel_finalized_event(signed_event.clone(), id)?;

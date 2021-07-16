@@ -62,7 +62,7 @@ pub trait EventDatabase {
             let parsed = message(&raw).unwrap().1;
             // apply it to the state
             // TODO avoid .clone()
-            state = match state.clone().apply(&parsed.event) {
+            state = match state.clone().apply(&parsed.event_message) {
                 Ok(s) => s,
                 // will happen when a recovery has overridden some part of the KEL,
                 // stop processing here

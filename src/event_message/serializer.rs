@@ -81,11 +81,15 @@ impl<'a> ser::Serializer for &'a mut KeriJsonSerializer {
         self.serialize_str(&v.to_string())
     }
 
-    // for KERI attachments we put strings as they are
+    // for KERI master codes we skip adding quotes
     fn serialize_str(self, v: &str) -> Result<()> {
-        // self.output += "\"";
-        self.output += v;
-        // self.output += "\"";
+        if v.starts_with("-") {
+            self.output += v;
+        } else {
+            self.output += "\"";
+            self.output += v;
+            self.output += "\"";
+        }
         Ok(())
     }
 
@@ -158,7 +162,7 @@ impl<'a> ser::Serializer for &'a mut KeriJsonSerializer {
 
     // do nothing for KERI attachments
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
-        // self.output += "[";
+        self.output += "[";
         Ok(self)
     }
 
@@ -191,13 +195,13 @@ impl<'a> ser::Serializer for &'a mut KeriJsonSerializer {
         self.output += "{";
         Ok(self)
     }
-
+    // this is used to start serializing KERI struct, nothing more
     fn serialize_struct(
         self,
         _name: &'static str,
-        len: usize,
+        _len: usize,
     ) -> Result<Self::SerializeStruct> {
-        self.serialize_map(Some(len))
+        Ok(self)
     }
 
     fn serialize_struct_variant(
@@ -226,14 +230,14 @@ impl<'a> ser::SerializeSeq for &'a mut KeriJsonSerializer {
     where
         T: ?Sized + Serialize,
     {
-        // if !self.output.ends_with('[') {
-        //     self.output += ",";
-        // }
+        if !self.output.ends_with('[') {
+            self.output += ",";
+        }
         value.serialize(&mut **self)
     }
 
     fn end(self) -> Result<()> {
-        // self.output += "]";
+        self.output += "]";
         Ok(())
     }
 }
@@ -339,18 +343,21 @@ impl<'a> ser::SerializeStruct for &'a mut KeriJsonSerializer {
         T: ?Sized + Serialize,
     {
         // KERI master code
+        // value must be concatenated with code upfront
         if key.starts_with("-") {
-            self.output += "}";
-            self.output += key;
             value.serialize(&mut **self)?;
         } else { // regular field here
-            if !self.output.ends_with('{') {
+            if !self.output.ends_with('{') && !self.output.is_empty() {
                 self.output += ",";
+                self.output += "{";
             }
-            key.serialize(&mut **self)?;
-            self.output += ":";
+            if !key.is_empty() {
+                key.serialize(&mut **self)?;
+            }
             value.serialize(&mut **self)?;
-            self.output += "}";
+            if !self.output.ends_with('}') {
+                self.output += "}";
+            }
         }
         Ok(())
     }

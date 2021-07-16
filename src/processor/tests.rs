@@ -29,7 +29,7 @@ fn test_process() -> Result<(), Error> {
     let deserialized_icp = parse::signed_message(icp_raw).unwrap().1;
 
     let (id, _raw_parsed) = match &deserialized_icp {
-        Deserialized::Event(e) => (e.event.event.event.prefix.clone(), e.event.raw.to_vec()),
+        Deserialized::Event(e) => (e.event.event_message.event.prefix.clone(), e.event.raw.to_vec()),
         _ => Err(Error::SemanticError("bad deser".into()))?,
     };
 
@@ -73,7 +73,7 @@ fn test_process() -> Result<(), Error> {
     let ixn_from_db = event_processor.get_event_at_sn(&id, 2).unwrap().unwrap();
     match deserialized_ixn {
         Deserialized::Event(evt) =>
-            assert_eq!(ixn_from_db.event.event_message.event, evt.event.event.event),
+            assert_eq!(ixn_from_db.event.event_message.event, evt.event.event_message.event),
         _ => assert!(false)
     }
 
