@@ -110,7 +110,7 @@ where
                         println!("cutting: {}..{}", *this.processed, *this.processed + msg_length);
                         let sliced_message = &buffer[*this.processed..*this.processed + msg_length];
                         // and generate response
-                        let response = this.keri.respond(sliced_message).map_err(|e| e.to_string())?;
+                        let response = this.keri.respond_single(sliced_message).map_err(|e| e.to_string())?;
                         // stream it back
                         futures_core::ready!(this.writer.as_mut().poll_write(cx, &response))
                             .map_err(|e| e.to_string())?;
