@@ -1,3 +1,5 @@
+use serde::Serialize;
+
 use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivation::self_addressing::SelfAddressing, derivation::self_signing::SelfSigning, error::Error, event::sections::seal::{DigestSeal, Seal}, event::{event_data::EventData, Event, EventMessage, SerializationFormats}, event::{event_data::Receipt, sections::seal::EventSeal}, event_message::{parse::signed_message, payload_size::PayloadType}, event_message::{
         event_msg_builder::{EventMsgBuilder, EventType},
         parse::{signed_event_stream, Deserialized},
@@ -107,9 +109,23 @@ impl<'d, K: KeyManager> Keri<'d, K> {
         Ok(ixn)
     }
 
+    /// Process and respond to single event
+    ///
+    pub fn respond_single(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
+        match signed_message(msg) {
+            Err(e) => Err(Error::DeserializeError(e.to_string())),
+            Ok(event) => {
+                match self.processor.process(event.1)? {
+                    None => Err(Error::InvalidIdentifierStat),
+                    Some(state) => Ok(serde_json::to_vec(&state)?),
+                }
+            }
+        }
+    }
+
     pub fn respond(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
         let events = signed_event_stream(msg)
-            .map_err(|_| Error::DeserializationError)?
+            .map_err(|e| Error::DeserializeError(e.to_string()))?
             .1;
         let (processed_ok, _processed_failed): (Vec<_>, Vec<_>) = events
             .into_iter()
@@ -143,6 +159,7 @@ impl<'d, K: KeyManager> Keri<'d, K> {
                         buf.append(&mut self.make_rct(ev.event.event_message.clone())?.serialize()?);
                         Ok(buf)
                     }
+                    // TODO: this should process properly
                     _ => Ok(vec![]),
                 }
             })

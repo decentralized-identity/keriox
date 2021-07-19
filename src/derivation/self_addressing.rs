@@ -102,9 +102,9 @@ impl FromStr for SelfAddressing {
                 "E" => Ok(Self::SHA3_512),
                 "F" => Ok(Self::Blake2B512),
                 "G" => Ok(Self::SHA2_512),
-                _ => Err(Error::DeserializationError),
+                _ => Err(Error::DeserializeError("Unknown hash code".into())),
             },
-            _ => Err(Error::DeserializationError),
+            _ => Err(Error::DeserializeError("Unknown hash algorithm code".into())),
         }
     }
 }

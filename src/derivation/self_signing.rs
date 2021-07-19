@@ -51,13 +51,13 @@ impl FromStr for SelfSigning {
             "0" => match &s[1..2] {
                 "B" => Ok(Self::Ed25519Sha512),
                 "C" => Ok(Self::ECDSAsecp256k1Sha256),
-                _ => Err(Error::DeserializationError),
+                _ => Err(Error::DeserializeError("Unknown signature type code".into())),
             },
             "1" => match &s[1..4] {
                 "AAE" => Ok(Self::Ed448),
-                _ => Err(Error::DeserializationError),
+                _ => Err(Error::DeserializeError("Unknown signature type code".into())),
             },
-            _ => Err(Error::DeserializationError),
+            _ => Err(Error::DeserializeError(format!("Unknown master code: {}", s))),
         }
     }
 }

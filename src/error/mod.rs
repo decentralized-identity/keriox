@@ -49,8 +49,8 @@ pub enum Error {
     #[error("Not enough signatures while verifing")]
     NotEnoughSigsError,
 
-    #[error("Deserialization error")]
-    DeserializationError,
+    #[error("Deserialize error: {0}")]
+    DeserializeError(String),
 
     #[error("Identifier is not indexed into the DB")]
     NotIndexedError,
@@ -69,6 +69,9 @@ pub enum Error {
 
     #[error("Storage error")]
     StorageError,
+
+    #[error("Invalid identifier state")]
+    InvalidIdentifierStat,
 
     #[cfg(feature = "async")]
     #[error("Zero send error")]

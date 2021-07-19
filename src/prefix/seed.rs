@@ -56,9 +56,9 @@ impl FromStr for SeedPrefix {
                     &s[2..],
                     base64::URL_SAFE,
                 )?)),
-                _ => Err(Error::DeserializationError),
+                _ => Err(Error::DeserializeError(format!("Unknown seed prefix cod: {}", s))),
             },
-            _ => Err(Error::DeserializationError),
+            _ => Err(Error::DeserializeError(format!("Unknown seed prefix cod: {}", s))),
         }
     }
 }

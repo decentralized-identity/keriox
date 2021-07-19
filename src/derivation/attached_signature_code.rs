@@ -65,9 +65,9 @@ impl FromStr for AttachedSignatureCode {
                     SelfSigning::Ed448,
                     b64_to_num(&s.as_bytes()[3..4])?,
                 )),
-                _ => Err(Error::DeserializationError),
+                _ => Err(Error::DeserializeError("Unknows signature code".into())),
             },
-            _ => Err(Error::DeserializationError),
+            _ => Err(Error::DeserializeError("Unknown attachment code".into())),
         }
     }
 }

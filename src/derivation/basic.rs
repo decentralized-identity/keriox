@@ -70,9 +70,9 @@ impl FromStr for Basic {
                 "AAB" => Ok(Self::ECDSAsecp256k1),
                 "AAC" => Ok(Self::Ed448NT),
                 "AAD" => Ok(Self::Ed448),
-                _ => Err(Error::DeserializationError),
+                _ => Err(Error::DeserializeError("Unknown signature code".into())),
             },
-            _ => Err(Error::DeserializationError),
+            _ => Err(Error::DeserializeError("Unknown prefix code".into())),
         }
     }
 }
