@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 /// Basic Derivations
 ///
 /// Basic prefix derivation is just a public key (2.3.1)
-#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize, Hash)]
 pub enum Basic {
     ECDSAsecp256k1NT,
     ECDSAsecp256k1,

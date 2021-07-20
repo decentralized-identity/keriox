@@ -3,8 +3,8 @@ use crate::{
     database::sled::SledEventDatabase,
     error::Error,
     keri::Keri,
-    prefix::IdentifierPrefix,
     signer::CryptoBox,
+    prefix::IdentifierPrefix,
 };
 
 #[test]

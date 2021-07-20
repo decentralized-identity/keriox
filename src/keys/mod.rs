@@ -7,7 +7,7 @@ use k256::ecdsa::{
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Hash)]
 pub struct Key {
     key: Vec<u8>,
 }
