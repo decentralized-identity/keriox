@@ -1,4 +1,12 @@
-use std::{convert::TryFrom, future::Future, pin::Pin, sync::Arc};
+use std::{
+    convert::TryFrom,
+    future::Future,
+    pin::Pin,
+    sync::{
+        Arc,
+        mpsc::Sender,
+    },
+};
 use arrayref::array_ref;
 use pin_project_lite::pin_project;
 use async_std::{
@@ -20,12 +28,19 @@ use crate::{
     },
     keri::Keri,
     signer::CryptoBox,
+    prefix::IdentifierPrefix,
 };
 use bitpat::bitpat;
 
 pub type Result<T> = std::result::Result<T, String>;
 
-pub async fn process<'a, R, W>(keri: Arc<Keri<'a, CryptoBox>>, reader: &mut R, writer: &mut W, first_byte: u8) -> Result<()>
+pub async fn process<'a, R, W>(
+    keri: Arc<Keri<'a, CryptoBox>>,
+    reader: &mut R,
+    writer: &mut W,
+    first_byte: u8,
+    respond_to: Sender<(IdentifierPrefix, Vec<u8>)>)
+    -> Result<()>
 where
     R: Read + Unpin + ?Sized,
     W: Write + Unpin + ?Sized
@@ -38,8 +53,10 @@ where
                 writer: W,
                 #[pin]
                 keri: Arc<Keri<'a, CryptoBox>>,
+                #[pin]
+                respond_to: Sender<(IdentifierPrefix, Vec<u8>)>,
                 first_byte: u8,
-                processed: usize
+                processed: usize,
             }
         }
 
@@ -107,12 +124,14 @@ where
                             }
                         } // TODO: if equal it might mean that no attachments or not yet arrived!
                         // parse arrived message
-                        println!("cutting: {}..{}", *this.processed, *this.processed + msg_length);
                         let sliced_message = &buffer[*this.processed..*this.processed + msg_length];
                         // and generate response
                         let response = this.keri.respond_single(sliced_message).map_err(|e| e.to_string())?;
                         // stream it back
-                        futures_core::ready!(this.writer.as_mut().poll_write(cx, &response))
+                        futures_core::ready!(this.writer.as_mut().poll_write(cx, &response.1))
+                            .map_err(|e| e.to_string())?;
+                        // send responded message with identifier for sync purposes
+                        this.respond_to.as_mut().send((response.0, sliced_message.to_vec()))
                             .map_err(|e| e.to_string())?;
                         // store size of the processed data
                         *this.processed += msg_length;
@@ -133,6 +152,7 @@ where
             reader: BufReader::new(reader),
             writer,
             keri,
+            respond_to,
             first_byte,
             processed: 0,
         };

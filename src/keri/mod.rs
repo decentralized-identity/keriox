@@ -2,7 +2,7 @@ use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivat
         event_msg_builder::{EventMsgBuilder, EventType},
         parse::{signed_event_stream, Deserialized},
     }, event_message::{SignedEventMessage, SignedTransferableReceipt}, prefix::AttachedSignaturePrefix, prefix::IdentifierPrefix, processor::EventProcessor, signer::KeyManager, state::IdentifierState};
-    
+
 #[cfg(test)]
 mod test;
 pub struct Keri<'d, K: KeyManager> {
@@ -111,13 +111,13 @@ impl<'d, K: KeyManager> Keri<'d, K> {
 
     /// Process and respond to single event
     ///
-    pub fn respond_single(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
+    pub fn respond_single(&self, msg: &[u8]) -> Result<(IdentifierPrefix, Vec<u8>), Error> {
         match signed_message(msg) {
             Err(e) => Err(Error::DeserializeError(e.to_string())),
             Ok(event) => {
                 match self.processor.process(event.1)? {
                     None => Err(Error::InvalidIdentifierStat),
-                    Some(state) => Ok(serde_json::to_vec(&state)?),
+                    Some(state) => Ok((state.prefix.clone(), serde_json::to_vec(&state)?)),
                 }
             }
         }
