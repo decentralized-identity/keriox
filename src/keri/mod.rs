@@ -1,9 +1,9 @@
-use serde::Serialize;
-
 use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivation::self_addressing::SelfAddressing, derivation::self_signing::SelfSigning, error::Error, event::sections::seal::{DigestSeal, Seal}, event::{event_data::EventData, Event, EventMessage, SerializationFormats}, event::{event_data::Receipt, sections::seal::EventSeal}, event_message::{parse::signed_message, payload_size::PayloadType}, event_message::{
         event_msg_builder::{EventMsgBuilder, EventType},
         parse::{signed_event_stream, Deserialized},
     }, event_message::{SignedEventMessage, SignedTransferableReceipt}, prefix::AttachedSignaturePrefix, prefix::IdentifierPrefix, processor::EventProcessor, signer::KeyManager, state::IdentifierState};
+    
+#[cfg(test)]
 mod test;
 pub struct Keri<'d, K: KeyManager> {
     prefix: IdentifierPrefix,
