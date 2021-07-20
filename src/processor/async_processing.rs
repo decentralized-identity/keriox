@@ -2,25 +2,16 @@ use std::{
     convert::TryFrom,
     future::Future,
     pin::Pin,
-    sync::{
-        Arc,
-        mpsc::Sender,
-    },
+    sync:: Arc,
 };
 use arrayref::array_ref;
 use pin_project_lite::pin_project;
-use async_std::{
-    io::{
+use async_std::{channel::Sender, io::{
         Read,
         Write,
         BufRead,
         BufReader,
-    },
-    task::{
-        Context,
-        Poll
-    },
-};
+    }, task::{Context, Poll, block_on}};
 use crate::{
     event_message::{
         parse::{version, sig_count},
@@ -131,7 +122,8 @@ where
                         futures_core::ready!(this.writer.as_mut().poll_write(cx, &response.1))
                             .map_err(|e| e.to_string())?;
                         // send responded message with identifier for sync purposes
-                        this.respond_to.as_mut().send((response.0, sliced_message.to_vec()))
+                        block_on(this.respond_to.as_mut()
+                            .send((response.0, sliced_message.to_vec())))
                             .map_err(|e| e.to_string())?;
                         // store size of the processed data
                         *this.processed += msg_length;
