@@ -25,8 +25,8 @@ use bitpat::bitpat;
 
 pub type Result<T> = std::result::Result<T, String>;
 
-pub async fn process<'a, R, W>(
-    keri: Arc<Keri<'a, CryptoBox>>,
+pub async fn process<R, W>(
+    keri: Arc<Keri<CryptoBox>>,
     reader: &mut R,
     writer: &mut W,
     first_byte: u8,
@@ -37,13 +37,13 @@ where
     W: Write + Unpin + ?Sized
 {
         pin_project! {
-            struct Processor<'a, R, W> {
+            struct Processor<R, W> {
                 #[pin]
                 reader: R,
                 #[pin]
                 writer: W,
                 #[pin]
-                keri: Arc<Keri<'a, CryptoBox>>,
+                keri: Arc<Keri<CryptoBox>>,
                 #[pin]
                 respond_to: Sender<(IdentifierPrefix, Vec<u8>)>,
                 first_byte: u8,
@@ -51,7 +51,7 @@ where
             }
         }
 
-        impl<'a, R, W> Future for Processor<'a, R, W>
+        impl<R, W> Future for Processor<R, W>
         where
             R: BufRead,
             W: Write + Unpin

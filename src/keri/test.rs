@@ -6,6 +6,7 @@ use crate::{
     signer::CryptoBox,
     prefix::IdentifierPrefix,
 };
+use std::sync::Arc;
 
 #[test]
 fn test_direct_mode() -> Result<(), Error> {
@@ -14,14 +15,14 @@ fn test_direct_mode() -> Result<(), Error> {
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     std::fs::create_dir_all(root.path()).unwrap();
-    let db = SledEventDatabase::new(root.path()).unwrap();
+    let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
     // Init alice.
-    let mut alice = Keri::new(&db, CryptoBox::new()?, IdentifierPrefix::default())?;
+    let mut alice = Keri::new(Arc::clone(&db), CryptoBox::new()?, IdentifierPrefix::default())?;
     assert_eq!(alice.get_state()?, None);
 
     // Init bob.
-    let mut bob = Keri::new(&db, CryptoBox::new()?, IdentifierPrefix::default())?;
+    let mut bob = Keri::new(Arc::clone(&db), CryptoBox::new()?, IdentifierPrefix::default())?;
     bob.incept()?;
     let bob_state = bob.get_state()?;
     assert_eq!(bob_state.unwrap().sn, 0);

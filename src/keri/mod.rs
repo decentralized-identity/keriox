@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivation::self_addressing::SelfAddressing, derivation::self_signing::SelfSigning, error::Error, event::sections::seal::{DigestSeal, Seal}, event::{event_data::EventData, Event, EventMessage, SerializationFormats}, event::{event_data::Receipt, sections::seal::EventSeal}, event_message::{parse::signed_message, payload_size::PayloadType}, event_message::{
         event_msg_builder::{EventMsgBuilder, EventType},
         parse::{signed_event_stream, Deserialized},
@@ -5,15 +7,15 @@ use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivat
 
 #[cfg(test)]
 mod test;
-pub struct Keri<'d, K: KeyManager> {
+pub struct Keri<K: KeyManager> {
     prefix: IdentifierPrefix,
     key_manager: K,
-    processor: EventProcessor<'d>,
+    processor: EventProcessor,
 }
 
-impl<'d, K: KeyManager> Keri<'d, K> {
+impl<K: KeyManager> Keri<K> {
     // incept a state and keys
-    pub fn new(db: &'d SledEventDatabase, key_manager: K, prefix: IdentifierPrefix) -> Result<Keri<K>, Error> {
+    pub fn new(db: Arc<SledEventDatabase>, key_manager: K, prefix: IdentifierPrefix) -> Result<Keri<K>, Error> {
         Ok(Keri {
             prefix,
             key_manager,

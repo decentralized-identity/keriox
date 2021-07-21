@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{database::sled::SledEventDatabase, derivation::self_addressing::SelfAddressing, error::Error, event::{EventMessage, event_data::EventData, sections::{
             seal::{EventSeal, LocationSeal, Seal},
             KeyConfig,
@@ -11,12 +13,12 @@ mod tests;
 #[cfg(feature = "async")]
 pub mod async_processing;
 
-pub struct EventProcessor<'d> {
-    db: &'d SledEventDatabase,
+pub struct EventProcessor {
+    db: Arc<SledEventDatabase>,
 }
 
-impl<'d> EventProcessor<'d> {
-    pub fn new(db: &'d SledEventDatabase) -> Self {
+impl EventProcessor {
+    pub fn new(db: Arc<SledEventDatabase>) -> Self {
         Self { db }
     }
 
