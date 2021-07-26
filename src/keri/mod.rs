@@ -73,7 +73,8 @@ impl<K: KeyManager> Keri<K> {
             let mut keys: Vec<BasicPrefix> = extra_keys
                 .into_iter()
                 .map(|(key_type, key)| key_type.derive(key)).collect();
-            keys.push(Basic::Ed25519.derive(self.key_manager.borrow().public_key()));
+            // Signing key must be first
+            keys.insert(0, Basic::Ed25519.derive(self.key_manager.borrow().public_key()));
             let icp = EventMsgBuilder::new(EventType::Inception)?
                 .with_prefix(self.prefix.clone())
                 .with_keys(keys)
