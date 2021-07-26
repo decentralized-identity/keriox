@@ -43,11 +43,14 @@ pub enum Error {
     #[error("Error while applying event: out of order event")]
     EventOutOfOrderError,
 
-    #[error("Error while aplying event: duplicate event")]
+    #[error("Error while applying event: duplicate event")]
     EventDuplicateError,
 
-    #[error("Not enough signatures while verifing")]
+    #[error("Not enough signatures while verifying")]
     NotEnoughSigsError,
+
+    #[error("Signature verification failed")]
+    SignatureVerificationError,
 
     #[error("Deserialize error: {0}")]
     DeserializeError(String),
@@ -85,4 +88,9 @@ pub enum Error {
 
     #[error(transparent)]
     SerdeSerError(#[from] serializer_error::Error),
+
+    #[cfg(feature = "wallet")]
+    #[error(transparent)]
+    WalletError(#[from] universal_wallet::Error),
+
 }

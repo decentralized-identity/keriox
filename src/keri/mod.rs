@@ -1,21 +1,24 @@
-use std::sync::Arc;
+use std::{
+    cell::RefCell,
+    sync:: Arc,
+};
 
 use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivation::self_addressing::SelfAddressing, derivation::self_signing::SelfSigning, error::Error, event::sections::seal::{DigestSeal, Seal}, event::{event_data::EventData, Event, EventMessage, SerializationFormats}, event::{event_data::Receipt, sections::seal::EventSeal}, event_message::{parse::signed_message, payload_size::PayloadType}, event_message::{
         event_msg_builder::{EventMsgBuilder, EventType},
         parse::{signed_event_stream, Deserialized},
-    }, event_message::{SignedEventMessage, SignedTransferableReceipt}, prefix::AttachedSignaturePrefix, prefix::IdentifierPrefix, processor::EventProcessor, signer::KeyManager, state::IdentifierState};
+    }, event_message::{SignedEventMessage, SignedTransferableReceipt}, keys::Key, prefix::AttachedSignaturePrefix, prefix::{BasicPrefix, IdentifierPrefix}, processor::EventProcessor, signer::KeyManager, state::{EventSemantics, IdentifierState}};
 
 #[cfg(test)]
 mod test;
 pub struct Keri<K: KeyManager> {
     prefix: IdentifierPrefix,
-    key_manager: K,
+    key_manager: Arc<RefCell<K>>,
     processor: EventProcessor,
 }
 
 impl<K: KeyManager> Keri<K> {
     // incept a state and keys
-    pub fn new(db: Arc<SledEventDatabase>, key_manager: K, prefix: IdentifierPrefix) -> Result<Keri<K>, Error> {
+    pub fn new(db: Arc<SledEventDatabase>, key_manager: Arc<RefCell<K>>, prefix: IdentifierPrefix) -> Result<Keri<K>, Error> {
         Ok(Keri {
             prefix,
             key_manager,
@@ -23,18 +26,27 @@ impl<K: KeyManager> Keri<K> {
         })
     }
 
+    pub fn process(&self, id: &IdentifierPrefix, event: impl EventSemantics)
+        -> Result<(), Error> {
+            match self.processor.process_actual_event(id, event) {
+                Ok(Some(_)) => Ok(()),
+                Ok(None) => Err(Error::SemanticError("Unknown identifier.".into())),
+                Err(e) => Err(e)
+            }
+        }
+
     pub fn incept(&mut self) -> Result<SignedEventMessage, Error> {
         let icp = EventMsgBuilder::new(EventType::Inception)?
             .with_prefix(self.prefix.clone())
-            .with_keys(vec![Basic::Ed25519.derive(self.key_manager.public_key())])
+            .with_keys(vec![Basic::Ed25519.derive(self.key_manager.borrow().public_key())])
             .with_next_keys(vec![
-                Basic::Ed25519.derive(self.key_manager.next_public_key())
+                Basic::Ed25519.derive(self.key_manager.borrow().next_public_key())
             ])
             .build()?;
 
         let signed = icp.sign(PayloadType::MA, vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
-            self.key_manager.sign(&icp.serialize()?)?,
+            self.key_manager.borrow().sign(&icp.serialize()?)?,
             0,
         )]);
 
@@ -46,13 +58,50 @@ impl<K: KeyManager> Keri<K> {
         Ok(signed)
     }
 
+    /// Incepts instance of KERI and includes EXTRA keys provided as parameter
+    /// CURRENT Public verification key is extracted directly from KeyManager
+    ///  - it should not be included into `extra_keys` set.
+    /// # Parameters
+    /// * `extra_keys` - iterator over tuples of `(keri::derivation::Basic, keri::keys::Key)`
+    /// # Returns
+    /// `Result<keri::event_message::SignedEventMessage, keri::error::Error>`
+    ///  where `SignedEventMessage` is ICP event including all provided keys + directly fetched
+    ///  verification key, signed with it's private key via KeyManager and serialized.
+    ///
+    pub fn incept_with_extra_keys(&mut self, extra_keys: impl IntoIterator<Item = (Basic, Key)>)
+        -> Result<SignedEventMessage, Error> {
+            let mut keys: Vec<BasicPrefix> = extra_keys
+                .into_iter()
+                .map(|(key_type, key)| key_type.derive(key)).collect();
+            keys.push(Basic::Ed25519.derive(self.key_manager.borrow().public_key()));
+            let icp = EventMsgBuilder::new(EventType::Inception)?
+                .with_prefix(self.prefix.clone())
+                .with_keys(keys)
+                .with_next_keys(vec!(Basic::Ed25519.derive(self.key_manager.borrow().next_public_key())))
+                .build()?;
+
+            let signed = icp.sign(PayloadType::MA, vec!(
+                AttachedSignaturePrefix::new(
+                    SelfSigning::Ed25519Sha512,
+                    self.key_manager.borrow().sign(&icp.serialize()?)?,
+                    0
+                )
+            ));
+            let serialized = signed.serialize()?;
+            println!("{}", String::from_utf8(serialized.clone()).unwrap());
+            self.processor.process(signed_message(&serialized).unwrap().1)?;
+            self.prefix = icp.event.prefix;
+
+            Ok(signed)
+    }
+
     pub fn rotate(&mut self) -> Result<SignedEventMessage, Error> {
-        self.key_manager.rotate()?;
+        self.key_manager.borrow_mut().rotate()?;
 
         let rot = self.make_rotation()?;
         let rot = rot.sign(PayloadType::MA, vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
-            self.key_manager.sign(&rot.serialize()?)?,
+            self.key_manager.borrow().sign(&rot.serialize()?)?,
             0,
         )]);
 
@@ -71,9 +120,9 @@ impl<K: KeyManager> Keri<K> {
             .with_prefix(self.prefix.clone())
             .with_sn(state.sn + 1)
             .with_previous_event(SelfAddressing::Blake3_256.derive(&state.last))
-            .with_keys(vec![Basic::Ed25519.derive(self.key_manager.public_key())])
+            .with_keys(vec![Basic::Ed25519.derive(self.key_manager.borrow().public_key())])
             .with_next_keys(vec![
-                Basic::Ed25519.derive(self.key_manager.next_public_key())
+                Basic::Ed25519.derive(self.key_manager.borrow().next_public_key())
             ])
             .build()
     }
@@ -101,7 +150,7 @@ impl<K: KeyManager> Keri<K> {
 
         let ixn = ev.sign(PayloadType::MA, vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
-            self.key_manager.sign(&ev.serialize()?)?,
+            self.key_manager.borrow().sign(&ev.serialize()?)?,
             0,
         )]);
 
@@ -173,7 +222,7 @@ impl<K: KeyManager> Keri<K> {
 
     fn make_rct(&self, event: EventMessage) -> Result<SignedTransferableReceipt, Error> {
         let ser = event.serialize()?;
-        let signature = self.key_manager.sign(&ser)?;
+        let signature = self.key_manager.borrow().sign(&ser)?;
         let validator_event_seal = self
             .processor
             .get_last_establishment_event_seal(&self.prefix)?

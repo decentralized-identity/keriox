@@ -234,6 +234,13 @@ impl EventProcessor {
         }
     }
 
+    pub fn process_actual_event(&self, id: &IdentifierPrefix, event: impl EventSemantics)
+        -> Result<Option<IdentifierState>, Error> {
+            if let Some(state) = self.compute_state(id)? {
+                Ok(Some(event.apply_to(state)?))
+            } else { Ok(None) }
+        }
+
     /// Process Event
     ///
     /// Validates a Key Event against the latest state
@@ -259,15 +266,19 @@ impl EventProcessor {
         }?;
         self.apply_to_state(event.event.event_message.clone())
             .and_then(|new_state| {
-                // add event from the getgo and clean it up on failure later
+                // add event from the get go and clean it up on failure later
                 self.db.add_kel_finalized_event(signed_event.clone(), id)?;
                 // match on verification result
                 match new_state
                     .current
                     .verify(&event.event.raw, &event.signatures)
-                    .and_then(|_result| {
-                        // TODO should check if there are enough receipts and probably escrow
-                        Ok(new_state)
+                    .and_then(|result| {
+                        if !result {
+                            Err(Error::SignatureVerificationError)
+                        } else {
+                            // TODO should check if there are enough receipts and probably escrow
+                            Ok(new_state)
+                        }
                     }) {
                         Ok(state) => Ok(Some(state)),
                         Err(e) => {
@@ -302,7 +313,6 @@ impl EventProcessor {
             EventData::Rct(_r) => {
                 if let Ok(Some(event)) = 
                     self.get_event_at_sn(&vrc.body.event.prefix, vrc.body.event.sn) {
-                    // prev .get_keys_at_event()
                     let kp = self.get_keys_at_event(
                         &vrc.validator_seal.event_seal.prefix,
                         vrc.validator_seal.event_seal.sn,

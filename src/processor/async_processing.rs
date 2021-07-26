@@ -1,11 +1,6 @@
-use std::{
-    convert::TryFrom,
-    future::Future,
-    pin::Pin,
-    sync:: Arc,
-};
+use std::{convert::TryFrom, future::Future, pin::Pin, sync:: Arc};
 use arrayref::array_ref;
-use pin_project_lite::pin_project;
+use pin_project::pin_project;
 use async_std::{channel::Sender, io::{
         Read,
         Write,
@@ -18,15 +13,15 @@ use crate::{
         payload_size::PayloadType,
     },
     keri::Keri,
-    signer::CryptoBox,
+    signer::KeyManager,
     prefix::IdentifierPrefix,
 };
 use bitpat::bitpat;
 
 pub type Result<T> = std::result::Result<T, String>;
 
-pub async fn process<R, W>(
-    keri: Arc<Keri<CryptoBox>>,
+pub async fn process<R, W, K>(
+    keri: Arc<Keri<K>>,
     reader: &mut R,
     writer: &mut W,
     first_byte: u8,
@@ -34,27 +29,29 @@ pub async fn process<R, W>(
     -> Result<()>
 where
     R: Read + Unpin + ?Sized,
-    W: Write + Unpin + ?Sized
+    W: Write + Unpin + ?Sized,
+    K: KeyManager + Unpin
 {
-        pin_project! {
-            struct Processor<R, W> {
-                #[pin]
-                reader: R,
-                #[pin]
-                writer: W,
-                #[pin]
-                keri: Arc<Keri<CryptoBox>>,
-                #[pin]
-                respond_to: Sender<(IdentifierPrefix, Vec<u8>)>,
-                first_byte: u8,
-                processed: usize,
-            }
+        #[pin_project]
+        struct Processor<R, W, K: KeyManager>
+        {
+            #[pin]
+            reader: R,
+            #[pin]
+            writer: W,
+            #[pin]
+            keri: Arc<Keri<K>>,
+            #[pin]
+            respond_to: Sender<(IdentifierPrefix, Vec<u8>)>,
+            first_byte: u8,
+            processed: usize,
         }
 
-        impl<R, W> Future for Processor<R, W>
+        impl<R, W, K> Future for Processor<R, W, K>
         where
             R: BufRead,
-            W: Write + Unpin
+            W: Write + Unpin,
+            K: KeyManager + Unpin
         {
             type Output = Result<()>;
             // TODO: close stream if some timeout reached

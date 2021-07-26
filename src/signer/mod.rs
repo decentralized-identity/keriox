@@ -1,6 +1,11 @@
+use std::ops::{Deref, DerefMut};
 use crate::{error::Error, keys::Key, prefix::SeedPrefix};
 use ed25519_dalek::{Keypair, PublicKey, SecretKey};
 use rand::rngs::OsRng;
+
+#[cfg(feature = "wallet")]
+pub mod wallet;
+
 pub trait KeyManager {
     fn sign(&self, msg: &Vec<u8>) -> Result<Vec<u8>, Error>;
     fn public_key(&self) -> Key;
@@ -13,6 +18,20 @@ pub struct CryptoBox {
     next_priv_key: Key,
     pub next_pub_key: Key,
     seeds: Vec<String>,
+}
+
+impl DerefMut for CryptoBox {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self
+    }
+}
+
+impl Deref for CryptoBox {
+    type Target = CryptoBox;
+
+    fn deref(&self) -> &Self::Target {
+        self
+    }
 }
 
 impl KeyManager for CryptoBox {

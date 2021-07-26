@@ -146,7 +146,7 @@ impl EventMsgBuilder {
         Ok(match self.event_type {
             EventType::Inception => {
                 let icp_event = InceptionEvent {
-                    key_config: key_config,
+                    key_config,
                     witness_config: InceptionWitnessConfig::default(),
                     inception_configuration: vec![],
                     data: vec![],
@@ -154,7 +154,7 @@ impl EventMsgBuilder {
 
                 match prefix {
                     IdentifierPrefix::Basic(_) => Event {
-                        prefix: prefix,
+                        prefix,
                         sn: 0,
                         event_data: EventData::Icp(icp_event),
                     }
@@ -167,18 +167,18 @@ impl EventMsgBuilder {
             }
 
             EventType::Rotation => Event {
-                prefix: prefix,
+                prefix,
                 sn: self.sn,
                 event_data: EventData::Rot(RotationEvent {
                     previous_event_hash: self.prev_event,
-                    key_config: key_config,
+                    key_config,
                     witness_config: WitnessConfig::default(),
                     data: self.data,
                 }),
             }
             .to_message(self.format)?,
             EventType::Interaction => Event {
-                prefix: prefix,
+                prefix,
                 sn: self.sn,
                 event_data: EventData::Ixn(InteractionEvent {
                     previous_event_hash: self.prev_event,
@@ -188,7 +188,7 @@ impl EventMsgBuilder {
             .to_message(self.format)?,
             EventType::DelegatedInception => {
                 let icp_data = InceptionEvent {
-                    key_config: key_config,
+                    key_config,
                     witness_config: InceptionWitnessConfig::default(),
                     inception_configuration: vec![],
                     data: vec![],
@@ -202,12 +202,12 @@ impl EventMsgBuilder {
             EventType::DelegatedRotation => {
                 let rotation_data = RotationEvent {
                     previous_event_hash: self.prev_event,
-                    key_config: key_config,
+                    key_config,
                     witness_config: WitnessConfig::default(),
                     data: self.data,
                 };
                 Event {
-                    prefix: prefix,
+                    prefix,
                     sn: self.sn,
                     event_data: EventData::Drt(DelegatedRotationEvent {
                         rotation_data,
