@@ -89,7 +89,6 @@ impl<K: KeyManager> Keri<K> {
                 )
             ));
             let serialized = signed.serialize()?;
-            println!("{}", String::from_utf8(serialized.clone()).unwrap());
             self.processor.process(signed_message(&serialized).unwrap().1)?;
             self.prefix = icp.event.prefix;
 
