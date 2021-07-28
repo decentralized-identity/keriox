@@ -7,15 +7,7 @@ use async_std::{channel::Sender, io::{
         BufRead,
         BufReader,
     }, task::{Context, Poll, block_on}};
-use crate::{
-    event_message::{
-        parse::{version, sig_count},
-        payload_size::PayloadType,
-    },
-    keri::Keri,
-    signer::KeyManager,
-    prefix::IdentifierPrefix,
-};
+use crate::{event_message::{parse::{message, sig_count, version}, payload_size::PayloadType}, keri::Keri, prefix::IdentifierPrefix, signer::KeyManager};
 use bitpat::bitpat;
 
 pub type Result<T> = std::result::Result<T, String>;
@@ -115,9 +107,18 @@ where
                         let sliced_message = &buffer[*this.processed..*this.processed + msg_length];
                         // and generate response
                         let response = this.keri.respond_single(sliced_message).map_err(|e| e.to_string())?;
+                        // if we can make receipt for event - do it
                         // stream it back
-                        futures_core::ready!(this.writer.as_mut().poll_write(cx, &response.1))
-                            .map_err(|e| e.to_string())?;
+                        if let Ok(receipt) = this.keri.make_rct(message(sliced_message).unwrap().1.event_message) {
+                            futures_core::ready!(this.writer.as_mut().poll_write(
+                                cx,
+                                &receipt.serialize()
+                                    .map_err(|e| e.to_string())?))
+                                .map_err(|e| e.to_string())?;
+                        } else {
+                            futures_core::ready!(this.writer.as_mut().poll_write(cx, &response.1))
+                                .map_err(|e| e.to_string())?;
+                        }
                         // send responded message with identifier for sync purposes
                         block_on(this.respond_to.as_mut()
                             .send((response.0, sliced_message.to_vec())))

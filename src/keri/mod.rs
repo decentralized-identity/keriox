@@ -3,10 +3,10 @@ use std::{
     sync:: Arc,
 };
 
-use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivation::self_addressing::SelfAddressing, derivation::self_signing::SelfSigning, error::Error, event::sections::seal::{DigestSeal, Seal}, event::{event_data::EventData, Event, EventMessage, SerializationFormats}, event::{event_data::Receipt, sections::seal::EventSeal}, event_message::{parse::signed_message, payload_size::PayloadType}, event_message::{
+use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivation::self_addressing::SelfAddressing, derivation::self_signing::SelfSigning, error::Error, event::sections::seal::{DigestSeal, Seal}, event::{event_data::EventData, Event, EventMessage, SerializationFormats}, event::{event_data::Receipt, sections::seal::EventSeal}, event_message::{SignedNontransferableReceipt, parse::signed_message, payload_size::PayloadType}, event_message::{
         event_msg_builder::{EventMsgBuilder, EventType},
         parse::{signed_event_stream, Deserialized},
-    }, event_message::{SignedEventMessage, SignedTransferableReceipt}, keys::Key, prefix::AttachedSignaturePrefix, prefix::{BasicPrefix, IdentifierPrefix}, processor::EventProcessor, signer::KeyManager, state::{EventSemantics, IdentifierState}};
+    }, event_message::{SignedEventMessage, SignedTransferableReceipt}, keys::Key, prefix::AttachedSignaturePrefix, prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix}, processor::EventProcessor, signer::KeyManager, state::{EventSemantics, IdentifierState}};
 
 #[cfg(test)]
 mod test;
@@ -220,7 +220,7 @@ impl<K: KeyManager> Keri<K> {
         Ok(response)
     }
 
-    fn make_rct(&self, event: EventMessage) -> Result<SignedTransferableReceipt, Error> {
+    pub fn make_rct(&self, event: EventMessage) -> Result<SignedTransferableReceipt, Error> {
         let ser = event.serialize()?;
         let signature = self.key_manager.borrow().sign(&ser)?;
         let validator_event_seal = self
@@ -249,6 +249,46 @@ impl<K: KeyManager> Keri<K> {
         Ok(signed_rcp)
     }
 
+    /// Create `SignedNontransferableReceipt` for given `EventMessage`
+    /// This will actually process and generate receipt if we are added as witness
+    /// Generated receipt will be stored into `ntp` DB table under sender's identifier
+    /// Ignore and return `Error::SemanticError` with description why no receipt returned
+    ///
+    /// # Parameters
+    /// * `message` - `EventMessage` we are to process
+    ///
+    pub fn make_ntr(&self, message: EventMessage) -> Result<SignedNontransferableReceipt, Error> {
+        let our_bp = match &self.prefix {
+            IdentifierPrefix::Basic(prefix) => prefix,
+            _ => return Err(Error::SemanticError("we are not a witness - our prefix is not Basic".into()))
+        };
+        match &message.event.event_data {
+            // ICP requires check if we are in initial witnesses only
+            EventData::Icp(evt) => {
+                if !evt.witness_config.initial_witnesses.contains(&our_bp) {
+                    return Err(Error::SemanticError("we are not in a witness list.".into()));
+                }
+                self.generate_ntr(message)
+            },
+            EventData::Rot(evt) => {
+                if !evt.witness_config.prune.contains(&our_bp) {
+                    if evt.witness_config.graft.contains(&our_bp) {
+                        // FIXME: logic for already witnessed identifier required
+                        self.generate_ntr(message)
+                    } else {
+                        Err(Error::SemanticError("event does not change our status as a witness".into()))
+                    }
+                } else if evt.witness_config.prune.contains(&our_bp) {
+                    self.processor.db.remove_receipts_nt(&message.event.prefix)?;
+                    Err(Error::SemanticError("we were removed. no receipt to generate".into()))
+                } else {
+                    Err(Error::SemanticError("event without witness modifications".into()))
+                }
+            },
+            _ => Err(Error::SemanticError("event without witness modifications".into()))
+        }
+    }
+
     pub fn get_state(&self) -> Result<Option<IdentifierState>, Error> {
         self.processor.compute_state(&self.prefix)
     }
@@ -266,5 +306,18 @@ impl<K: KeyManager> Keri<K> {
 
     pub fn get_state_for_seal(&self, seal: &EventSeal) -> Result<Option<IdentifierState>, Error> {
         self.processor.compute_state_at_sn(&seal.prefix, seal.sn)
+    }
+
+    fn generate_ntr(&self, message: EventMessage) -> Result<SignedNontransferableReceipt, Error> {
+        let signature = self.key_manager.borrow().sign(&message.serialize()?)?;
+        let bp = BasicPrefix::new(Basic::Ed25519, self.key_manager.borrow().public_key());
+        let ssp = SelfSigningPrefix::new(SelfSigning::Ed25519Sha512, signature);
+        let id = &message.event.prefix.clone();
+        let ntr = SignedNontransferableReceipt {
+            body: message,
+            couplets: vec!((bp, ssp))
+        };
+        self.processor.db.add_receipt_nt(ntr.clone(), id)?;
+        Ok(ntr)
     }
 }

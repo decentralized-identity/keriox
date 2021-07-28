@@ -79,6 +79,16 @@ impl SledEventDatabase {
             self.receipts_nt.iter_values(self.identifiers.designated_key(id))
         }
 
+    pub fn remove_receipts_nt(&self, id: &IdentifierPrefix)
+        -> Result<(), Error> {
+            if let Some(receipts) = self.get_receipts_nt(id) {
+                for receipt in receipts {
+                    self.receipts_nt.remove(self.identifiers.designated_key(id), &receipt)?;
+                }
+            }
+            Ok(())
+        }
+
     pub fn add_escrow_t_receipt(&self, receipt: SignedTransferableReceipt, id: &IdentifierPrefix)
         -> Result<(), Error> {
             self.escrowed_receipts_t

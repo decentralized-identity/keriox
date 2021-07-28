@@ -14,7 +14,7 @@ mod tests;
 pub mod async_processing;
 
 pub struct EventProcessor {
-    db: Arc<SledEventDatabase>,
+    pub db: Arc<SledEventDatabase>,
 }
 
 impl EventProcessor {
