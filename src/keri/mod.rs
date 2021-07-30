@@ -312,12 +312,8 @@ impl<K: KeyManager> Keri<K> {
         let signature = self.key_manager.borrow().sign(&message.serialize()?)?;
         let bp = BasicPrefix::new(Basic::Ed25519, self.key_manager.borrow().public_key());
         let ssp = SelfSigningPrefix::new(SelfSigning::Ed25519Sha512, signature);
-        let id = &message.event.prefix.clone();
-        let ntr = SignedNontransferableReceipt {
-            body: message,
-            couplets: vec!((bp, ssp))
-        };
-        self.processor.db.add_receipt_nt(ntr.clone(), id)?;
+        let ntr = SignedNontransferableReceipt::new(&message, vec!((bp, ssp)));
+        self.processor.db.add_receipt_nt(ntr.clone(), &message.event.prefix)?;
         Ok(ntr)
     }
 }

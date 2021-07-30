@@ -109,10 +109,10 @@ where
                         let response = this.keri.respond_single(sliced_message).map_err(|e| e.to_string())?;
                         // if we can make receipt for event - do it
                         // stream it back
-                        if let Ok(receipt) = this.keri.make_rct(message(sliced_message).unwrap().1.event_message) {
+                        if let Ok(receipt) = this.keri.make_ntr(message(sliced_message).unwrap().1.event_message) {
                             futures_core::ready!(this.writer.as_mut().poll_write(
                                 cx,
-                                &receipt.serialize()
+                                receipt.serialize().as_ref()
                                     .map_err(|e| e.to_string())?))
                                 .map_err(|e| e.to_string())?;
                         } else {

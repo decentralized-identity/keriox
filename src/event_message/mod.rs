@@ -202,31 +202,6 @@ impl Ord for TimestampedSignedEventMessage {
 
 impl Eq for TimestampedSignedEventMessage {}
 
-/// Signed Non-Transferrable Receipt
-///
-/// A receipt created by an Identifier of a non-transferrable type.
-/// Mostly intended for use by Witnesses.
-/// NOTE: This receipt has a unique structure to it's appended
-/// signatures
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SignedNontransferableReceipt {
-    pub body: EventMessage,
-    pub couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
-}
-
-/// Signed Transferrable Receipt
-///
-/// Event Receipt which is suitable for creation by Transferable
-/// Identifiers. Provides both the signatures and a commitment to
-/// the latest establishment event of the receipt creator.
-/// Mostly intended for use by Validators
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SignedTransferableReceipt {
-    pub body: EventMessage,
-    pub validator_seal: AttachedEventSeal,
-    pub signatures: Vec<AttachedSignaturePrefix>,
-}
-
 impl EventMessage {
     pub fn new(event: Event, format: SerializationFormats) -> Result<Self, Error> {
         Ok(Self {
@@ -279,35 +254,6 @@ impl SignedEventMessage {
 
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         Ok(to_string(&self)?.as_bytes().to_vec())
-    }
-}
-
-impl SignedTransferableReceipt {
-    pub fn new(
-        message: &EventMessage,
-        event_seal: EventSeal,
-        sigs: Vec<AttachedSignaturePrefix>,
-    ) -> Self {
-        Self {
-            body: message.clone(),
-            validator_seal: AttachedEventSeal::new(event_seal),
-            signatures: sigs,
-        }
-    }
-
-    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        Ok([
-            self.body.serialize()?,
-            self.validator_seal.serialize()?,
-            get_sig_count(self.signatures.len() as u16)
-                .as_bytes()
-                .to_vec(),
-            self.signatures
-                .iter()
-                .map(|sig| sig.to_str().as_bytes().to_vec())
-                .fold(vec![], |acc, next| [acc, next].concat()),
-        ]
-        .concat())
     }
 }
 
@@ -394,6 +340,87 @@ impl EventSemantics for EventMessage {
 impl EventSemantics for SignedEventMessage {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         self.event_message.apply_to(state)
+    }
+}
+
+/// Signed Transferrable Receipt
+///
+/// Event Receipt which is suitable for creation by Transferable
+/// Identifiers. Provides both the signatures and a commitment to
+/// the latest establishment event of the receipt creator.
+/// Mostly intended for use by Validators
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SignedTransferableReceipt {
+    pub body: EventMessage,
+    pub validator_seal: AttachedEventSeal,
+    pub signatures: Vec<AttachedSignaturePrefix>,
+}
+
+impl SignedTransferableReceipt {
+    pub fn new(
+        message: &EventMessage,
+        event_seal: EventSeal,
+        sigs: Vec<AttachedSignaturePrefix>,
+    ) -> Self {
+        Self {
+            body: message.clone(),
+            validator_seal: AttachedEventSeal::new(event_seal),
+            signatures: sigs,
+        }
+    }
+
+    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
+        Ok([
+            self.body.serialize()?,
+            self.validator_seal.serialize()?,
+            get_sig_count(self.signatures.len() as u16)
+                .as_bytes()
+                .to_vec(),
+            self.signatures
+                .iter()
+                .map(|sig| sig.to_str().as_bytes().to_vec())
+                .fold(vec![], |acc, next| [acc, next].concat()),
+        ]
+        .concat())
+    }
+}
+
+/// Signed Non-Transferrable Receipt
+///
+/// A receipt created by an Identifier of a non-transferrable type.
+/// Mostly intended for use by Witnesses.
+/// NOTE: This receipt has a unique structure to it's appended
+/// signatures
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SignedNontransferableReceipt {
+    pub body: EventMessage,
+    pub couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
+}
+
+impl SignedNontransferableReceipt {
+    pub fn new(
+        message: &EventMessage,
+        couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
+    ) -> Self {
+        Self {
+            body: message.clone(),
+            couplets
+        }
+    }
+
+    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
+        Ok(
+            [
+                self.body.serialize()?,
+                get_sig_count(self.couplets.len() as u16)
+                    .as_bytes()
+                    .to_vec(),
+                self.couplets
+                    .iter()
+                    .map(|(_, sp)| sp.to_str().as_bytes().to_vec())
+                    .fold(vec!(), |acc, next| [acc, next].concat()),
+            ].concat()
+        )
     }
 }
 
