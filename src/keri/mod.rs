@@ -3,10 +3,56 @@ use std::{
     sync:: Arc,
 };
 
-use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivation::self_addressing::SelfAddressing, derivation::self_signing::SelfSigning, error::Error, event::sections::seal::{DigestSeal, Seal}, event::{event_data::EventData, Event, EventMessage, SerializationFormats}, event::{event_data::Receipt, sections::seal::EventSeal}, event_message::{SignedNontransferableReceipt, parse::signed_message, payload_size::PayloadType}, event_message::{
+use crate::{
+    database::sled::SledEventDatabase,
+    derivation::basic::Basic,
+    derivation::self_addressing::SelfAddressing,
+    derivation::self_signing::SelfSigning,
+    error::Error,
+    event::sections::seal::{
+        DigestSeal,
+        Seal
+    },
+    event::{
+        event_data::EventData,
+        Event,
+        EventMessage,
+        SerializationFormats
+    },
+    event::{
+        event_data::Receipt,
+        sections::seal::EventSeal
+    },
+    event_message::{
+        SignedNontransferableReceipt,
+        parse::signed_message,
+        payload_size::PayloadType
+    },
+    event_message::{
         event_msg_builder::{EventMsgBuilder, EventType},
         parse::{signed_event_stream, Deserialized},
-    }, event_message::{SignedEventMessage, SignedTransferableReceipt}, keys::Key, prefix::AttachedSignaturePrefix, prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix}, processor::EventProcessor, signer::KeyManager, state::{EventSemantics, IdentifierState}};
+        SignedEventMessage,
+        SignedTransferableReceipt,
+    },
+    keys::Key,
+    prefix::AttachedSignaturePrefix,
+    prefix::{
+        BasicPrefix,
+        IdentifierPrefix,
+        SelfSigningPrefix
+    },
+    processor::EventProcessor,
+    signer::KeyManager,
+    state::{
+        EventSemantics,
+        IdentifierState
+    },
+};
+#[cfg(feature = "wallet")]
+use universal_wallet::prelude::{
+    UnlockedWallet,
+    Content,
+};
 
 #[cfg(test)]
 mod test;
@@ -16,9 +62,38 @@ pub struct Keri<K: KeyManager> {
     processor: EventProcessor,
 }
 
+#[cfg(feature = "wallet")]
+impl Keri<UnlockedWallet> {
+    /// Instantiates KERI with freshly created and pre-populated wallet
+    /// Wallet has ECDSA and X25519 key pairs
+    /// Only available with crate `wallet` feature.
+    ///
+    pub fn new_with_fresh_wallet(db: Arc<SledEventDatabase>)
+        -> Result<Keri<UnlockedWallet>, Error> {
+            use crate::{prefix::Prefix, signer::wallet::{CURRENT, incept_keys}};
+            // instantiate wallet with random ID instead of static for security reasons
+            let mut wallet = UnlockedWallet::new(&generate_random_string());
+            incept_keys(&mut wallet)?;
+            let pk = match wallet.get_key(CURRENT).unwrap().content {
+                Content::PublicKey(pk) => pk.public_key,
+                Content::KeyPair(kp) => kp.public_key.public_key,
+                Content::Entropy(_) => return Err(Error::WalletError(universal_wallet::Error::KeyNotFound)),
+            };
+            let prefix = IdentifierPrefix::Basic(BasicPrefix::new(Basic::ECDSAsecp256k1, Key::new(pk)));
+            // setting wallet's ID to prefix of identity instead of random string
+            wallet.id = prefix.to_str();
+            Ok(Keri {
+                prefix,
+                key_manager: Arc::new(RefCell::new(wallet)),
+                processor: EventProcessor::new(db)
+            })
+    }
+}
+
 impl<K: KeyManager> Keri<K> {
     // incept a state and keys
-    pub fn new(db: Arc<SledEventDatabase>, key_manager: Arc<RefCell<K>>, prefix: IdentifierPrefix) -> Result<Keri<K>, Error> {
+    pub fn new(db: Arc<SledEventDatabase>, key_manager: Arc<RefCell<K>>, prefix: IdentifierPrefix)
+        -> Result<Keri<K>, Error> {
         Ok(Keri {
             prefix,
             key_manager,
@@ -316,4 +391,14 @@ impl<K: KeyManager> Keri<K> {
         self.processor.db.add_receipt_nt(ntr.clone(), &message.event.prefix)?;
         Ok(ntr)
     }
+}
+
+fn generate_random_string() -> String {
+    use rand::Rng;
+    let all = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnoprstuvwxyz0987654321";
+    let mut ret = String::default();
+    for _ in 0..10 {
+        ret += &all.chars().nth(rand::thread_rng().gen_range(0, all.len() + 1)).unwrap().to_string();
+    }
+    ret
 }
