@@ -437,15 +437,14 @@ impl<K: KeyManager> Keri<K> {
 #[cfg(feature = "wallet")]
 fn generate_random_string() -> String {
     use rand::Rng;
-    let all = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+    const ALL: [char; 61] = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
         'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
         'k', 'l', 'm', 'n', 'o', 'p', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '9', '8', '7', '6',
         '5', '4', '3', '2', '1'];
-    const LEN: usize = 62;
     let mut ret = String::default();
     for _ in 0..10 {
-        let n = rand::thread_rng().gen_range(0, LEN);
-        ret.push(all[n]);
+        let n = rand::thread_rng().gen_range(0, ALL.len());
+        ret.push(ALL[n]);
     }
     ret
 }
