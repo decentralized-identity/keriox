@@ -20,7 +20,10 @@ use crate::{
         SerializationFormats
     },
     event::{
-        event_data::Receipt,
+        event_data::{
+            Receipt,
+            InteractionEvent,
+        },
         sections::seal::EventSeal
     },
     event_message::{
@@ -168,6 +171,43 @@ impl<K: KeyManager> Keri<K> {
             self.prefix = icp.event.prefix;
 
             Ok(signed)
+    }
+
+    /// Interacts with peer identifier via generation of a `Seal`
+    /// Seal gets added to our KEL db and returned back as `SignedEventMessage`
+    ///
+    pub fn interact(&self, peer: IdentifierPrefix)
+        -> Result<SignedEventMessage, Error> {
+            let next_sn = match self.processor.db.get_kel_finalized_events(&self.prefix) {
+                Some(mut events) => 
+                    match events.next_back() {
+                        Some(db_event) => db_event.event.event_message.event.sn,
+                        None => return Err(Error::InvalidIdentifierStat)
+                    },
+                None => return Err(Error::InvalidIdentifierStat)
+            };
+        let (pref, seal) = match peer {
+            IdentifierPrefix::SelfAddressing(pref) =>
+                (pref.clone(), Seal::Digest(DigestSeal{dig: pref})),
+            _ => return Err(Error::SemanticError("Can interact with SelfAdressing prefixes only".into()))
+        };
+        let event = EventMessage::new(
+            Event::new(
+                self.prefix.clone(),
+                next_sn,
+                EventData::Ixn(InteractionEvent::new(pref, vec!(seal)))
+            ),
+            SerializationFormats::JSON)?;
+        let serialized = event.serialize()?;
+        let signature = self.key_manager.borrow().sign(&serialized)?;
+        let asp = AttachedSignaturePrefix::new(
+            SelfSigning::ECDSAsecp256k1Sha256,
+            signature,
+            0 // TODO: what is this?
+        );
+        let signed = SignedEventMessage::new(&event, PayloadType::OC, vec!(asp));
+        self.processor.db.add_kel_finalized_event(signed.clone(), &self.prefix)?;
+        Ok(signed)
     }
 
     pub fn rotate(&mut self) -> Result<SignedEventMessage, Error> {
@@ -393,12 +433,30 @@ impl<K: KeyManager> Keri<K> {
     }
 }
 
+// Non re-allocating random `String` generator with output length of 10 char string
+#[cfg(feature = "wallet")]
 fn generate_random_string() -> String {
     use rand::Rng;
-    let all = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnoprstuvwxyz0987654321";
+    let all = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+        'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
+        'k', 'l', 'm', 'n', 'o', 'p', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '9', '8', '7', '6',
+        '5', '4', '3', '2', '1'];
+    const LEN: usize = 62;
     let mut ret = String::default();
     for _ in 0..10 {
-        ret += &all.chars().nth(rand::thread_rng().gen_range(0, all.len() + 1)).unwrap().to_string();
+        let n = rand::thread_rng().gen_range(0, LEN);
+        ret.push(all[n]);
     }
     ret
+}
+
+#[cfg(test)]
+#[cfg(feature = "wallet")]
+mod keri_wallet {
+    #[test]
+    fn random_string_test() {
+        let rst = super::generate_random_string();
+        assert!(!rst.is_empty());
+        assert!(rst != super::generate_random_string());
+    }
 }
