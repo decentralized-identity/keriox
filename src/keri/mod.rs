@@ -104,6 +104,24 @@ impl<K: KeyManager> Keri<K> {
         })
     }
 
+    /// Getter of the instance prefix
+    ///
+    pub fn prefix(&self) -> &IdentifierPrefix {
+        &self.prefix
+    }
+
+    /// Getter of ref to owned `KeyManager` instance
+    ///
+    pub fn key_manager(&self) -> &Arc<RefCell<K>> {
+        &self.key_manager
+    }
+
+    /// Getter of the DB instance behind own processor
+    ///
+    pub fn db(&self) -> Arc<SledEventDatabase> {
+        Arc::clone(&self.processor.db)
+    }
+
     pub fn process(&self, id: &IdentifierPrefix, event: impl EventSemantics)
         -> Result<(), Error> {
             match self.processor.process_actual_event(id, event) {
@@ -178,14 +196,14 @@ impl<K: KeyManager> Keri<K> {
     ///
     pub fn interact(&self, peer: IdentifierPrefix)
         -> Result<SignedEventMessage, Error> {
-            let next_sn = match self.processor.db.get_kel_finalized_events(&self.prefix) {
-                Some(mut events) => 
-                    match events.next_back() {
-                        Some(db_event) => db_event.event.event_message.event.sn,
-                        None => return Err(Error::InvalidIdentifierStat)
-                    },
-                None => return Err(Error::InvalidIdentifierStat)
-            };
+        let next_sn = match self.processor.db.get_kel_finalized_events(&self.prefix) {
+            Some(mut events) => 
+                match events.next_back() {
+                    Some(db_event) => db_event.event.event_message.event.sn,
+                    None => return Err(Error::InvalidIdentifierStat)
+                },
+            None => return Err(Error::InvalidIdentifierStat)
+        };
         let (pref, seal) = match peer {
             IdentifierPrefix::SelfAddressing(pref) =>
                 (pref.clone(), Seal::Digest(DigestSeal{dig: pref})),
