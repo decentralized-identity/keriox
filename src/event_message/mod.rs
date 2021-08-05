@@ -93,12 +93,20 @@ impl From<EventMessage> for TimestampedEventMessage {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignedEventMessage {
     pub event_message: EventMessage,
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
-#[derive(Serialize, Deserialize, PartialEq)]
+
+impl PartialEq for SignedEventMessage {
+    fn eq(&self, other: &Self) -> bool {
+        self.event_message == other.event_message
+        && self.signatures == other.signatures
+    }
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct TimestampedSignedEventMessage {
     pub timestamp: DateTime<Local>,
     pub event: SignedEventMessage,
@@ -122,6 +130,18 @@ impl From<TimestampedSignedEventMessage> for SignedEventMessage {
 impl From<SignedEventMessage> for TimestampedSignedEventMessage {
     fn from(event: SignedEventMessage) -> TimestampedSignedEventMessage {
         TimestampedSignedEventMessage::new(event)
+    }
+}
+
+impl From<&SignedEventMessage> for TimestampedSignedEventMessage {
+    fn from(event: &SignedEventMessage) -> TimestampedSignedEventMessage {
+        TimestampedSignedEventMessage::new(event.clone())
+    }
+}
+
+impl PartialEq for TimestampedSignedEventMessage {
+    fn eq(&self, other: &Self) -> bool {
+        self.event == other.event
     }
 }
 
@@ -161,7 +181,7 @@ impl Eq for TimestampedSignedEventMessage {}
 /// Mostly intended for use by Witnesses.
 /// NOTE: This receipt has a unique structure to it's appended
 /// signatures
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SignedNontransferableReceipt {
     pub body: EventMessage,
     pub couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
@@ -173,7 +193,7 @@ pub struct SignedNontransferableReceipt {
 /// Identifiers. Provides both the signatures and a commitment to
 /// the latest establishment event of the receipt creator.
 /// Mostly intended for use by Validators
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SignedTransferableReceipt {
     pub body: EventMessage,
     pub validator_seal: AttachedEventSeal,
