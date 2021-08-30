@@ -2,7 +2,7 @@
 use crate::{derivation::{
         attached_signature_code::b64_to_num, basic::Basic, self_addressing::SelfAddressing,
         self_signing::SelfSigning, DerivationCode,
-    }, error::Error, event::sections::seal::EventSeal, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix, basic::PublicKey}};
+    }, error::Error, event::sections::seal::EventSeal, keys::PublicKey, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix}};
 use base64::URL_SAFE;
 use nom::{bytes::complete::take, error::ErrorKind};
 

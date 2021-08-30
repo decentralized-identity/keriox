@@ -147,7 +147,7 @@ pub fn derive(seed: &SeedPrefix, transferable: bool) -> Result<BasicPrefix, Erro
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{derivation::self_addressing::SelfAddressing, keys::PrivateKey, prefix::basic::PublicKey};
+    use crate::{derivation::self_addressing::SelfAddressing, keys::{PrivateKey, PublicKey}};
     use ed25519_dalek::{Keypair};
     use rand::rngs::OsRng;
 

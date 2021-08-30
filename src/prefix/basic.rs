@@ -1,58 +1,8 @@
 use super::{verify, Prefix, SelfSigningPrefix};
-use crate::{derivation::{basic::Basic, DerivationCode}, error::Error, };
+use crate::{derivation::{basic::Basic, DerivationCode}, error::Error, keys::PublicKey};
 use base64::decode_config;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use k256::ecdsa::{VerifyingKey, signature::{Verifier as EcdsaVerifier}};
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct PublicKey {
-    public_key: Vec<u8>
-}
-
-impl PublicKey {
-    pub fn new(key: Vec<u8>) -> Self {
-        PublicKey {public_key: key.to_vec()}
-    }
-
-    pub fn key(&self) -> Vec<u8> {
-        self.public_key.clone()
-    }
-
-    pub fn verify_ed(&self, msg: &[u8], sig: &[u8]) -> bool {
-        if let Ok(key) = ed25519_dalek::PublicKey::from_bytes(&self.key()) {
-            use arrayref::array_ref;
-            if sig.len() != 64 {
-                return false;
-            }
-            let sig = ed25519_dalek::Signature::from(array_ref!(sig, 0, 64).to_owned());
-            match key.verify(msg, &sig) {
-                Ok(()) => true,
-                Err(_) => false,
-            }
-        } else {
-            false
-        }
-    }
-
-    pub fn verify_ecdsa(&self, msg: &[u8], sig: &[u8]) -> bool {
-        match VerifyingKey::from_sec1_bytes(&self.key()) {
-            Ok(k) => {
-                use k256::ecdsa::Signature;
-                use std::convert::TryFrom;
-                if let Ok(sig) = Signature::try_from(sig) {
-                    match k.verify(msg, &sig) {
-                        Ok(()) => true,
-                        Err(_) => false,
-                    }
-                } else {
-                    false
-                }
-            }
-            Err(_) => false,
-        }
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct BasicPrefix {

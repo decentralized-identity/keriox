@@ -1,5 +1,5 @@
-use super::{Prefix, basic::PublicKey};
-use crate::{error::Error, keys::PrivateKey};
+use super::Prefix;
+use crate::{error::Error, keys::{PrivateKey, PublicKey}};
 use base64::decode_config;
 use core::str::FromStr;
 use ed25519_dalek::{SecretKey};

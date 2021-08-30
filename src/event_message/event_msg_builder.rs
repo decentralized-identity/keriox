@@ -12,7 +12,7 @@ use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing}, error::
         sections::InceptionWitnessConfig,
         sections::KeyConfig,
         Event, EventMessage,
-    }, prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix, basic::PublicKey}};
+    }, keys::PublicKey, prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix}};
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
 use std::str::FromStr;

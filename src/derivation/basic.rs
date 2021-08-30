@@ -1,5 +1,5 @@
 use super::DerivationCode;
-use crate::{error::Error, prefix::{BasicPrefix, basic::PublicKey}};
+use crate::{error::Error, keys::PublicKey, prefix::BasicPrefix};
 use core::str::FromStr;
 use serde::{Deserialize, Serialize};
 

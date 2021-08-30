@@ -1,4 +1,4 @@
-use crate::{error::Error, keys::PrivateKey, prefix::{SeedPrefix, basic::PublicKey}};
+use crate::{error::Error, keys::{PrivateKey, PublicKey}, prefix::{SeedPrefix}};
 use ed25519_dalek::{Keypair, SecretKey};
 use rand::rngs::OsRng;
 pub trait KeyManager {

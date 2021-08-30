@@ -181,7 +181,7 @@ fn test_next_commitment() {
 #[test]
 fn test_threshold() -> Result<(), Error> {
     use crate::derivation::{basic::Basic, self_signing::SelfSigning};
-    use crate::{keys::PrivateKey, prefix::basic::PublicKey};
+    use crate::keys::{PrivateKey, PublicKey};
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
 

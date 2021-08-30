@@ -1,5 +1,5 @@
 use super::event_msg_builder::{EventMsgBuilder, EventType};
-use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning}, error::Error, event::sections::{key_config::nxt_commitment, threshold::SignatureThreshold}, keys::PrivateKey, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix, basic::PublicKey}, state::IdentifierState};
+use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning}, error::Error, event::sections::{key_config::nxt_commitment, threshold::SignatureThreshold}, keys::{PrivateKey, PublicKey}, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix }, state::IdentifierState};
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
 

@@ -412,7 +412,7 @@ mod tests {
             event_data::{inception::InceptionEvent, EventData},
             sections::KeyConfig,
             sections::{threshold::SignatureThreshold, InceptionWitnessConfig},
-        }, keys::PrivateKey, prefix::{AttachedSignaturePrefix, IdentifierPrefix, basic::PublicKey}};
+        }, keys::{PrivateKey, PublicKey}, prefix::{AttachedSignaturePrefix, IdentifierPrefix }};
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
 
