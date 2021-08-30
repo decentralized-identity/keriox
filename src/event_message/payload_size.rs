@@ -77,6 +77,7 @@ pub enum PayloadType {
     // TODO: Indexed signatures
 }
 
+#[cfg(feature = "async")]
 impl PayloadType {
     pub(crate) fn size(&self) -> usize {
         match self {

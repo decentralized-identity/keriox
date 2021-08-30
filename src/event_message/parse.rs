@@ -1,4 +1,11 @@
-use super::{AttachedSignaturePrefix, EventMessage, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, payload_size::PayloadType, serialization_info::SerializationInfo};
+use super::{
+    AttachedSignaturePrefix,
+    EventMessage,
+    SignedEventMessage,
+    SignedNontransferableReceipt,
+    SignedTransferableReceipt,
+    payload_size::PayloadType,
+};
 use crate::{
     derivation::attached_signature_code::b64_to_num,
     event::{event_data::EventData, sections::seal::EventSeal},
@@ -18,6 +25,8 @@ use nom::{
 use rmp_serde as serde_mgpk;
 use serde::Deserialize;
 use std::io::Cursor;
+#[cfg(feature = "async")]
+use super::serialization_info::SerializationInfo;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DeserializedEvent<'a> {
@@ -95,6 +104,7 @@ pub fn message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], DeserializedEvent> {
 }
 
 // TESTED: OK
+#[cfg(feature = "async")]
 fn json_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
     match serde_json::from_slice(data) {
         Ok(vi) => Ok((data, vi)),
@@ -103,6 +113,7 @@ fn json_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
 }
 
 // TODO: Requires testing
+#[cfg(feature = "async")]
 fn cbor_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
     match serde_cbor::from_slice(data) {
         Ok(vi) => Ok((data, vi)),
@@ -111,6 +122,7 @@ fn cbor_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
 }
 
 // TODO: Requires testing
+#[cfg(feature = "async")]
 fn mgpk_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
     match serde_mgpk::from_slice(data) {
         Ok(vi) => Ok((data, vi)),
@@ -118,6 +130,7 @@ fn mgpk_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
     }
 }
 
+#[cfg(feature = "async")]
 pub(crate) fn version<'a>(data: &'a [u8]) -> nom::IResult<&[u8], SerializationInfo> {
     alt((json_version, cbor_version, mgpk_version))(data).map(|d| (d.0, d.1))
 }
@@ -383,6 +396,7 @@ fn test_stream3() {
     assert!(!result.is_ok());
 }
 
+#[cfg(feature = "async")]
 #[test]
 fn test_version_parse() {
     let json = br#""KERI10JSON00014b_""#;
