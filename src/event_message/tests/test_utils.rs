@@ -1,12 +1,5 @@
 use super::event_msg_builder::{EventMsgBuilder, EventType};
-use crate::{
-    derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
-    error::Error,
-    event::sections::{key_config::nxt_commitment, threshold::SignatureThreshold},
-    keys::Key,
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
-    state::IdentifierState,
-};
+use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning}, error::Error, event::sections::{key_config::nxt_commitment, threshold::SignatureThreshold}, keys::PrivateKey, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix, basic::PublicKey}, state::IdentifierState};
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
 
@@ -20,16 +13,16 @@ pub struct TestStateData {
     keys_history: Vec<BasicPrefix>,
     prev_event_hash: SelfAddressingPrefix,
     sn: u64,
-    current_keypair: (Key, Key),
-    new_keypair: (Key, Key),
+    current_keypair: (PublicKey, PrivateKey),
+    new_keypair: (PublicKey, PrivateKey),
 }
 
 /// Create initial `TestStateData`, before application of any Event.
 /// Provides only keypair for next event.
 fn get_initial_test_data() -> Result<TestStateData, Error> {
     let keypair = Keypair::generate(&mut OsRng);
-    let pk = Key::new(keypair.public.as_bytes().to_vec());
-    let sk = Key::new(keypair.secret.as_bytes().to_vec());
+    let pk = PublicKey::new(keypair.public.as_bytes().to_vec());
+    let sk = PrivateKey::new(keypair.secret.as_bytes().to_vec());
 
     Ok(TestStateData {
         state: IdentifierState::default(),
@@ -57,8 +50,8 @@ fn test_update_identifier_state(
         cur_pk = next_pk;
         cur_sk = next_sk;
         let keypair = Keypair::generate(&mut OsRng);
-        let pk = Key::new(keypair.public.as_bytes().to_vec());
-        let sk = Key::new(keypair.secret.as_bytes().to_vec());
+        let pk = PublicKey::new(keypair.public.as_bytes().to_vec());
+        let sk = PrivateKey::new(keypair.secret.as_bytes().to_vec());
         next_pk = pk;
         next_sk = sk;
     };

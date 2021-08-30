@@ -147,8 +147,8 @@ pub fn derive(seed: &SeedPrefix, transferable: bool) -> Result<BasicPrefix, Erro
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{derivation::self_addressing::SelfAddressing, keys::Key};
-    use ed25519_dalek::{Keypair, PublicKey};
+    use crate::{derivation::self_addressing::SelfAddressing, keys::PrivateKey, prefix::basic::PublicKey};
+    use ed25519_dalek::{Keypair};
     use rand::rngs::OsRng;
 
     #[test]
@@ -193,8 +193,8 @@ mod tests {
 
     #[test]
     fn simple_serialize() -> Result<(), Error> {
-        let pref = Basic::Ed25519NT.derive(Key::new(
-            PublicKey::from_bytes(&[0; 32])?.to_bytes().to_vec(),
+        let pref = Basic::Ed25519NT.derive(PublicKey::new(
+            ed25519_dalek::PublicKey::from_bytes(&[0; 32])?.to_bytes().to_vec(),
         ));
 
         assert_eq!(
@@ -210,8 +210,8 @@ mod tests {
         let data_string = "hello there";
 
         let kp = Keypair::generate(&mut OsRng);
-        let pub_key = Key::new(kp.public.to_bytes().to_vec());
-        let priv_key = Key::new(kp.secret.to_bytes().to_vec());
+        let pub_key = PublicKey::new(kp.public.to_bytes().to_vec());
+        let priv_key = PrivateKey::new(kp.secret.to_bytes().to_vec());
 
         let key_prefix = Basic::Ed25519NT.derive(pub_key);
 
@@ -286,7 +286,7 @@ mod tests {
         assert_eq!(
             BasicPrefix::new(
                 Basic::Ed25519NT,
-                Key::new(PublicKey::from_bytes(&[0; 32])?.to_bytes().to_vec())
+                PublicKey::new(ed25519_dalek::PublicKey::from_bytes(&[0; 32])?.to_bytes().to_vec())
             )
             .to_str(),
             ["B".to_string(), "A".repeat(43)].join("")
@@ -294,7 +294,7 @@ mod tests {
         assert_eq!(
             BasicPrefix::new(
                 Basic::X25519,
-                Key::new(PublicKey::from_bytes(&[0; 32])?.to_bytes().to_vec())
+                PublicKey::new(ed25519_dalek::PublicKey::from_bytes(&[0; 32])?.to_bytes().to_vec())
             )
             .to_str(),
             ["C".to_string(), "A".repeat(43)].join("")
@@ -302,29 +302,29 @@ mod tests {
         assert_eq!(
             BasicPrefix::new(
                 Basic::Ed25519,
-                Key::new(PublicKey::from_bytes(&[0; 32])?.to_bytes().to_vec())
+                PublicKey::new(ed25519_dalek::PublicKey::from_bytes(&[0; 32])?.to_bytes().to_vec())
             )
             .to_str(),
             ["D".to_string(), "A".repeat(43)].join("")
         );
         assert_eq!(
-            BasicPrefix::new(Basic::X448, Key::new([0; 56].to_vec())).to_str(),
+            BasicPrefix::new(Basic::X448, PublicKey::new([0; 56].to_vec())).to_str(),
             ["L".to_string(), "A".repeat(75)].join("")
         );
         assert_eq!(
-            BasicPrefix::new(Basic::ECDSAsecp256k1NT, Key::new([0; 33].to_vec())).to_str(),
+            BasicPrefix::new(Basic::ECDSAsecp256k1NT, PublicKey::new([0; 33].to_vec())).to_str(),
             ["1AAA".to_string(), "A".repeat(44)].join("")
         );
         assert_eq!(
-            BasicPrefix::new(Basic::ECDSAsecp256k1, Key::new([0; 33].to_vec())).to_str(),
+            BasicPrefix::new(Basic::ECDSAsecp256k1, PublicKey::new([0; 33].to_vec())).to_str(),
             ["1AAB".to_string(), "A".repeat(44)].join("")
         );
         assert_eq!(
-            BasicPrefix::new(Basic::Ed448NT, Key::new([0; 57].to_vec())).to_str(),
+            BasicPrefix::new(Basic::Ed448NT, PublicKey::new([0; 57].to_vec())).to_str(),
             ["1AAC".to_string(), "A".repeat(76)].join("")
         );
         assert_eq!(
-            BasicPrefix::new(Basic::Ed448, Key::new([0; 57].to_vec())).to_str(),
+            BasicPrefix::new(Basic::Ed448, PublicKey::new([0; 57].to_vec())).to_str(),
             ["1AAD".to_string(), "A".repeat(76)].join("")
         );
 

@@ -1,8 +1,4 @@
-use crate::{
-    derivation::{basic::Basic, self_addressing::SelfAddressing},
-    error::Error,
-    event::sections::key_config::nxt_commitment,
-    event::{
+use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing}, error::Error, event::sections::key_config::nxt_commitment, event::{
         event_data::{
             delegated::{DelegatedInceptionEvent, DelegatedRotationEvent},
             interaction::InteractionEvent,
@@ -10,17 +6,13 @@ use crate::{
         },
         sections::{threshold::SignatureThreshold, seal::LocationSeal, WitnessConfig},
         SerializationFormats,
-    },
-    event::{
+    }, event::{
         event_data::{inception::InceptionEvent, EventData},
         sections::seal::Seal,
         sections::InceptionWitnessConfig,
         sections::KeyConfig,
         Event, EventMessage,
-    },
-    keys::Key,
-    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
-};
+    }, prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix, basic::PublicKey}};
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
 use std::str::FromStr;
@@ -65,8 +57,8 @@ impl EventMsgBuilder {
         let mut rng = OsRng {};
         let kp = Keypair::generate(&mut rng);
         let nkp = Keypair::generate(&mut rng);
-        let pk = Key::new(kp.public.to_bytes().to_vec());
-        let npk = Key::new(nkp.public.to_bytes().to_vec());
+        let pk = PublicKey::new(kp.public.to_bytes().to_vec());
+        let npk = PublicKey::new(nkp.public.to_bytes().to_vec());
         let basic_pref = Basic::Ed25519.derive(pk);
         let dummy_loc_seal = LocationSeal {
             prefix: IdentifierPrefix::from_str("EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM")?,
