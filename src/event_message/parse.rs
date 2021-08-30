@@ -14,7 +14,7 @@ use crate::{
 use nom::{
     branch::*,
     combinator::*,
-    error::{ErrorKind},
+    error::ErrorKind,
     multi::*,
     sequence::*,
 };

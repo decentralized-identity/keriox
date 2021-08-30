@@ -78,7 +78,9 @@ impl Drop for Key {
 
 #[test]
 fn libsodium_to_ed25519_dalek_compat() {
-    let kp = ed25519_dalek::Keypair::generate(&mut rand::rngs::OsRng);
+    use rand::rngs::OsRng;
+
+    let kp = ed25519_dalek::Keypair::generate(&mut OsRng);
 
     let msg = b"are libsodium and dalek compatible?";
 

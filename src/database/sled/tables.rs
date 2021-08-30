@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::marker::PhantomData;
 use serde::{Serialize, de::DeserializeOwned};
 use arrayref::array_ref;
@@ -7,7 +8,7 @@ use crate::error::Error;
 ///
 pub(crate) struct SledEventTreeVec<T> {
     tree: sled::Tree,
-    marker: Vec<PhantomData<T>>
+    marker: PhantomData<T>
 }
 
 impl<T> SledEventTreeVec<T> {
@@ -16,7 +17,7 @@ impl<T> SledEventTreeVec<T> {
     pub fn new(tree: sled::Tree) -> Self {
         Self {
             tree,
-            marker: vec!(PhantomData),
+            marker: PhantomData,
         }
     }
 }

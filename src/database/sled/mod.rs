@@ -10,8 +10,6 @@ pub struct SledEventDatabase {
     identifiers: SledEventTree<IdentifierPrefix>,
     // "kels" tree
     key_event_logs: SledEventTreeVec<TimestampedSignedEventMessage>,
-    // "pses" tree
-    partially_signed_events: SledEventTreeVec<TimestampedSignedEventMessage>,
     // "ldes" tree
     likely_duplicious_events: SledEventTreeVec<TimestampedEventMessage>,
     // "dels" tree
@@ -39,7 +37,6 @@ impl SledEventDatabase {
             escrowed_receipts_t: SledEventTreeVec::new(db.open_tree(b"vres")?),
             receipts_nt: SledEventTreeVec::new(db.open_tree(b"rcts")?),
             key_event_logs: SledEventTreeVec::new(db.open_tree(b"kels")?),
-            partially_signed_events: SledEventTreeVec::new(db.open_tree(b"pses")?),
             likely_duplicious_events: SledEventTreeVec::new(db.open_tree(b"ldes")?),
             duplicitous_events: SledEventTreeVec::new(db.open_tree(b"dels")?)
         })
@@ -113,20 +110,6 @@ impl SledEventDatabase {
         -> Result<(), Error> {
             self.escrowed_receipts_nt.remove(self.identifiers.designated_key(id), receipt)
         }
-
-    pub fn add_partially_signed_event(&self, event: SignedEventMessage, id: &IdentifierPrefix) -> Result<(), Error> {
-        self.partially_signed_events.push(self.identifiers.designated_key(id), event.into())
-    }
-
-    pub fn get_partially_signed_events(&self, id: &IdentifierPrefix)
-        -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
-            self.partially_signed_events.iter_values(self.identifiers.designated_key(id))
-        }
-
-    pub fn remove_partially_signed_event(&self, id: &IdentifierPrefix, event: &SignedEventMessage)
-        -> Result<(), Error> {
-            self.partially_signed_events.remove(self.identifiers.designated_key(id), &event.into())
-    }
 
     pub fn add_likely_duplicious_event(&self, event: EventMessage, id: &IdentifierPrefix) -> Result<(), Error> {
         self.likely_duplicious_events.push(self.identifiers.designated_key(id), event.into())
