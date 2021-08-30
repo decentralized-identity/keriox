@@ -35,7 +35,7 @@ serde-hex = "0.1"
 nom = "5"
 itoa = "0.4"
 ryu = "1.0"
-blake3 = { version = "0.3", default-features = false }
+blake3 = { version = "1", default-features = false }
 chrono = { version = "0.4.18", features = ["serde"] }
 rmp-serde = "0.15"
 arrayref = "0.3.6"
