@@ -143,11 +143,11 @@ impl<'d, K: KeyManager> Keri<'d, K> {
                 match des_event {
                     Deserialized::Event(ev) => {
                         let mut buf = vec![];
-                        if let EventData::Icp(_) = ev.event.event.event.event_data {
+                        if let EventData::Icp(_) = ev.deserialized_event.event_message.event.event_data {
                             if !self.processor.has_receipt(
                                 &self.prefix,
                                 0,
-                                &ev.event.event.event.prefix,
+                                &ev.deserialized_event.event_message.event.prefix,
                             )? {
                                 buf.append(
                                     &mut self
@@ -157,7 +157,7 @@ impl<'d, K: KeyManager> Keri<'d, K> {
                                 )
                             }
                         }
-                        buf.append(&mut self.make_rct(ev.event.event.clone())?.serialize()?);
+                        buf.append(&mut self.make_rct(ev.deserialized_event.event_message.clone())?.serialize()?);
                         Ok(buf)
                     }
                     _ => Ok(vec![]),

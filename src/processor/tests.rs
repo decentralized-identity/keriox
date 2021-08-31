@@ -29,7 +29,7 @@ fn test_process() -> Result<(), Error> {
     let deserialized_icp = parse::signed_message(icp_raw).unwrap().1;
 
     let (id, _raw_parsed) = match &deserialized_icp {
-        Deserialized::Event(e) => (e.event.event.event.prefix.clone(), e.event.raw.to_vec()),
+        Deserialized::Event(e) => (e.deserialized_event.event_message.event.prefix.clone(), e.deserialized_event.raw.to_vec()),
         _ => Err(Error::SemanticError("bad deser".into()))?,
     };
 
@@ -38,20 +38,20 @@ fn test_process() -> Result<(), Error> {
 
     // Check if processed event is in kel.
     let icp_from_db = event_processor.get_event_at_sn(&id, 0).unwrap().unwrap();
-    assert_eq!(icp_from_db.event.serialize().unwrap(), icp_raw);
+    assert_eq!(icp_from_db.signed_event_message.serialize().unwrap(), icp_raw);
 
     let rot_raw = br#"{"v":"KERI10JSON000180_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"1","t":"rot","p":"ElIKmVhsgDtxLhFqsWPASdq9J2slLqG-Oiov0rEG4s-w","kt":"2","k":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ","D1kcBE7h0ImWW6_Sp7MQxGYSshZZz6XM7OiUE5DXm0dU","D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM"],"n":"EQpRYqbID2rW8X5lB6mOzDckJEIFae6NbJISXgJSN9qg","bt":"0","br":[],"ba":[],"a":[]}-AADAAOA7_2NfORAD7hnavnFDhIQ_1fX1zVjNzFLYLOqW4mLdmNlE4745-o75wtaPX1Reg27YP0lgrCFW_3Evz9ebNAQAB6CJhTEANFN8fAFEdxwbnllsUd3jBTZHeeR-KiYe0yjCdOhbEnTLKTpvwei9QsAP0z3xc6jKjUNJ6PoxNnmD7AQAC4YfEq1tZPteXlH2cLOMjOAxqygRgbDsFRvjEQCHQva1K4YsS3ErQjuKd5Z57Uac-aDaRjeH8KdSSDvtNshIyBw"#;
     let deserialized_rot = parse::signed_message(rot_raw).unwrap().1;
 
     let _raw_parsed = match &deserialized_rot {
-        Deserialized::Event(e) => e.event.raw.to_vec(),
+        Deserialized::Event(e) => e.deserialized_event.raw.to_vec(),
         _ => Err(Error::SemanticError("bad deser".into()))?,
     };
 
     // Process rotation event.
     event_processor.process(deserialized_rot.clone())?.unwrap();
     let rot_from_db = event_processor.get_event_at_sn(&id, 1).unwrap().unwrap();
-    assert_eq!(rot_from_db.event.serialize().unwrap(), rot_raw);
+    assert_eq!(rot_from_db.signed_event_message.serialize().unwrap(), rot_raw);
 
     // Process the same rotation event one more time.
     let id_state = event_processor.process(deserialized_rot);
@@ -62,7 +62,7 @@ fn test_process() -> Result<(), Error> {
     let deserialized_ixn = parse::signed_message(ixn_raw).unwrap().1;
 
     let _raw_parsed = match &deserialized_ixn {
-        Deserialized::Event(e) => e.event.raw.to_vec(),
+        Deserialized::Event(e) => e.deserialized_event.raw.to_vec(),
         _ => Err(Error::SemanticError("bad deser".into()))?,
     };
 
@@ -73,7 +73,7 @@ fn test_process() -> Result<(), Error> {
     let ixn_from_db = event_processor.get_event_at_sn(&id, 2).unwrap().unwrap();
     match deserialized_ixn {
         Deserialized::Event(evt) =>
-            assert_eq!(ixn_from_db.event.event_message.event, evt.event.event.event),
+            assert_eq!(ixn_from_db.signed_event_message.event_message.event, evt.deserialized_event.event_message.event),
         _ => assert!(false)
     }
 
