@@ -2,7 +2,6 @@ use crate::error::Error;
 use ed25519_dalek::{ExpandedSecretKey, SecretKey};
 use k256::ecdsa::{VerifyingKey, signature::{Verifier as EcdsaVerifier}};
 use k256::ecdsa::{Signature as EcdsaSignature, SigningKey, signature::{Signer as EcdsaSigner}};
-use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -54,7 +53,7 @@ impl PublicKey {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct PrivateKey {
     key: Vec<u8>,
 }

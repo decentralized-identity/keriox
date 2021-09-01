@@ -90,8 +90,8 @@ impl Signer {
         Signer { pub_key, priv_key }
     }
 
-    pub fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
-        self.priv_key.sign_ed(msg)
+    pub fn sign(&self, msg: impl AsRef<[u8]>) -> Result<Vec<u8>, Error> {
+        self.priv_key.sign_ed(msg.as_ref())
     }
 }
 
