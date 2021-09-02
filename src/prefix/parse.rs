@@ -1,14 +1,8 @@
 #![allow(non_upper_case_globals)]
-use crate::{
-    derivation::{
+use crate::{derivation::{
         attached_signature_code::b64_to_num, basic::Basic, self_addressing::SelfAddressing,
         self_signing::SelfSigning, DerivationCode,
-    },
-    error::Error,
-    event::sections::seal::EventSeal,
-    keys::Key,
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-};
+    }, error::Error, event::sections::seal::EventSeal, keys::PublicKey, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix}};
 use base64::URL_SAFE;
 use nom::{bytes::complete::take, error::ErrorKind};
 
@@ -97,7 +91,7 @@ pub fn basic_prefix(s: &[u8]) -> nom::IResult<&[u8], BasicPrefix> {
         .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
 
     let (extra, b) = take(code.derivative_b64_len())(rest)?;
-    let pk = Key::new(base64::decode_config(b.to_vec(), URL_SAFE).unwrap());
+    let pk = PublicKey::new(base64::decode_config(b.to_vec(), URL_SAFE).unwrap());
     Ok((extra, code.derive(pk)))
 }
 
@@ -222,7 +216,7 @@ fn test_basic_prefix() {
 
     let bp = BasicPrefix {
         derivation: Basic::Ed25519,
-        public_key: Key::new(kp.public.to_bytes().to_vec()),
+        public_key: PublicKey::new(kp.public.to_bytes().to_vec()),
     };
     let bp_str = [&bp.to_str(), "more"].join("");
     let parsed = basic_prefix(bp_str.as_bytes()).unwrap();

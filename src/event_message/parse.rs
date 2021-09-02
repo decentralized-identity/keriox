@@ -36,7 +36,7 @@ pub struct DeserializedEvent<'a> {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DeserializedSignedEvent<'a> {
-    pub event: DeserializedEvent<'a>,
+    pub deserialized_event: DeserializedEvent<'a>,
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
 
@@ -205,7 +205,7 @@ pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], Deserialized> {
             Ok((
                 extra,
                 Deserialized::Event(DeserializedSignedEvent {
-                    event: e,
+                    deserialized_event: e,
                     signatures,
                 }),
             ))
@@ -228,7 +228,7 @@ pub fn signed_event_stream_validate(s: &[u8]) -> nom::IResult<&[u8], IdentifierS
                     .map_err(|_| nom::Err::Error((s, ErrorKind::Verify)))?;
                 if new_state
                     .current
-                    .verify(e.event.raw, &e.signatures)
+                    .verify(e.deserialized_event.raw, &e.signatures)
                     .map_err(|_| nom::Err::Error((s, ErrorKind::Verify)))?
                 {
                     Ok(new_state)

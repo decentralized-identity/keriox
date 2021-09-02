@@ -1,9 +1,5 @@
 use super::{verify, Prefix, SelfSigningPrefix};
-use crate::{
-    derivation::{basic::Basic, DerivationCode},
-    error::Error,
-    keys::Key,
-};
+use crate::{derivation::{basic::Basic, DerivationCode}, error::Error, keys::PublicKey};
 use base64::decode_config;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -11,11 +7,11 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 #[derive(Debug, Clone, Hash)]
 pub struct BasicPrefix {
     pub derivation: Basic,
-    pub public_key: Key,
+    pub public_key: PublicKey,
 }
 
 impl BasicPrefix {
-    pub fn new(code: Basic, public_key: Key) -> Self {
+    pub fn new(code: Basic, public_key: PublicKey) -> Self {
         Self {
             derivation: code,
             public_key,
@@ -42,7 +38,7 @@ impl FromStr for BasicPrefix {
         if s.len() == code.prefix_b64_len() {
             let k_vec =
                 decode_config(&s[code.code_len()..code.prefix_b64_len()], base64::URL_SAFE)?;
-            Ok(Self::new(code, Key::new(k_vec)))
+            Ok(Self::new(code, PublicKey::new(k_vec)))
         } else {
             Err(Error::SemanticError(format!(
                 "Incorrect Prefix Length: {}",
@@ -92,7 +88,7 @@ fn serialize_deserialize() {
 
     let bp = BasicPrefix {
         derivation: Basic::Ed25519,
-        public_key: Key::new(kp.public.to_bytes().to_vec()),
+        public_key: PublicKey::new(kp.public.to_bytes().to_vec()),
     };
 
     let serialized = serde_json::to_string(&bp);
@@ -108,10 +104,11 @@ fn serialize_deserialize() {
 fn to_from_string() {
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
+    use crate::keys::PrivateKey;
 
     let kp = Keypair::generate(&mut OsRng);
 
-    let signer = Key::new(kp.secret.to_bytes().to_vec());
+    let signer = PrivateKey::new(kp.secret.to_bytes().to_vec());
 
     let message = b"hello there";
     let sig = SelfSigningPrefix::new(
@@ -121,7 +118,7 @@ fn to_from_string() {
 
     let bp = BasicPrefix {
         derivation: Basic::Ed25519,
-        public_key: Key::new(kp.public.to_bytes().to_vec()),
+        public_key: PublicKey::new(kp.public.to_bytes().to_vec()),
     };
 
     assert!(bp.verify(message, &sig).unwrap());

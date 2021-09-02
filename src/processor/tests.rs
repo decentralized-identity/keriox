@@ -46,14 +46,14 @@ fn test_process() -> Result<(), Error> {
     let deserialized_rot = parse::signed_message(rot_raw).unwrap().1;
 
     let _raw_parsed = match &deserialized_rot {
-        Deserialized::Event(e) => e.event.raw.to_vec(),
+        Deserialized::Event(e) => e.deserialized_event.raw.to_vec(),
         _ => Err(Error::SemanticError("bad deser".into()))?,
     };
 
     // Process rotation event.
     event_processor.process(deserialized_rot.clone())?.unwrap();
     let rot_from_db = event_processor.get_event_at_sn(&id, 1).unwrap().unwrap();
-    assert_eq!(rot_from_db.event.serialize().unwrap(), rot_raw);
+    assert_eq!(rot_from_db.signed_event_message.serialize().unwrap(), rot_raw);
 
     // Process the same rotation event one more time.
     let id_state = event_processor.process(deserialized_rot);
@@ -64,7 +64,7 @@ fn test_process() -> Result<(), Error> {
     let deserialized_ixn = parse::signed_message(ixn_raw).unwrap().1;
 
     let _raw_parsed = match &deserialized_ixn {
-        Deserialized::Event(e) => e.event.raw.to_vec(),
+        Deserialized::Event(e) => e.deserialized_event.raw.to_vec(),
         _ => Err(Error::SemanticError("bad deser".into()))?,
     };
 

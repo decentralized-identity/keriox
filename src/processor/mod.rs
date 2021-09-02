@@ -34,7 +34,7 @@ impl EventProcessor {
             let mut sorted_events = events.collect::<Vec<TimestampedSignedEventMessage>>();
             sorted_events.sort();
             for event in sorted_events {
-                state = match state.clone().apply(&event.event) {
+                state = match state.clone().apply(&event.signed_event_message) {
                     Ok(s) => s,
                     // will happen when a recovery has overridden some part of the KEL,
                     Err(e) => match e {
@@ -68,8 +68,8 @@ impl EventProcessor {
             let mut sorted_events = events.collect::<Vec<TimestampedSignedEventMessage>>();
             sorted_events.sort();
             for event in sorted_events.iter()
-                .filter(|e| e.event.event_message.event.sn <= sn) {
-                    state = state.apply(&event.event.event_message)?;
+                .filter(|e| e.signed_event_message.event_message.event.sn <= sn) {
+                    state = state.apply(&event.signed_event_message.event_message)?;
                 }
         } else {
             return Ok(None);
@@ -89,11 +89,11 @@ impl EventProcessor {
         let mut last_est = None;
         if let Some(events) = self.db.get_kel_finalized_events(id) {
             for event in events {
-                state = state.apply(&event.event.event_message.event)?;
+                state = state.apply(&event.signed_event_message.event_message.event)?;
                 // TODO: is this event.event.event stuff too ugly? =)
-                last_est = match event.event.event_message.event.event_data {
-                    EventData::Icp(_) => Some(event.event),
-                    EventData::Rot(_) => Some(event.event),
+                last_est = match event.signed_event_message.event_message.event.event_data {
+                    EventData::Icp(_) => Some(event.signed_event_message),
+                    EventData::Rot(_) => Some(event.signed_event_message),
                     _ => last_est,
                 }
             }
@@ -116,16 +116,9 @@ impl EventProcessor {
     /// Returns the current validated KEL for a given Prefix
     pub fn get_kerl(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Error> {
        match self.db.get_kel_finalized_events(id) {
-           Some(events) => {
-                let mut collected = events.map(|event| event.event.serialize().unwrap_or_default())
-                    .fold(vec!(), |mut accum, serialized_event| { accum.extend(serialized_event); accum });
-                if let Some(receipts) = self.db.get_receipts_t(id) {
-                        receipts
-                        .map(|r| collected.extend(r.serialize().unwrap_or_default()))
-                        .for_each(drop);
-                }
-               Ok(Some(collected))
-           },
+           Some(events) => 
+               Ok(Some(events.map(|event| event.signed_event_message.serialize().unwrap_or_default())
+                .fold(vec!(), |mut accum, serialized_event| { accum.extend(serialized_event); accum }))),
             None => Ok(None)
        }
     }
@@ -143,9 +136,9 @@ impl EventProcessor {
     ) -> Result<Option<KeyConfig>, Error> {
         if let Ok(Some(event)) = self.get_event_at_sn(id, sn) {
             // if it's the event we're looking for
-            if event_digest.verify_binding(&event.event.event_message.serialize()?) {
+            if event_digest.verify_binding(&event.signed_event_message.event_message.serialize()?) {
                 // return the config or error if it's not an establishment event
-                Ok(Some(match event.event.event_message.event.event_data {
+                Ok(Some(match event.signed_event_message.event_message.event.event_data {
                     EventData::Icp(icp) => icp.key_config,
                     EventData::Rot(rot) => rot.key_config,
                     EventData::Dip(dip) => dip.inception_data.key_config,
@@ -169,7 +162,7 @@ impl EventProcessor {
         // Check if event of seal's prefix and sn is in db.
         if let Ok(Some(event)) = self.get_event_at_sn(&seal.prefix, seal.sn) {
             // Extract prior_digest and data field from delegating event.
-            let (prior_dig, data) = match event.event.event_message.event.event_data {
+            let (prior_dig, data) = match event.signed_event_message.event_message.event.event_data {
                 EventData::Rot(rot) => (rot.previous_event_hash, rot.data),
                 EventData::Ixn(ixn) => (ixn.previous_event_hash, ixn.data),
                 EventData::Drt(drt) => (
@@ -187,7 +180,7 @@ impl EventProcessor {
                 // get previous event from db
                 match self.get_event_at_sn(&seal.prefix, seal.sn -1)? {
                     Some(previous_event) => {
-                        match previous_event.event.event_message.event.prefix {
+                        match previous_event.signed_event_message.event_message.event.prefix {
                             IdentifierPrefix::SelfAddressing(prefix) => 
                                 Ok(prefix.digest == seal.prior_digest.digest),
                             _ => Err(Error::SemanticError("No event in db".into()))
@@ -247,7 +240,6 @@ impl EventProcessor {
     /// of the Identifier and applies it to update the state
     /// returns the updated state
     /// TODO improve checking and handling of errors!
-    /// FIXME: refactor to remove multiple event recourse wrappers
     pub fn process_event(
         &self,
         event: DeserializedSignedEvent,
@@ -259,9 +251,9 @@ impl EventProcessor {
         // If delegated event, check its delegator seal.
         match event.event.event_message.event.event_data.clone() {
             EventData::Dip(dip) =>
-                self.validate_seal(dip.seal, &event.event.raw),
+                self.validate_seal(dip.seal, &event.deserialized_event.raw),
             EventData::Drt(drt) =>
-                self.validate_seal(drt.seal, &event.event.raw),
+                self.validate_seal(drt.seal, &event.deserialized_event.raw),
             _ => Ok(()),
         }?;
         self.apply_to_state(event.event.event_message.clone())
@@ -317,7 +309,7 @@ impl EventProcessor {
                         &vrc.validator_seal.event_seal.prefix,
                         vrc.validator_seal.event_seal.sn,
                         &vrc.validator_seal.event_seal.event_digest)?;
-                    if kp.is_some() && kp.unwrap().verify(&event.event.event_message.serialize()?, &vrc.signatures)? {
+                    if kp.is_some() && kp.unwrap().verify(&event.signed_event_message.event_message.serialize()?, &vrc.signatures)? {
                         self.db.add_receipt_t(vrc.clone(), &vrc.body.event.prefix)
                     } else {
                         Err(Error::SemanticError("Incorrect receipt signatures".into()))
@@ -348,7 +340,7 @@ impl EventProcessor {
             EventData::Rct(_) => {
                 let id = &rct.body.event.prefix.to_owned();
                 if let Ok(Some(event)) = self.get_event_at_sn(&rct.body.event.prefix, rct.body.event.sn) {
-                    let serialized_event = event.event.serialize()?;
+                    let serialized_event = event.signed_event_message.serialize()?;
                     let (_, mut errors): (Vec<_>, Vec<Result<bool, Error>>) = rct.clone().couplets.into_iter()
                         .map(|(witness, receipt)| 
                             witness.verify(&&serialized_event, &receipt))
@@ -370,7 +362,7 @@ impl EventProcessor {
 
     pub fn get_event_at_sn(&self, id: &IdentifierPrefix, sn: u64) -> Result<Option<TimestampedSignedEventMessage>, Error> {
        if let Some(mut events) = self.db.get_kel_finalized_events(id) {
-            Ok(events.find(|event| event.event.event_message.event.sn == sn))
+            Ok(events.find(|event| event.signed_event_message.event_message.event.sn == sn))
        } else { Ok(None) }
     }
 

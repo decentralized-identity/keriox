@@ -40,6 +40,9 @@ pub enum Error {
     #[error("Error while applying event: {0}")]
     SemanticError(String),
 
+    #[error("Event signature verification faulty")]
+    FaultySignatureVerification,
+
     #[error("Error while applying event: out of order event")]
     EventOutOfOrderError,
 

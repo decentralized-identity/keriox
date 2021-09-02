@@ -1,5 +1,5 @@
 use super::DerivationCode;
-use crate::{error::Error, keys::Key, prefix::BasicPrefix};
+use crate::{error::Error, keys::PublicKey, prefix::BasicPrefix};
 use core::str::FromStr;
 use serde::{Deserialize, Serialize};
 
@@ -19,7 +19,7 @@ pub enum Basic {
 }
 
 impl Basic {
-    pub fn derive(&self, public_key: Key) -> BasicPrefix {
+    pub fn derive(&self, public_key: PublicKey) -> BasicPrefix {
         BasicPrefix::new(*self, public_key)
     }
 }
