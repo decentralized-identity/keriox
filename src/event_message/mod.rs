@@ -41,23 +41,23 @@ pub struct EventMessage {
 #[derive(Serialize, Deserialize, PartialEq)]
 pub struct TimestampedEventMessage {
     pub timestamp: DateTime<Local>,
-    pub event: EventMessage,
+    pub event_message: EventMessage,
 }
 
 impl TimestampedEventMessage {
     pub fn new(event: EventMessage) -> Self {
         Self {
             timestamp: Local::now(),
-            event,
+            event_message: event,
         }
     }
 }
 
 impl PartialOrd for TimestampedEventMessage {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(match self.event.event.sn == other.event.event.sn {
+        Some(match self.event_message.event.sn == other.event_message.event.sn {
             true => Ordering::Equal,
-            false => match self.event.event.sn > other.event.event.sn {
+            false => match self.event_message.event.sn > other.event_message.event.sn {
                 true => Ordering::Greater,
                 false => Ordering::Less,
             },
@@ -67,9 +67,9 @@ impl PartialOrd for TimestampedEventMessage {
 
 impl Ord for TimestampedEventMessage {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.event.event.sn == other.event.event.sn {
+        match self.event_message.event.sn == other.event_message.event.sn {
             true => Ordering::Equal,
-            false => match self.event.event.sn > other.event.event.sn {
+            false => match self.event_message.event.sn > other.event_message.event.sn {
                 true => Ordering::Greater,
                 false => Ordering::Less,
             },
@@ -81,7 +81,7 @@ impl Eq for TimestampedEventMessage {}
 
 impl From<TimestampedEventMessage> for EventMessage {
     fn from(event: TimestampedEventMessage) -> EventMessage {
-        event.event
+        event.event_message
     }
 }
 
@@ -136,21 +136,21 @@ impl PartialEq for SignedEventMessage {
 #[derive(Serialize, Deserialize)]
 pub struct TimestampedSignedEventMessage {
     pub timestamp: DateTime<Local>,
-    pub event: SignedEventMessage,
+    pub signed_event_message: SignedEventMessage,
 }
 
 impl TimestampedSignedEventMessage {
     pub fn new(event: SignedEventMessage) -> Self {
         Self {
             timestamp: Local::now(),
-            event,
+            signed_event_message: event,
         }
     }
 }
 
 impl From<TimestampedSignedEventMessage> for SignedEventMessage {
     fn from(event: TimestampedSignedEventMessage) -> SignedEventMessage {
-        event.event
+        event.signed_event_message
     }
 }
 
@@ -168,17 +168,17 @@ impl From<&SignedEventMessage> for TimestampedSignedEventMessage {
 
 impl PartialEq for TimestampedSignedEventMessage {
     fn eq(&self, other: &Self) -> bool {
-        self.event == other.event
+        self.signed_event_message == other.signed_event_message
     }
 }
 
 impl PartialOrd for TimestampedSignedEventMessage {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(
-            match self.event.event_message.event.sn == other.event.event_message.event.sn {
+            match self.signed_event_message.event_message.event.sn == other.signed_event_message.event_message.event.sn {
                 true => Ordering::Equal,
                 false => {
-                    match self.event.event_message.event.sn > other.event.event_message.event.sn {
+                    match self.signed_event_message.event_message.event.sn > other.signed_event_message.event_message.event.sn {
                         true => Ordering::Greater,
                         false => Ordering::Less,
                     }
@@ -190,9 +190,9 @@ impl PartialOrd for TimestampedSignedEventMessage {
 
 impl Ord for TimestampedSignedEventMessage {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.event.event_message.event.sn == other.event.event_message.event.sn {
+        match self.signed_event_message.event_message.event.sn == other.signed_event_message.event_message.event.sn {
             true => Ordering::Equal,
-            false => match self.event.event_message.event.sn > other.event.event_message.event.sn {
+            false => match self.signed_event_message.event_message.event.sn > other.signed_event_message.event_message.event.sn {
                 true => Ordering::Greater,
                 false => Ordering::Less,
             },
@@ -201,31 +201,6 @@ impl Ord for TimestampedSignedEventMessage {
 }
 
 impl Eq for TimestampedSignedEventMessage {}
-
-/// Signed Non-Transferrable Receipt
-///
-/// A receipt created by an Identifier of a non-transferrable type.
-/// Mostly intended for use by Witnesses.
-/// NOTE: This receipt has a unique structure to it's appended
-/// signatures
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SignedNontransferableReceipt {
-    pub body: EventMessage,
-    pub couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
-}
-
-/// Signed Transferrable Receipt
-///
-/// Event Receipt which is suitable for creation by Transferable
-/// Identifiers. Provides both the signatures and a commitment to
-/// the latest establishment event of the receipt creator.
-/// Mostly intended for use by Validators
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SignedTransferableReceipt {
-    pub body: EventMessage,
-    pub validator_seal: AttachedEventSeal,
-    pub signatures: Vec<AttachedSignaturePrefix>,
-}
 
 impl EventMessage {
     pub fn new(event: Event, format: SerializationFormats) -> Result<Self, Error> {
@@ -279,35 +254,6 @@ impl SignedEventMessage {
 
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         Ok(to_string(&self)?.as_bytes().to_vec())
-    }
-}
-
-impl SignedTransferableReceipt {
-    pub fn new(
-        message: &EventMessage,
-        event_seal: EventSeal,
-        sigs: Vec<AttachedSignaturePrefix>,
-    ) -> Self {
-        Self {
-            body: message.clone(),
-            validator_seal: AttachedEventSeal::new(event_seal),
-            signatures: sigs,
-        }
-    }
-
-    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        Ok([
-            self.body.serialize()?,
-            self.validator_seal.serialize()?,
-            get_sig_count(self.signatures.len() as u16)
-                .as_bytes()
-                .to_vec(),
-            self.signatures
-                .iter()
-                .map(|sig| sig.to_str().as_bytes().to_vec())
-                .fold(vec![], |acc, next| [acc, next].concat()),
-        ]
-        .concat())
     }
 }
 
@@ -397,6 +343,87 @@ impl EventSemantics for SignedEventMessage {
     }
 }
 
+/// Signed Transferrable Receipt
+///
+/// Event Receipt which is suitable for creation by Transferable
+/// Identifiers. Provides both the signatures and a commitment to
+/// the latest establishment event of the receipt creator.
+/// Mostly intended for use by Validators
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SignedTransferableReceipt {
+    pub body: EventMessage,
+    pub validator_seal: AttachedEventSeal,
+    pub signatures: Vec<AttachedSignaturePrefix>,
+}
+
+impl SignedTransferableReceipt {
+    pub fn new(
+        message: &EventMessage,
+        event_seal: EventSeal,
+        sigs: Vec<AttachedSignaturePrefix>,
+    ) -> Self {
+        Self {
+            body: message.clone(),
+            validator_seal: AttachedEventSeal::new(event_seal),
+            signatures: sigs,
+        }
+    }
+
+    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
+        Ok([
+            self.body.serialize()?,
+            self.validator_seal.serialize()?,
+            get_sig_count(self.signatures.len() as u16)
+                .as_bytes()
+                .to_vec(),
+            self.signatures
+                .iter()
+                .map(|sig| sig.to_str().as_bytes().to_vec())
+                .fold(vec![], |acc, next| [acc, next].concat()),
+        ]
+        .concat())
+    }
+}
+
+/// Signed Non-Transferrable Receipt
+///
+/// A receipt created by an Identifier of a non-transferrable type.
+/// Mostly intended for use by Witnesses.
+/// NOTE: This receipt has a unique structure to it's appended
+/// signatures
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SignedNontransferableReceipt {
+    pub body: EventMessage,
+    pub couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
+}
+
+impl SignedNontransferableReceipt {
+    pub fn new(
+        message: &EventMessage,
+        couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
+    ) -> Self {
+        Self {
+            body: message.clone(),
+            couplets
+        }
+    }
+
+    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
+        Ok(
+            [
+                self.body.serialize()?,
+                get_sig_count(self.couplets.len() as u16)
+                    .as_bytes()
+                    .to_vec(),
+                self.couplets
+                    .iter()
+                    .map(|(_, sp)| sp.to_str().as_bytes().to_vec())
+                    .fold(vec!(), |acc, next| [acc, next].concat()),
+            ].concat()
+        )
+    }
+}
+
 pub fn verify_identifier_binding(icp_event: &EventMessage) -> Result<bool, Error> {
     let event_data = &icp_event.event.event_data;
     match event_data {
@@ -433,16 +460,11 @@ mod tests {
 
     use self::{event_msg_builder::EventType, test_utils::test_mock_event_sequence};
     use super::*;
-    use crate::{
-        derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
-        event::{
+    use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning}, event::{
             event_data::{inception::InceptionEvent, EventData},
             sections::KeyConfig,
             sections::{threshold::SignatureThreshold, InceptionWitnessConfig},
-        },
-        keys::Key,
-        prefix::{AttachedSignaturePrefix, IdentifierPrefix},
-    };
+        }, keys::{PrivateKey, PublicKey}, prefix::{AttachedSignaturePrefix, IdentifierPrefix }};
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
 
@@ -453,11 +475,11 @@ mod tests {
         let kp1 = Keypair::generate(&mut OsRng);
 
         // get two ed25519 keypairs
-        let pub_key0 = Key::new(kp0.public.to_bytes().to_vec());
-        let priv_key0 = Key::new(kp0.secret.to_bytes().to_vec());
+        let pub_key0 = PublicKey::new(kp0.public.to_bytes().to_vec());
+        let priv_key0 = PrivateKey::new(kp0.secret.to_bytes().to_vec());
         let (pub_key1, _priv_key1) = (
-            Key::new(kp1.public.to_bytes().to_vec()),
-            Key::new(kp1.secret.to_bytes().to_vec()),
+            PublicKey::new(kp1.public.to_bytes().to_vec()),
+            PrivateKey::new(kp1.secret.to_bytes().to_vec()),
         );
 
         // initial signing key prefix
@@ -524,21 +546,21 @@ mod tests {
         let kp2 = Keypair::generate(&mut OsRng);
 
         // get two ed25519 keypairs
-        let pub_key0 = Key::new(kp0.public.to_bytes().to_vec());
-        let priv_key0 = Key::new(kp0.secret.to_bytes().to_vec());
+        let pub_key0 = PublicKey::new(kp0.public.to_bytes().to_vec());
+        let priv_key0 = PrivateKey::new(kp0.secret.to_bytes().to_vec());
         let (pub_key1, sig_key_1) = (
-            Key::new(kp1.public.to_bytes().to_vec()),
-            Key::new(kp1.secret.to_bytes().to_vec()),
+            PublicKey::new(kp1.public.to_bytes().to_vec()),
+            PrivateKey::new(kp1.secret.to_bytes().to_vec()),
         );
 
         // hi X!
         // let x = XChaCha20Poly1305::new((&priv_key0.into_bytes()[..]).into());
 
         // get two X25519 keypairs
-        let (enc_key_0, _enc_priv_0) = (Key::new(kp2.public.to_bytes().to_vec()), sig_key_1);
+        let (enc_key_0, _enc_priv_0) = (PublicKey::new(kp2.public.to_bytes().to_vec()), sig_key_1);
         let (enc_key_1, _enc_priv_1) = (
-            Key::new(kp2.public.to_bytes().to_vec()),
-            Key::new(kp2.secret.to_bytes().to_vec()),
+            PublicKey::new(kp2.public.to_bytes().to_vec()),
+            PrivateKey::new(kp2.secret.to_bytes().to_vec()),
         );
 
         // initial key set

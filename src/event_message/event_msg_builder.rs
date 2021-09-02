@@ -1,8 +1,4 @@
-use crate::{
-    derivation::{basic::Basic, self_addressing::SelfAddressing},
-    error::Error,
-    event::sections::key_config::nxt_commitment,
-    event::{
+use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing}, error::Error, event::sections::key_config::nxt_commitment, event::{
         event_data::{
             delegated::{DelegatedInceptionEvent, DelegatedRotationEvent},
             interaction::InteractionEvent,
@@ -10,17 +6,13 @@ use crate::{
         },
         sections::{threshold::SignatureThreshold, seal::LocationSeal, WitnessConfig},
         SerializationFormats,
-    },
-    event::{
+    }, event::{
         event_data::{inception::InceptionEvent, EventData},
         sections::seal::Seal,
         sections::InceptionWitnessConfig,
         sections::KeyConfig,
         Event, EventMessage,
-    },
-    keys::Key,
-    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
-};
+    }, keys::PublicKey, prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix}};
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
 use std::str::FromStr;
@@ -65,8 +57,8 @@ impl EventMsgBuilder {
         let mut rng = OsRng {};
         let kp = Keypair::generate(&mut rng);
         let nkp = Keypair::generate(&mut rng);
-        let pk = Key::new(kp.public.to_bytes().to_vec());
-        let npk = Key::new(nkp.public.to_bytes().to_vec());
+        let pk = PublicKey::new(kp.public.to_bytes().to_vec());
+        let npk = PublicKey::new(nkp.public.to_bytes().to_vec());
         let basic_pref = Basic::Ed25519.derive(pk);
         let dummy_loc_seal = LocationSeal {
             prefix: IdentifierPrefix::from_str("EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM")?,
@@ -146,7 +138,7 @@ impl EventMsgBuilder {
         Ok(match self.event_type {
             EventType::Inception => {
                 let icp_event = InceptionEvent {
-                    key_config: key_config,
+                    key_config,
                     witness_config: InceptionWitnessConfig::default(),
                     inception_configuration: vec![],
                     data: vec![],
@@ -154,7 +146,7 @@ impl EventMsgBuilder {
 
                 match prefix {
                     IdentifierPrefix::Basic(_) => Event {
-                        prefix: prefix,
+                        prefix,
                         sn: 0,
                         event_data: EventData::Icp(icp_event),
                     }
@@ -167,18 +159,18 @@ impl EventMsgBuilder {
             }
 
             EventType::Rotation => Event {
-                prefix: prefix,
+                prefix,
                 sn: self.sn,
                 event_data: EventData::Rot(RotationEvent {
                     previous_event_hash: self.prev_event,
-                    key_config: key_config,
+                    key_config,
                     witness_config: WitnessConfig::default(),
                     data: self.data,
                 }),
             }
             .to_message(self.format)?,
             EventType::Interaction => Event {
-                prefix: prefix,
+                prefix,
                 sn: self.sn,
                 event_data: EventData::Ixn(InteractionEvent {
                     previous_event_hash: self.prev_event,
@@ -188,7 +180,7 @@ impl EventMsgBuilder {
             .to_message(self.format)?,
             EventType::DelegatedInception => {
                 let icp_data = InceptionEvent {
-                    key_config: key_config,
+                    key_config,
                     witness_config: InceptionWitnessConfig::default(),
                     inception_configuration: vec![],
                     data: vec![],
@@ -202,12 +194,12 @@ impl EventMsgBuilder {
             EventType::DelegatedRotation => {
                 let rotation_data = RotationEvent {
                     previous_event_hash: self.prev_event,
-                    key_config: key_config,
+                    key_config,
                     witness_config: WitnessConfig::default(),
                     data: self.data,
                 };
                 Event {
-                    prefix: prefix,
+                    prefix,
                     sn: self.sn,
                     event_data: EventData::Drt(DelegatedRotationEvent {
                         rotation_data,

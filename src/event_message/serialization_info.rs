@@ -36,7 +36,7 @@ impl FromStr for SerializationFormats {
             "JSON" => Ok(SerializationFormats::JSON),
             "MGPK" => Ok(SerializationFormats::MGPK),
             "CBOR" => Ok(SerializationFormats::CBOR),
-            _ => Err(Error::DeserializationError),
+            _ => Err(Error::DeserializeError("Unknown format".into())),
         }
     }
 }
@@ -79,7 +79,7 @@ impl FromStr for SerializationInfo {
                 kind: SerializationFormats::from_str(&s[6..10])?,
                 size: u16::from_str_radix(&s[10..16], 16)? as usize,
             }),
-            _ => Err(Error::DeserializationError),
+            _ => Err(Error::DeserializeError("Metadata parsing error".into())),
         }
     }
 }

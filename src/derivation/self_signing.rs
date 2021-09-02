@@ -5,7 +5,7 @@ use core::str::FromStr;
 /// Self Signing Derivations
 ///
 /// A self signing prefix derivation outputs a signature as its derivative (2.3.5)
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, Hash)]
 pub enum SelfSigning {
     Ed25519Sha512,
     ECDSAsecp256k1Sha256,
@@ -51,13 +51,13 @@ impl FromStr for SelfSigning {
             "0" => match &s[1..2] {
                 "B" => Ok(Self::Ed25519Sha512),
                 "C" => Ok(Self::ECDSAsecp256k1Sha256),
-                _ => Err(Error::DeserializationError),
+                _ => Err(Error::DeserializeError("Unknown signature type code".into())),
             },
             "1" => match &s[1..4] {
                 "AAE" => Ok(Self::Ed448),
-                _ => Err(Error::DeserializationError),
+                _ => Err(Error::DeserializeError("Unknown signature type code".into())),
             },
-            _ => Err(Error::DeserializationError),
+            _ => Err(Error::DeserializeError(format!("Unknown master code: {}", s))),
         }
     }
 }

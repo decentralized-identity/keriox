@@ -40,17 +40,23 @@ pub enum Error {
     #[error("Error while applying event: {0}")]
     SemanticError(String),
 
+    #[error("Event signature verification faulty")]
+    FaultySignatureVerification,
+
     #[error("Error while applying event: out of order event")]
     EventOutOfOrderError,
 
-    #[error("Error while aplying event: duplicate event")]
+    #[error("Error while applying event: duplicate event")]
     EventDuplicateError,
 
-    #[error("Not enough signatures while verifing")]
+    #[error("Not enough signatures while verifying")]
     NotEnoughSigsError,
 
-    #[error("Deserialization error")]
-    DeserializationError,
+    #[error("Signature verification failed")]
+    SignatureVerificationError,
+
+    #[error("Deserialize error: {0}")]
+    DeserializeError(String),
 
     #[error("Identifier is not indexed into the DB")]
     NotIndexedError,
@@ -70,6 +76,9 @@ pub enum Error {
     #[error("Storage error")]
     StorageError,
 
+    #[error("Invalid identifier state")]
+    InvalidIdentifierStat,
+
     #[cfg(feature = "async")]
     #[error("Zero send error")]
     ZeroSendError,
@@ -82,4 +91,9 @@ pub enum Error {
 
     #[error(transparent)]
     SerdeSerError(#[from] serializer_error::Error),
+
+    #[cfg(feature = "wallet")]
+    #[error(transparent)]
+    WalletError(#[from] universal_wallet::Error),
+
 }

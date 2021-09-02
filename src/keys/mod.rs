@@ -1,29 +1,30 @@
 use crate::error::Error;
-use ed25519_dalek::{ExpandedSecretKey, PublicKey, SecretKey, Signature};
-use k256::ecdsa::{
-    signature::{Signer as EcdsaSigner, Verifier as EcdsaVerifier},
-    Signature as EcdsaSignature, SigningKey, VerifyingKey,
-};
-use serde::{Deserialize, Serialize};
+use ed25519_dalek::{ExpandedSecretKey, SecretKey};
+use k256::ecdsa::{VerifyingKey, signature::{Verifier as EcdsaVerifier}};
+use k256::ecdsa::{Signature as EcdsaSignature, SigningKey, signature::{Signer as EcdsaSigner}};
 use zeroize::Zeroize;
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-pub struct Key {
-    key: Vec<u8>,
+#[derive(Debug, Clone, PartialEq, Hash)]
+pub struct PublicKey {
+    public_key: Vec<u8>
 }
 
-impl Key {
+impl PublicKey {
     pub fn new(key: Vec<u8>) -> Self {
-        Self { key }
+        PublicKey {public_key: key.to_vec()}
+    }
+
+    pub fn key(&self) -> Vec<u8> {
+        self.public_key.clone()
     }
 
     pub fn verify_ed(&self, msg: &[u8], sig: &[u8]) -> bool {
-        if let Ok(key) = PublicKey::from_bytes(&self.key) {
+        if let Ok(key) = ed25519_dalek::PublicKey::from_bytes(&self.key()) {
             use arrayref::array_ref;
             if sig.len() != 64 {
                 return false;
             }
-            let sig = Signature::from(array_ref!(sig, 0, 64).to_owned());
+            let sig = ed25519_dalek::Signature::from(array_ref!(sig, 0, 64).to_owned());
             match key.verify(msg, &sig) {
                 Ok(()) => true,
                 Err(_) => false,
@@ -34,7 +35,7 @@ impl Key {
     }
 
     pub fn verify_ecdsa(&self, msg: &[u8], sig: &[u8]) -> bool {
-        match VerifyingKey::from_sec1_bytes(&self.key) {
+        match VerifyingKey::from_sec1_bytes(&self.key()) {
             Ok(k) => {
                 use k256::ecdsa::Signature;
                 use std::convert::TryFrom;
@@ -50,6 +51,17 @@ impl Key {
             Err(_) => false,
         }
     }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct PrivateKey {
+    key: Vec<u8>,
+}
+
+impl PrivateKey {
+    pub fn new(key: Vec<u8>) -> Self {
+        Self { key }
+    }
 
     pub fn sign_ecdsa(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
         let sig: EcdsaSignature = EcdsaSigner::sign(&SigningKey::from_bytes(&self.key)?, msg);
@@ -58,7 +70,7 @@ impl Key {
 
     pub fn sign_ed(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
         let sk = SecretKey::from_bytes(&self.key)?;
-        let pk = PublicKey::from(&sk);
+        let pk = ed25519_dalek::PublicKey::from(&sk);
         Ok(ExpandedSecretKey::from(&sk)
             .sign(msg, &pk)
             .as_ref()
@@ -70,7 +82,7 @@ impl Key {
     }
 }
 
-impl Drop for Key {
+impl Drop for PrivateKey {
     fn drop(&mut self) {
         self.key.zeroize()
     }
@@ -78,6 +90,7 @@ impl Drop for Key {
 
 #[test]
 fn libsodium_to_ed25519_dalek_compat() {
+    use ed25519_dalek::{Signature};
     use rand::rngs::OsRng;
 
     let kp = ed25519_dalek::Keypair::generate(&mut OsRng);

@@ -1,10 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    derivation::self_addressing::SelfAddressing,
-    error::Error,
-    prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfAddressingPrefix},
-};
+use crate::{derivation::self_addressing::SelfAddressing, error::Error, prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfAddressingPrefix}};
 
 use super::threshold::SignatureThreshold;
 
@@ -60,7 +56,7 @@ impl KeyConfig {
             Ok(sigs
                 .iter()
                 .fold(Ok(true), |acc: Result<bool, Error>, sig| {
-                    Ok(acc?
+                    Ok(acc? == true
                         && self
                             .public_keys
                             .get(sig.index as usize)
@@ -185,17 +181,17 @@ fn test_next_commitment() {
 #[test]
 fn test_threshold() -> Result<(), Error> {
     use crate::derivation::{basic::Basic, self_signing::SelfSigning};
-    use crate::keys::Key;
+    use crate::keys::{PrivateKey, PublicKey};
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
 
-    let (pub_keys, priv_keys): (Vec<BasicPrefix>, Vec<Key>) = [0, 1, 2]
+    let (pub_keys, priv_keys): (Vec<BasicPrefix>, Vec<PrivateKey>) = [0, 1, 2]
         .iter()
         .map(|_| {
             let kp = Keypair::generate(&mut OsRng);
             (
-                Basic::Ed25519.derive(Key::new(kp.public.to_bytes().to_vec())),
-                Key::new(kp.secret.to_bytes().to_vec()),
+                Basic::Ed25519.derive(PublicKey::new(kp.public.to_bytes().to_vec())),
+                PrivateKey::new(kp.secret.to_bytes().to_vec()),
             )
         })
         .unzip();
@@ -207,7 +203,7 @@ fn test_threshold() -> Result<(), Error> {
             .iter()
             .map(|_| {
                 let kp = Keypair::generate(&mut OsRng);
-                Basic::Ed25519.derive(Key::new(kp.public.to_bytes().to_vec()))
+                Basic::Ed25519.derive(PublicKey::new(kp.public.to_bytes().to_vec()))
             })
             .collect();
         nxt_commitment(&next_threshold, &next_keys, &SelfAddressing::Blake3_256)
@@ -277,9 +273,9 @@ fn test_verify() -> Result<(), Error> {
     let signed_msg = parse::signed_message(ev).unwrap();
     match signed_msg.1 {
         Deserialized::Event(ref e) => {
-            if let EventData::Icp(icp) = e.to_owned().event.event_message.event.event_data {
+            if let EventData::Icp(icp) = e.to_owned().deserialized_event.event_message.event.event_data {
                 let kc = icp.key_config;
-                let msg = e.clone().event.event_message.serialize()?;
+                let msg = e.deserialized_event.event_message.serialize()?;
                 assert!(kc.verify(&msg, &e.signatures)?);
             }
         }
@@ -290,9 +286,9 @@ fn test_verify() -> Result<(), Error> {
     let signed_msg = parse::signed_message(ev).unwrap();
     match signed_msg.1 {
         Deserialized::Event(ref e) => {
-            if let EventData::Icp(icp) = e.to_owned().event.event_message.event.event_data {
+            if let EventData::Icp(icp) = e.to_owned().deserialized_event.event_message.event.event_data {
                 let kc = icp.key_config;
-                let msg = e.clone().event.event_message.serialize()?;
+                let msg = e.deserialized_event.event_message.serialize()?;
                 assert!(kc.verify(&msg, &e.signatures)?);
             }
         }

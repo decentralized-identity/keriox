@@ -9,5 +9,4 @@ pub mod prefix;
 pub mod processor;
 pub mod signer;
 pub mod state;
-
-pub(crate) mod keys;
+pub mod keys;
