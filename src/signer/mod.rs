@@ -1,45 +1,34 @@
-use crate::{error::Error, keys::Key, prefix::SeedPrefix};
-use ed25519_dalek::{Keypair, PublicKey, SecretKey};
+use crate::{error::Error, keys::{ PrivateKey, PublicKey }};
+use ed25519_dalek::{Keypair, SecretKey};
 use rand::rngs::OsRng;
 pub trait KeyManager {
-    fn sign(&self, msg: &Vec<u8>) -> Result<Vec<u8>, Error>;
-    fn public_key(&self) -> Key;
-    fn next_public_key(&self) -> Key;
+    fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error>;
+    fn public_key(&self) -> PublicKey;
+    fn next_public_key(&self) -> PublicKey;
     fn rotate(&mut self) -> Result<(), Error>;
 }
 
 pub struct CryptoBox {
     signer: Signer,
-    next_priv_key: Key,
-    pub next_pub_key: Key,
-    seeds: Vec<String>,
+    next_priv_key: PrivateKey,
+    pub next_pub_key: PublicKey,
 }
 
 impl KeyManager for CryptoBox {
-    fn sign(&self, msg: &Vec<u8>) -> Result<Vec<u8>, Error> {
+    fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
         self.signer.sign(msg)
     }
 
-    fn public_key(&self) -> Key {
+    fn public_key(&self) -> PublicKey {
         self.signer.pub_key.clone()
     }
 
-    fn next_public_key(&self) -> Key {
+    fn next_public_key(&self) -> PublicKey {
         self.next_pub_key.clone()
     }
 
     fn rotate(&mut self) -> Result<(), Error> {
-        let (next_pub_key, next_priv_key) =
-            if let Some((next_secret, next_seeds)) = self.seeds.split_first() {
-                let next_secret: SeedPrefix = next_secret.parse()?;
-                self.seeds = next_seeds.to_vec();
-                next_secret.derive_key_pair()?
-            } else {
-                let kp = Keypair::generate(&mut OsRng {});
-                let vk = Key::new(kp.public.as_bytes().to_vec());
-                let sk = Key::new(kp.secret.as_bytes().to_vec());
-                (vk, sk)
-            };
+        let (next_pub_key, next_priv_key) = generate_key_pair()?;
 
         let new_signer = Signer {
             priv_key: self.next_priv_key.clone(),
@@ -55,84 +44,39 @@ impl KeyManager for CryptoBox {
 //#[cfg(feature = "demo")]
 impl CryptoBox {
     pub fn new() -> Result<Self, Error> {
-        let signer = Signer::new()?;
-        let kp = Keypair::generate(&mut OsRng {});
-        let (next_pub_key, next_priv_key) = (
-            Key::new(kp.public.as_bytes().to_vec()),
-            Key::new(kp.secret.as_bytes().to_vec()),
-        );
+        let signer = Signer::new();
+        let (next_pub_key, next_priv_key) = generate_key_pair()?;
         Ok(CryptoBox {
             signer,
             next_pub_key,
             next_priv_key,
-            seeds: vec![],
-        })
-    }
-
-    pub fn derive_from_seed(seeds: &[&str]) -> Result<Self, Error> {
-        let (pub_key, priv_key) = match seeds.get(0) {
-            Some(secret) => {
-                let secret = SecretKey::from_bytes(secret.as_bytes()).map_err(|_| {
-                    Error::SemanticError("failed to convert provided seet to SecretKey".into())
-                })?;
-                let public = PublicKey::from(&secret);
-                (public, secret)
-            }
-            None => ed_new_public_private(),
-        };
-
-        let (next_pub_key, next_priv_key) = match seeds.get(1) {
-            Some(secret) => {
-                let seed: SeedPrefix = secret.parse()?;
-                seed.derive_key_pair()?
-            }
-            None => {
-                let (vk, sk) = ed_new_public_private();
-                let vk = Key::new(vk.to_bytes().to_vec());
-                let sk = Key::new(sk.to_bytes().to_vec());
-                (vk, sk)
-            }
-        };
-
-        let seeds = seeds
-            .get(2..)
-            .unwrap_or(&vec![])
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-
-        Ok(CryptoBox {
-            signer: Signer {
-                pub_key: Key::new(pub_key.to_bytes().to_vec()),
-                priv_key: Key::new(priv_key.to_bytes().to_vec()),
-            },
-            next_pub_key,
-            next_priv_key,
-            seeds,
         })
     }
 }
 
 struct Signer {
-    priv_key: Key,
-    pub pub_key: Key,
+    priv_key: PrivateKey,
+    pub pub_key: PublicKey,
 }
 
 impl Signer {
-    pub fn new() -> Result<Self, Error> {
+    pub fn new() -> Self {
         let ed = Keypair::generate(&mut OsRng);
-        let pub_key = Key::new(ed.public.to_bytes().to_vec());
-        let priv_key = Key::new(ed.secret.to_bytes().to_vec());
+        let pub_key = PublicKey::new(ed.public.to_bytes().to_vec());
+        let priv_key = PrivateKey::new(ed.secret.to_bytes().to_vec());
 
-        Ok(Signer { pub_key, priv_key })
+        Signer { pub_key, priv_key }
     }
 
-    pub fn sign(&self, msg: &Vec<u8>) -> Result<Vec<u8>, Error> {
-        self.priv_key.sign_ed(msg)
+    pub fn sign(&self, msg: impl AsRef<[u8]>) -> Result<Vec<u8>, Error> {
+        self.priv_key.sign_ed(msg.as_ref())
     }
 }
 
-fn ed_new_public_private() -> (PublicKey, SecretKey) {
+fn generate_key_pair() -> Result<(PublicKey, PrivateKey), Error> {
     let kp = Keypair::generate(&mut OsRng {});
-    (kp.public, kp.secret)
+    let (vk, sk) = (kp.public, kp.secret);
+    let vk = PublicKey::new(vk.to_bytes().to_vec());
+    let sk = PrivateKey::new(sk.to_bytes().to_vec());
+    Ok((vk, sk))
 }
