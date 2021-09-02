@@ -4,7 +4,7 @@ use universal_wallet::{
 };
 use super::KeyManager;
 use crate::{
-    keys::Key,
+    keys::PublicKey,
     error::Error,
 };
 
@@ -29,40 +29,40 @@ pub fn incept_keys(wallet: &mut UnlockedWallet) -> Result<(), Error> {
 }
 
 impl KeyManager for UnlockedWallet {
-    fn sign(&self, msg: &Vec<u8>) -> Result<Vec<u8>, Error> {
+    fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
         // FIXME: figure out how to fetch signing key with limited trait
         Ok(UnlockedWallet::sign_raw(&self, CURRENT, msg)?)
     }
 
     // TODO: do we really need this trait not to fail or option out?
     // Now to handle wrong key content we should check for empty vec...
-    fn public_key(&self) -> Key {
+    fn public_key(&self) -> PublicKey {
         match self.get_key(CURRENT) {
             Some(key) => match key.content {
                 Content::KeyPair(keys) =>
-                    Key::new(keys.public_key.public_key),
+                    PublicKey::new(keys.public_key.public_key),
                 Content::Entropy(_) =>
-                    Key::new(vec!()),
+                    PublicKey::new(vec!()),
                 Content::PublicKey(pk) =>
-                    Key::new(pk.public_key)
+                    PublicKey::new(pk.public_key)
             },
-            None => Key::new(vec!())
+            None => PublicKey::new(vec!())
         }
     }
 
     // TODO: do we really need this trait not to fail or option out?
     // Now to handle wrong key content we should check for empty vec...
-    fn next_public_key(&self) -> crate::keys::Key {
+    fn next_public_key(&self) -> crate::keys::PublicKey {
         match self.get_key(NEXT) {
             Some(key) => match key.content {
                 Content::KeyPair(keys) =>
-                    Key::new(keys.public_key.public_key),
+                    PublicKey::new(keys.public_key.public_key),
                 Content::Entropy(_) =>
-                    Key::new(vec!()),
+                    PublicKey::new(vec!()),
                 Content::PublicKey(pk) =>
-                    Key::new(pk.public_key)
+                    PublicKey::new(pk.public_key)
             },
-            None => Key::new(vec!())
+            None => PublicKey::new(vec!())
         }
     }
 

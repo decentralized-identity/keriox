@@ -43,7 +43,7 @@ pub struct DeserializedSignedEvent<'a> {
 // FIXME: detect payload type
 impl From<DeserializedSignedEvent<'_>> for SignedEventMessage {
     fn from(de: DeserializedSignedEvent) -> SignedEventMessage {
-        SignedEventMessage::new(&de.event.event_message, PayloadType::MA, de.signatures)
+        SignedEventMessage::new(&de.deserialized_event.event_message, PayloadType::MA, de.signatures)
     }
 }
 
@@ -224,7 +224,7 @@ pub fn signed_event_stream_validate(s: &[u8]) -> nom::IResult<&[u8], IdentifierS
         |acc, next| match next {
             Deserialized::Event(e) => {
                 let new_state = acc?
-                    .apply(&e.event.event_message)
+                    .apply(&e.deserialized_event.event_message)
                     .map_err(|_| nom::Err::Error((s, ErrorKind::Verify)))?;
                 if new_state
                     .current
@@ -335,8 +335,8 @@ fn test_stream1() {
     match parsed {
         Deserialized::Event(signed_event) => {
             assert_eq!(
-                signed_event.event.raw.len(),
-                signed_event.event.event_message.serialization_info.size
+                signed_event.deserialized_event.raw.len(),
+                signed_event.deserialized_event.event_message.serialization_info.size
             );
 
             assert!(signed_message(stream).is_ok());
@@ -363,8 +363,8 @@ fn test_stream2() {
     match parsed {
         Deserialized::Event(signed_event) => {
             assert_eq!(
-                signed_event.event.raw.len(),
-                signed_event.event.event_message.serialization_info.size
+                signed_event.deserialized_event.raw.len(),
+                signed_event.deserialized_event.event_message.serialization_info.size
             );
 
             assert!(signed_message(stream).is_ok());

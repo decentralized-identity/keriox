@@ -1,5 +1,4 @@
 use std::ops::{Deref, DerefMut};
-use ed25519_dalek::{Keypair, PublicKey, SecretKey};
 use crate::{error::Error, keys::{ PrivateKey, PublicKey }};
 use rand::rngs::OsRng;
 
@@ -80,7 +79,7 @@ struct Signer {
 
 impl Signer {
     pub fn new() -> Self {
-        let ed = Keypair::generate(&mut OsRng);
+        let ed = ed25519_dalek::Keypair::generate(&mut OsRng);
         let pub_key = PublicKey::new(ed.public.to_bytes().to_vec());
         let priv_key = PrivateKey::new(ed.secret.to_bytes().to_vec());
 
@@ -93,7 +92,7 @@ impl Signer {
 }
 
 fn generate_key_pair() -> Result<(PublicKey, PrivateKey), Error> {
-    let kp = Keypair::generate(&mut OsRng {});
+    let kp = ed25519_dalek::Keypair::generate(&mut OsRng {});
     let (vk, sk) = (kp.public, kp.secret);
     let vk = PublicKey::new(vk.to_bytes().to_vec());
     let sk = PrivateKey::new(sk.to_bytes().to_vec());

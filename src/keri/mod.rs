@@ -3,54 +3,37 @@ use std::{
     sync:: Arc,
 };
 
-use crate::{
-    database::sled::SledEventDatabase,
-    derivation::basic::Basic,
-    derivation::self_addressing::SelfAddressing,
-    derivation::self_signing::SelfSigning,
-    error::Error,
-    event::sections::seal::{
+use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivation::self_addressing::SelfAddressing, derivation::self_signing::SelfSigning, error::Error, event::sections::seal::{
         DigestSeal,
         Seal
-    },
-    event::{
+    }, event::{
         event_data::EventData,
         Event,
         EventMessage,
         SerializationFormats
-    },
-    event::{
+    }, event::{
         event_data::{
             Receipt,
             InteractionEvent,
         },
         sections::seal::EventSeal
-    },
-    event_message::{
+    }, event_message::{
         SignedNontransferableReceipt,
         parse::signed_message,
         payload_size::PayloadType
-    },
-    event_message::{
+    }, event_message::{
         event_msg_builder::{EventMsgBuilder, EventType},
         parse::{signed_event_stream, Deserialized},
         SignedEventMessage,
         SignedTransferableReceipt,
-    },
-    keys::Key,
-    prefix::AttachedSignaturePrefix,
-    prefix::{
+    }, keys::PublicKey, prefix::AttachedSignaturePrefix, prefix::{
         BasicPrefix,
         IdentifierPrefix,
         SelfSigningPrefix
-    },
-    processor::EventProcessor,
-    signer::KeyManager,
-    state::{
+    }, processor::EventProcessor, signer::KeyManager, state::{
         EventSemantics,
         IdentifierState
-    },
-};
+    }};
 #[cfg(feature = "wallet")]
 use universal_wallet::prelude::{
     UnlockedWallet,
@@ -82,7 +65,7 @@ impl Keri<UnlockedWallet> {
                 Content::KeyPair(kp) => kp.public_key.public_key,
                 Content::Entropy(_) => return Err(Error::WalletError(universal_wallet::Error::KeyNotFound)),
             };
-            let prefix = IdentifierPrefix::Basic(BasicPrefix::new(Basic::ECDSAsecp256k1, Key::new(pk)));
+            let prefix = IdentifierPrefix::Basic(BasicPrefix::new(Basic::ECDSAsecp256k1, PublicKey::new(pk)));
             // setting wallet's ID to prefix of identity instead of random string
             wallet.id = prefix.to_str();
             Ok(Keri {
@@ -164,7 +147,7 @@ impl<K: KeyManager> Keri<K> {
     ///  where `SignedEventMessage` is ICP event including all provided keys + directly fetched
     ///  verification key, signed with it's private key via KeyManager and serialized.
     ///
-    pub fn incept_with_extra_keys(&mut self, extra_keys: impl IntoIterator<Item = (Basic, Key)>)
+    pub fn incept_with_extra_keys(&mut self, extra_keys: impl IntoIterator<Item = (Basic, PublicKey)>)
         -> Result<SignedEventMessage, Error> {
             let mut keys: Vec<BasicPrefix> = extra_keys
                 .into_iter()
@@ -199,7 +182,7 @@ impl<K: KeyManager> Keri<K> {
         let next_sn = match self.processor.db.get_kel_finalized_events(&self.prefix) {
             Some(mut events) => 
                 match events.next_back() {
-                    Some(db_event) => db_event.event.event_message.event.sn,
+                    Some(db_event) => db_event.signed_event_message.event_message.event.sn,
                     None => return Err(Error::InvalidIdentifierStat)
                 },
             None => return Err(Error::InvalidIdentifierStat)
@@ -326,11 +309,11 @@ impl<K: KeyManager> Keri<K> {
                 match des_event {
                     Deserialized::Event(ev) => {
                         let mut buf = vec![];
-                        if let EventData::Icp(_) = ev.event.event_message.event.event_data {
+                        if let EventData::Icp(_) = ev.deserialized_event.event_message.event.event_data {
                             if !self.processor.has_receipt(
                                 &self.prefix,
                                 0,
-                                &ev.event.event_message.event.prefix,
+                                &ev.deserialized_event.event_message.event.prefix,
                             )? {
                                 buf.append(
                                     &mut self
@@ -340,7 +323,7 @@ impl<K: KeyManager> Keri<K> {
                                 )
                             }
                         }
-                        buf.append(&mut self.make_rct(ev.event.event_message.clone())?.serialize()?);
+                        buf.append(&mut self.make_rct(ev.deserialized_event.event_message.clone())?.serialize()?);
                         Ok(buf)
                     }
                     // TODO: this should process properly
