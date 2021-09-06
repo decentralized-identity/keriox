@@ -75,7 +75,7 @@ impl<K: KeyManager> Keri<K> {
     pub fn new(db: Arc<SledEventDatabase>, key_manager: Arc<RefCell<K>>, prefix: IdentifierPrefix)
         -> Result<Keri<K>, Error> {
         Ok(Keri {
-            prefix,
+            prefix: IdentifierPrefix::default(),
             key_manager,
             processor: EventProcessor::new(db),
         })
