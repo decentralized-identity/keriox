@@ -21,6 +21,7 @@ pub struct EventMsgBuilder {
     prefix: IdentifierPrefix,
     sn: u64,
     key_threshold: SignatureThreshold,
+    next_key_threshold: SignatureThreshold,
     keys: Vec<BasicPrefix>,
     next_keys: Vec<BasicPrefix>,
     prev_event: SelfAddressingPrefix,
@@ -64,7 +65,8 @@ impl EventMsgBuilder {
             prefix: IdentifierPrefix::default(),
             keys: vec![basic_pref],
             next_keys: vec![Basic::Ed25519.derive(npk)],
-            key_threshold: SignatureThreshold::Simple(1),
+            key_threshold: SignatureThreshold::default(),
+            next_key_threshold: SignatureThreshold::default(),
             sn: 1,
             prev_event: SelfAddressing::Blake3_256.derive(&[0u8; 32]),
             data: vec![],
@@ -118,9 +120,16 @@ impl EventMsgBuilder {
         }
     }
 
+    pub fn with_next_threshold(self, threshold: &SignatureThreshold) -> Self {
+        EventMsgBuilder {
+            next_key_threshold: threshold.clone(),
+            ..self
+        }
+    }
+
     pub fn build(self) -> Result<EventMessage, Error> {
         let next_key_hash = nxt_commitment(
-            &self.key_threshold,
+            &self.next_key_threshold,
             &self.next_keys,
             &SelfAddressing::Blake3_256,
         );
@@ -229,7 +238,8 @@ fn test_multisig_prefix_derivation() {
     EventMsgBuilder::new(EventType::Inception).unwrap()
         .with_keys(keys)
         .with_next_keys(next_keys)
-        .with_threshold(&SignatureThreshold::Simple(2));
+        .with_threshold(&SignatureThreshold::Simple(2))
+        .with_next_threshold(&SignatureThreshold::Simple(2));
     let msg = msg_builder.build().unwrap();
 
     assert_eq!(expected_event.to_vec(), msg.serialize().unwrap());
