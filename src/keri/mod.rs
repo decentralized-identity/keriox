@@ -182,7 +182,7 @@ impl<K: KeyManager> Keri<K> {
         let next_sn = match self.processor.db.get_kel_finalized_events(&self.prefix) {
             Some(mut events) => 
                 match events.next_back() {
-                    Some(db_event) => db_event.signed_event_message.event_message.event.sn,
+                    Some(db_event) => db_event.signed_event_message.event_message.event.sn + 1,
                     None => return Err(Error::InvalidIdentifierStat)
                 },
             None => return Err(Error::InvalidIdentifierStat)
@@ -428,7 +428,15 @@ impl<K: KeyManager> Keri<K> {
         let signature = self.key_manager.borrow().sign(&message.serialize()?)?;
         let bp = BasicPrefix::new(Basic::Ed25519, self.key_manager.borrow().public_key());
         let ssp = SelfSigningPrefix::new(SelfSigning::Ed25519Sha512, signature);
-        let ntr = SignedNontransferableReceipt::new(&message, vec!((bp, ssp)));
+        let rcp = Event {
+            prefix: message.event.prefix.clone(),
+            sn: message.event.sn,
+            event_data: EventData::Rct(Receipt {
+                receipted_event_digest: SelfAddressing::Blake3_256.derive(&message.serialize()?),
+            }),
+        }
+        .to_message(SerializationFormats::JSON)?;
+        let ntr = SignedNontransferableReceipt::new(&rcp, vec!((bp, ssp)));
         self.processor.db.add_receipt_nt(ntr.clone(), &message.event.prefix)?;
         Ok(ntr)
     }
