@@ -182,7 +182,7 @@ impl<K: KeyManager> Keri<K> {
         let next_sn = match self.processor.db.get_kel_finalized_events(&self.prefix) {
             Some(mut events) => 
                 match events.next_back() {
-                    Some(db_event) => db_event.signed_event_message.event_message.event.sn,
+                    Some(db_event) => db_event.signed_event_message.event_message.event.sn + 1,
                     None => return Err(Error::InvalidIdentifierStat)
                 },
             None => return Err(Error::InvalidIdentifierStat)
