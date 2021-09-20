@@ -275,7 +275,7 @@ fn test_verify() -> Result<(), Error> {
         Deserialized::Event(ref e) => {
             if let EventData::Icp(icp) = e.to_owned().deserialized_event.event_message.event.event_data {
                 let kc = icp.key_config;
-                let msg = e.clone().deserialized_event.event_message.serialize()?;
+                let msg = e.deserialized_event.event_message.serialize()?;
                 assert!(kc.verify(&msg, &e.signatures)?);
             }
         }
@@ -288,7 +288,7 @@ fn test_verify() -> Result<(), Error> {
         Deserialized::Event(ref e) => {
             if let EventData::Icp(icp) = e.to_owned().deserialized_event.event_message.event.event_data {
                 let kc = icp.key_config;
-                let msg = e.clone().deserialized_event.event_message.serialize()?;
+                let msg = e.deserialized_event.event_message.serialize()?;
                 assert!(kc.verify(&msg, &e.signatures)?);
             }
         }

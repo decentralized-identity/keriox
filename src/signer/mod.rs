@@ -1,6 +1,10 @@
+use std::ops::{Deref, DerefMut};
 use crate::{error::Error, keys::{ PrivateKey, PublicKey }};
-use ed25519_dalek::{Keypair, SecretKey};
 use rand::rngs::OsRng;
+
+#[cfg(feature = "wallet")]
+pub mod wallet;
+
 pub trait KeyManager {
     fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error>;
     fn public_key(&self) -> PublicKey;
@@ -12,6 +16,20 @@ pub struct CryptoBox {
     signer: Signer,
     next_priv_key: PrivateKey,
     pub next_pub_key: PublicKey,
+}
+
+impl DerefMut for CryptoBox {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self
+    }
+}
+
+impl Deref for CryptoBox {
+    type Target = CryptoBox;
+
+    fn deref(&self) -> &Self::Target {
+        self
+    }
 }
 
 impl KeyManager for CryptoBox {
@@ -61,7 +79,7 @@ struct Signer {
 
 impl Signer {
     pub fn new() -> Self {
-        let ed = Keypair::generate(&mut OsRng);
+        let ed = ed25519_dalek::Keypair::generate(&mut OsRng);
         let pub_key = PublicKey::new(ed.public.to_bytes().to_vec());
         let priv_key = PrivateKey::new(ed.secret.to_bytes().to_vec());
 
@@ -74,7 +92,7 @@ impl Signer {
 }
 
 fn generate_key_pair() -> Result<(PublicKey, PrivateKey), Error> {
-    let kp = Keypair::generate(&mut OsRng {});
+    let kp = ed25519_dalek::Keypair::generate(&mut OsRng {});
     let (vk, sk) = (kp.public, kp.secret);
     let vk = PublicKey::new(vk.to_bytes().to_vec());
     let sk = PrivateKey::new(sk.to_bytes().to_vec());

@@ -1,10 +1,16 @@
+#[cfg(feature = "wallet")]
+use universal_wallet::prelude::UnlockedWallet;
+
 #[cfg(test)]
 use crate::{
     database::sled::SledEventDatabase,
     error::Error,
     keri::Keri,
     prefix::IdentifierPrefix,
-    signer::CryptoBox,
+};
+use std::{
+    sync::Arc,
+    cell::RefCell,
 };
 
 #[test]
@@ -14,15 +20,53 @@ fn test_direct_mode() -> Result<(), Error> {
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     std::fs::create_dir_all(root.path()).unwrap();
-    let db = SledEventDatabase::new(root.path()).unwrap();
+    let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+
+    let alice_key_manager =
+    {
+        #[cfg(feature = "wallet")]
+        {
+            let mut alice_key_manager = UnlockedWallet::new("alice");
+            crate::signer::wallet::incept_keys(&mut alice_key_manager)?;
+            alice_key_manager
+        }
+        #[cfg(not(feature = "wallet"))]
+        {
+            use crate::signer::CryptoBox;
+            CryptoBox::new()?
+        }
+    };
 
     // Init alice.
-    let mut alice = Keri::new(&db, CryptoBox::new()?, IdentifierPrefix::default())?;
+    let mut alice = Keri::new(
+        Arc::clone(&db),
+        Arc::new(RefCell::new(alice_key_manager)),
+        IdentifierPrefix::default())?;
+
     assert_eq!(alice.get_state()?, None);
 
+    let bob_key_manager =
+    {
+        #[cfg(feature = "wallet")]
+        {
+            let mut bob_key_manager = UnlockedWallet::new("alice");
+            crate::signer::wallet::incept_keys(&mut bob_key_manager)?;
+            bob_key_manager
+        }
+        #[cfg(not(feature = "wallet"))]
+        {
+            use crate::signer::CryptoBox;
+            CryptoBox::new()?
+        }
+    };
+
     // Init bob.
-    let mut bob = Keri::new(&db, CryptoBox::new()?, IdentifierPrefix::default())?;
-    bob.incept()?;
+    let mut bob = Keri::new(
+        Arc::clone(&db),
+        Arc::new(RefCell::new(bob_key_manager)),
+        IdentifierPrefix::default())?;
+
+    bob.incept().unwrap();
     let bob_state = bob.get_state()?;
     assert_eq!(bob_state.unwrap().sn, 0);
 
@@ -32,20 +76,17 @@ fn test_direct_mode() -> Result<(), Error> {
 
     // Send it to bob.
     let mut msg_to_alice = bob.respond(&msg_to_bob)?;
-    {
-        // Check if bob's state of alice is the same as current alice state.
-        let alice_state_in_bob = bob.get_state_for_prefix(&alice.prefix)?.unwrap();
-        assert_eq!(alice_state_in_bob, alice.get_state()?.unwrap());
-    }
+
+    // Check if bob's state of alice is the same as current alice state.
+    let alice_state_in_bob = bob.get_state_for_prefix(&alice.prefix)?.unwrap();
+    assert_eq!(alice_state_in_bob, alice.get_state()?.unwrap());
 
     // Send message from bob to alice and get alice's receipts.
     msg_to_bob = alice.respond(&msg_to_alice)?;
 
-    {
-        // Check if alice's state of bob is the same as current bob state.
-        let bob_state_in_alice = alice.get_state_for_prefix(&bob.prefix)?.unwrap();
-        assert_eq!(bob_state_in_alice, bob.get_state()?.unwrap());
-    }
+    // Check if alice's state of bob is the same as current bob state.
+    let bob_state_in_alice = alice.get_state_for_prefix(&bob.prefix)?.unwrap();
+    assert_eq!(bob_state_in_alice, bob.get_state()?.unwrap());
 
     // Send it to bob.
     bob.respond(&msg_to_bob)?;
@@ -57,11 +98,9 @@ fn test_direct_mode() -> Result<(), Error> {
     // Send rotation event to bob.
     msg_to_bob = alice_rot.serialize()?;
     msg_to_alice = bob.respond(&msg_to_bob)?;
-    {
-        // Check if bob's state of alice is the same as current alice state.
-        let alice_state_in_bob = bob.get_state_for_prefix(&alice.prefix)?.unwrap();
-        assert_eq!(alice_state_in_bob, alice.get_state()?.unwrap());
-    }
+    // Check if bob's state of alice is the same as current alice state.
+    let alice_state_in_bob = bob.get_state_for_prefix(&alice.prefix)?.unwrap();
+    assert_eq!(alice_state_in_bob, alice.get_state()?.unwrap());
 
     // Send bob's receipt to alice.
     alice.respond(&msg_to_alice)?;
@@ -74,11 +113,9 @@ fn test_direct_mode() -> Result<(), Error> {
     msg_to_bob = alice_ixn.serialize()?;
     msg_to_alice = bob.respond(&msg_to_bob)?;
 
-    {
-        // Check if bob's state of alice is the same as current alice state.
-        let alice_state_in_bob = bob.get_state_for_prefix(&alice.prefix)?.unwrap();
-        assert_eq!(alice_state_in_bob, alice.get_state()?.unwrap());
-    }
+    // Check if bob's state of alice is the same as current alice state.
+    let alice_state_in_bob = bob.get_state_for_prefix(&alice.prefix)?.unwrap();
+    assert_eq!(alice_state_in_bob, alice.get_state()?.unwrap());
 
     alice.respond(&msg_to_alice)?;
 

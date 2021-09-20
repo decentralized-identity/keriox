@@ -27,16 +27,16 @@ pub trait Prefix: FromStr<Err = Error> {
         // empty data cannot be prefixed!
         match self.derivative().len() {
             0 => "".to_string(),
-            _ => [
-                self.derivation_code(),
-                encode_config(self.derivative(), base64::URL_SAFE_NO_PAD),
-            ]
-            .join(""),
+            _ => {
+                let dc = self.derivation_code();
+                let ec = encode_config(self.derivative(), base64::URL_SAFE_NO_PAD);
+                [dc, ec].join("")
+            },
         }
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Hash)]
 pub enum IdentifierPrefix {
     Basic(BasicPrefix),
     SelfAddressing(SelfAddressingPrefix),

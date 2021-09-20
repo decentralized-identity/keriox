@@ -1,6 +1,10 @@
 use super::{
-    AttachedSignaturePrefix, EventMessage, SignedEventMessage, SignedNontransferableReceipt,
+    AttachedSignaturePrefix,
+    EventMessage,
+    SignedEventMessage,
+    SignedNontransferableReceipt,
     SignedTransferableReceipt,
+    payload_size::PayloadType,
 };
 use crate::{
     derivation::attached_signature_code::b64_to_num,
@@ -21,6 +25,8 @@ use nom::{
 use rmp_serde as serde_mgpk;
 use serde::Deserialize;
 use std::io::Cursor;
+#[cfg(feature = "async")]
+use super::serialization_info::SerializationInfo;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DeserializedEvent<'a> {
@@ -34,9 +40,10 @@ pub struct DeserializedSignedEvent<'a> {
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
 
+// FIXME: detect payload type
 impl From<DeserializedSignedEvent<'_>> for SignedEventMessage {
     fn from(de: DeserializedSignedEvent) -> SignedEventMessage {
-        SignedEventMessage::new(&de.deserialized_event.event_message, de.signatures)
+        SignedEventMessage::new(&de.deserialized_event.event_message, PayloadType::MA, de.signatures)
     }
 }
 
@@ -96,8 +103,41 @@ pub fn message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], DeserializedEvent> {
     alt((json_message, cbor_message, mgpk_message))(s).map(|d| (d.0, d.1))
 }
 
+// TESTED: OK
+#[cfg(feature = "async")]
+fn json_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
+    match serde_json::from_slice(data) {
+        Ok(vi) => Ok((data, vi)),
+        _ => Err(nom::Err::Error((data, ErrorKind::IsNot)))
+    }
+}
+
+// TODO: Requires testing
+#[cfg(feature = "async")]
+fn cbor_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
+    match serde_cbor::from_slice(data) {
+        Ok(vi) => Ok((data, vi)),
+        _ => Err(nom::Err::Error((data, ErrorKind::IsNot)))
+    }
+}
+
+// TODO: Requires testing
+#[cfg(feature = "async")]
+fn mgpk_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
+    match serde_mgpk::from_slice(data) {
+        Ok(vi) => Ok((data, vi)),
+        _ => Err(nom::Err::Error((data, ErrorKind::IsNot)))
+    }
+}
+
+#[cfg(feature = "async")]
+pub(crate) fn version<'a>(data: &'a [u8]) -> nom::IResult<&[u8], SerializationInfo> {
+    alt((json_version, cbor_version, mgpk_version))(data).map(|d| (d.0, d.1))
+}
+
 /// extracts the count from the sig count code
-fn sig_count(s: &[u8]) -> nom::IResult<&[u8], u16> {
+// FIXME: is this working for all types of sigs?
+pub(crate) fn sig_count(s: &[u8]) -> nom::IResult<&[u8], u16> {
     let (rest, t) = tuple((
         map_parser(
             nom::bytes::complete::take(2u8),
@@ -300,7 +340,12 @@ fn test_stream1() {
             );
 
             assert!(signed_message(stream).is_ok());
-            assert!(signed_event_stream_validate(stream).is_ok())
+            assert!(signed_event_stream_validate(stream).is_ok());
+            let signed_event: SignedEventMessage = signed_event.into();
+            let serialized_again = signed_event.serialize();
+            assert!(serialized_again.is_ok());
+            let stringified = String::from_utf8(serialized_again.unwrap()).unwrap();
+            assert_eq!(stream, stringified.as_bytes())
         }
         _ => assert!(false),
     }
@@ -311,14 +356,34 @@ fn test_stream2() {
     // taken from KERIPY: tests/core/test_eventing.py::test_multisig_digprefix#2244
     let stream = br#"{"v":"KERI10JSON00014b_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"0","t":"icp","kt":"2","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"E9izzBkXX76sqt0N-tfLzJeRqj0W56p4pDQ_ZqNCDpyw","bt":"0","b":[],"c":[],"a":[]}-AADAAhcaP-l0DkIKlJ87iIVcDx-m0iKPdSArEu63b-2cSEn9wXVGNpWw9nfwxodQ9G8J3q_Pm-AWfDwZGD9fobWuHBAAB6mz7zP0xFNBEBfSKG4mjpPbeOXktaIyX8mfsEa1A3Psf7eKxSrJ5Woj3iUB2AhhLg412-zkk795qxsK2xfdxBAACj5wdW-EyUJNgW0LHePQcSFNxW3ZyPregL4H2FoOrsPxLa3MZx6xYTh6i7YRMGY50ezEjV81hkI1Yce75M_bPCQ"#;
     assert!(signed_message(stream).is_ok());
-    assert!(signed_event_stream_validate(stream).is_ok())
+    assert!(signed_event_stream_validate(stream).is_ok());
+    
+    let parsed = signed_message(stream).unwrap().1;
+
+    match parsed {
+        Deserialized::Event(signed_event) => {
+            assert_eq!(
+                signed_event.deserialized_event.raw.len(),
+                signed_event.deserialized_event.event_message.serialization_info.size
+            );
+
+            assert!(signed_message(stream).is_ok());
+            assert!(signed_event_stream_validate(stream).is_ok());
+            let signed_event: SignedEventMessage = signed_event.into();
+            let serialized_again = signed_event.serialize();
+            assert!(serialized_again.is_ok());
+            let stringified = String::from_utf8(serialized_again.unwrap()).unwrap();
+            assert_eq!(stream, stringified.as_bytes())
+        }
+        _ => assert!(false),
+    }
 }
 
 #[test]
 fn test_signed_trans_receipt() {
     let trans_receipt_event = r#"{"v":"KERI10JSON000091_","i":"E7WIS0e4Tx1PcQW5Um5s3Mb8uPSzsyPODhByXzgvmAdQ","s":"0","t":"rct","d":"ErDNDBG7x2xYAH2i4AOnhVe44RS3lC1mRRdkyolFFHJk"}-FABENlofRlu2VPul-tjDObk6bTia2deG6NMqeFmsXhAgFvA0AAAAAAAAAAAAAAAAAAAAAAAE_MT0wsz-_ju_DVK_SaMaZT9ZE7pP4auQYeo2PDaw9FI-AABAA0Q7bqPvenjWXo_YIikMBKOg-pghLKwBi1Plm0PEqdv67L1_c6dq9bll7OFnoLp0a74Nw1cBGdjIPcu-yAllHAw"#;
     let msg = signed_message(trans_receipt_event.as_bytes());
-    assert!(msg.is_ok())
+    assert!(msg.is_ok());
 }
 
 #[test]
@@ -329,4 +394,12 @@ fn test_stream3() {
     assert!(signed_message(stream).is_ok());
     let result = signed_event_stream_validate(stream);
     assert!(!result.is_ok());
+}
+
+#[cfg(feature = "async")]
+#[test]
+fn test_version_parse() {
+    let json = br#""KERI10JSON00014b_""#;
+    let json_result = version(json);
+    assert!(json_result.is_ok());
 }

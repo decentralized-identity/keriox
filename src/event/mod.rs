@@ -22,6 +22,15 @@ pub struct Event {
 }
 
 impl Event {
+    pub fn new(prefix: IdentifierPrefix, sn: u64, event_data: EventData)
+        -> Self {
+            Event {
+                prefix,
+                sn,
+                event_data
+            }
+        }
+
     pub fn to_message(self, format: SerializationFormats) -> Result<EventMessage, Error> {
         EventMessage::new(self, format)
     }

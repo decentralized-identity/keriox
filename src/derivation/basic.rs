@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 /// Basic Derivations
 ///
 /// Basic prefix derivation is just a public key (2.3.1)
-#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize, Hash)]
 pub enum Basic {
     ECDSAsecp256k1NT,
     ECDSAsecp256k1,
@@ -70,9 +70,9 @@ impl FromStr for Basic {
                 "AAB" => Ok(Self::ECDSAsecp256k1),
                 "AAC" => Ok(Self::Ed448NT),
                 "AAD" => Ok(Self::Ed448),
-                _ => Err(Error::DeserializationError),
+                _ => Err(Error::DeserializeError("Unknown signature code".into())),
             },
-            _ => Err(Error::DeserializationError),
+            _ => Err(Error::DeserializeError("Unknown prefix code".into())),
         }
     }
 }

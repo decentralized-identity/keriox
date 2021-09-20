@@ -1,5 +1,5 @@
 use super::event_msg_builder::{EventMsgBuilder, EventType};
-use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning}, error::Error, event::sections::{key_config::nxt_commitment, threshold::SignatureThreshold}, keys::{PrivateKey, PublicKey}, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix }, state::IdentifierState};
+use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning}, error::Error, event::sections::{key_config::nxt_commitment, threshold::SignatureThreshold}, event_message::payload_size::PayloadType, keys::{PrivateKey, PublicKey}, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix }, state::IdentifierState};
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
 
@@ -85,7 +85,7 @@ fn test_update_identifier_state(
     };
 
     // Attach sign to event message.
-    let signed_event = event_msg.sign(vec![attached_sig.clone()]);
+    let signed_event = event_msg.sign(PayloadType::MA, vec![attached_sig.clone()]);
 
     // Apply event to current IdentifierState.
     let new_state = state_data.state.apply(&signed_event)?;

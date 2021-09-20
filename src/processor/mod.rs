@@ -1,20 +1,24 @@
+use std::sync::Arc;
+
 use crate::{database::sled::SledEventDatabase, derivation::self_addressing::SelfAddressing, error::Error, event::{EventMessage, event_data::EventData, sections::{
             seal::{EventSeal, LocationSeal, Seal},
             KeyConfig,
         }}, event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedSignedEventMessage, parse::{
             Deserialized,
             DeserializedSignedEvent
-            }}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
+            }, payload_size::PayloadType}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
 
 #[cfg(test)]
 mod tests;
+#[cfg(feature = "async")]
+pub mod async_processing;
 
-pub struct EventProcessor<'d> {
-    db: &'d SledEventDatabase,
+pub struct EventProcessor {
+    pub db: Arc<SledEventDatabase>,
 }
 
-impl<'d> EventProcessor<'d> {
-    pub fn new(db: &'d SledEventDatabase) -> Self {
+impl EventProcessor {
+    pub fn new(db: Arc<SledEventDatabase>) -> Self {
         Self { db }
     }
 
@@ -223,6 +227,13 @@ impl<'d> EventProcessor<'d> {
         }
     }
 
+    pub fn process_actual_event(&self, id: &IdentifierPrefix, event: impl EventSemantics)
+        -> Result<Option<IdentifierState>, Error> {
+            if let Some(state) = self.compute_state(id)? {
+                Ok(Some(event.apply_to(state)?))
+            } else { Ok(None) }
+        }
+
     /// Process Event
     ///
     /// Validates a Key Event against the latest state
@@ -235,7 +246,7 @@ impl<'d> EventProcessor<'d> {
     ) -> Result<Option<IdentifierState>, Error> {
         // Log event.
         let signed_event = SignedEventMessage::new(
-                &event.deserialized_event.event_message, event.signatures.clone());
+                &event.deserialized_event.event_message, PayloadType::MA, event.signatures.clone());
         let id = &event.deserialized_event.event_message.event.prefix;
         // If delegated event, check its delegator seal.
         match event.deserialized_event.event_message.event.event_data.clone() {
@@ -247,16 +258,19 @@ impl<'d> EventProcessor<'d> {
         }?;
         self.apply_to_state(event.deserialized_event.event_message.clone())
             .and_then(|new_state| {
-                // add event from the getgo and clean it up on failure later
+                // add event from the get go and clean it up on failure later
                 self.db.add_kel_finalized_event(signed_event.clone(), id)?;
                 // match on verification result
                 match new_state
                     .current
                     .verify(&event.deserialized_event.raw, &event.signatures)
                     .and_then(|result| {
-                        // TODO should check if there are enough receipts and probably escrow
-                        if !result { return Err(Error::FaultySignatureVerification); }
-                        Ok(new_state)
+                        if !result {
+                            Err(Error::SignatureVerificationError)
+                        } else {
+                            // TODO should check if there are enough receipts and probably escrow
+                            Ok(new_state)
+                        }
                     }) {
                         Ok(state) => Ok(Some(state)),
                         Err(e) => {
@@ -291,7 +305,6 @@ impl<'d> EventProcessor<'d> {
             EventData::Rct(_r) => {
                 if let Ok(Some(event)) = 
                     self.get_event_at_sn(&vrc.body.event.prefix, vrc.body.event.sn) {
-                    // prev .get_keys_at_event()
                     let kp = self.get_keys_at_event(
                         &vrc.validator_seal.event_seal.prefix,
                         vrc.validator_seal.event_seal.sn,

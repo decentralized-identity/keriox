@@ -4,7 +4,7 @@ use base64::decode_config;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct BasicPrefix {
     pub derivation: Basic,
     pub public_key: PublicKey,

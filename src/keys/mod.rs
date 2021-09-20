@@ -4,7 +4,7 @@ use k256::ecdsa::{VerifyingKey, signature::{Verifier as EcdsaVerifier}};
 use k256::ecdsa::{Signature as EcdsaSignature, SigningKey, signature::{Signer as EcdsaSigner}};
 use zeroize::Zeroize;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub struct PublicKey {
     public_key: Vec<u8>
 }
