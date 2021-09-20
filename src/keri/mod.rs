@@ -17,15 +17,9 @@ use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivat
             InteractionEvent,
         },
         sections::seal::EventSeal
-    }, event_message::{
-        SignedNontransferableReceipt,
-        parse::signed_message,
-        payload_size::PayloadType
-    }, event_message::{
+    }, event_message::{parse::signed_message, payload_size::PayloadType, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt}}, event_message::{
         event_msg_builder::{EventMsgBuilder, EventType},
         parse::{signed_event_stream, Deserialized},
-        SignedEventMessage,
-        SignedTransferableReceipt,
     }, keys::PublicKey, prefix::AttachedSignaturePrefix, prefix::{
         BasicPrefix,
         IdentifierPrefix,

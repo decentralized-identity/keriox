@@ -1,8 +1,4 @@
-use crate::{
-    error::Error,
-    event_message::SignedEventMessage,
-    state::{EventSemantics, IdentifierState},
-};
+use crate::{error::Error, event_message::signed_event_message::SignedEventMessage, state::{EventSemantics, IdentifierState}};
 
 pub struct EventLog(Vec<SignedEventMessage>);
 

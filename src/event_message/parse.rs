@@ -1,11 +1,4 @@
-use super::{
-    AttachedSignaturePrefix,
-    EventMessage,
-    SignedEventMessage,
-    SignedNontransferableReceipt,
-    SignedTransferableReceipt,
-    payload_size::PayloadType,
-};
+use super::{AttachedSignaturePrefix, EventMessage, SignedEventMessage, payload_size::PayloadType, signed_event_message::{SignedNontransferableReceipt, SignedTransferableReceipt}};
 use crate::{
     derivation::attached_signature_code::b64_to_num,
     event::{event_data::EventData, sections::seal::EventSeal},

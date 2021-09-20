@@ -2,7 +2,7 @@ mod tables;
 
 use tables::{SledEventTree, SledEventTreeVec};
 use std::path::Path;
-use crate::{error::Error, event::EventMessage, event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedEventMessage, TimestampedSignedEventMessage}, prefix::IdentifierPrefix};
+use crate::{error::Error, event::EventMessage, event_message::{TimestampedEventMessage, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedSignedEventMessage}}, prefix::IdentifierPrefix};
 
 pub struct SledEventDatabase {
     // "iids" tree

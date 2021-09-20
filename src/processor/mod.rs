@@ -3,10 +3,10 @@ use std::sync::Arc;
 use crate::{database::sled::SledEventDatabase, derivation::self_addressing::SelfAddressing, error::Error, event::{EventMessage, event_data::EventData, sections::{
             seal::{EventSeal, LocationSeal, Seal},
             KeyConfig,
-        }}, event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedSignedEventMessage, parse::{
+        }}, event_message::{parse::{
             Deserialized,
             DeserializedSignedEvent
-            }, payload_size::PayloadType}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
+            }, payload_size::PayloadType, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedSignedEventMessage}}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
 
 #[cfg(test)]
 mod tests;
