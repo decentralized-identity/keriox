@@ -2,17 +2,11 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    derivation::attached_signature_code::num_to_b64,
-    error::Error,
-    event_message::parse::b64_count,
-    prefix::{
-        parse::{attached_sn, self_addressing_prefix},
+use crate::{derivation::attached_signature_code::{num_to_b64}, error::Error, prefix::{
         Prefix, SelfAddressingPrefix,
-    },
-};
+    }};
 
-use super::payload_size::PayloadType;
+use super::{parse::counter, payload_size::PayloadType};
 
 pub enum Counter {
     SealSourceCouplets(Vec<AttachedSnDigest>),
@@ -28,7 +22,6 @@ impl Counter {
                     .flatten();
                 Ok(vec![
                     PayloadType::MG.to_string().as_bytes().to_vec(),
-                    // TODO AB?
                     num_to_base_64(sources.len() as u16, 2)?.as_bytes().to_vec(),
                 ]
                 .into_iter()
@@ -46,25 +39,13 @@ impl FromStr for Counter {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match &s[0..2] {
             "-G" => {
-                let count = b64_count(&s[2..4].as_bytes()).unwrap().1;
-                println!("count: {}", count);
-                let sn_dig_vecs = (0..count).fold(
-                    Ok((s[4..].as_bytes(), vec![])),
-                    |acc: Result<_, Error>, _| {
-                        let (rest, mut parsed) = acc?;
-                        let (rest, sn) = attached_sn(rest).map_err(|_e| {
-                            Error::SemanticError("Not enough sns in attachement".into())
-                        })?;
-                        let (rest, digest) = self_addressing_prefix(rest).map_err(|_e| {
-                            Error::SemanticError("Not enough digests in attachement".into())
-                        })?;
-                        parsed.push(AttachedSnDigest { sn, digest });
-                        Ok((rest, parsed))
-                    },
-                )?;
-                Ok(Counter::SealSourceCouplets(sn_dig_vecs.1))
+                let (rest, counter) = counter(s.as_bytes()).map_err(|_e| Error::SemanticError("Can't parse counter".into()))?;
+                if rest.is_empty() {
+                    Ok(counter)} else {
+                    Err(Error::SemanticError("Can't parse counter".into()))
+                }
             }
-            _ => Err(Error::SemanticError("Can't parse attachement".into())),
+            _ => todo!(),
         }
     }
 }
@@ -76,10 +57,12 @@ pub struct AttachedSnDigest {
 }
 
 impl AttachedSnDigest {
+    pub fn new(sn: u64, digest: SelfAddressingPrefix) -> Self {
+        Self {sn, digest}
+    }
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         Ok([
-            // TODO 0A?
-            "0A".as_bytes().to_vec(),
+            PayloadType::OA.to_string().as_bytes().to_vec(),
             num_to_base_64(self.sn as u16, 22)?.as_bytes().to_vec(),
             self.digest.to_str().as_bytes().to_vec(),
         ]
@@ -89,27 +72,13 @@ impl AttachedSnDigest {
 
 fn num_to_base_64(sn: u16, len: usize) -> Result<String, Error> {
     let i = num_to_b64(sn);
+    // refill string to have proper size given in len argument
     let part = if i.len() < len {
         "A".repeat(len - i.len())
     } else {
         String::default()
     };
     Ok([part, i].join(""))
-}
-
-impl FromStr for AttachedSnDigest {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match &s[0..4] {
-            "-GAB" => {
-                let (rest, sn) = attached_sn(&s[4..].as_bytes()).unwrap();
-                let (_rest, digest) = self_addressing_prefix(rest).unwrap();
-                Ok(AttachedSnDigest { sn, digest })
-            }
-            _ => Err(Error::SemanticError("Can't parse attachement".into())),
-        }
-    }
 }
 
 #[test]
