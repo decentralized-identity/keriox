@@ -255,7 +255,7 @@ fn test_self_signing() {
 #[test]
 fn test_sn_parse() {
     let sn = attached_sn("0AAAAAAAAAAAAAAAAAAAAAAw".as_bytes()).unwrap();
-    assert_eq!(sn, ("".as_bytes(), 3));
+    assert_eq!(sn, ("".as_bytes(), 48));
 }
 
 #[test]
