@@ -139,12 +139,19 @@ pub(crate) fn sig_count(s: &[u8]) -> nom::IResult<&[u8], u16> {
                 nom::bytes::complete::tag("A"),
             )),
         ),
-        map(nom::bytes::complete::take(2u8), |b64_count| {
-            b64_to_num(b64_count).map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))
-        }),
+        b64_count,
     ))(s)?;
 
-    Ok((rest, t.1?))
+    Ok((rest, t.1))
+}
+
+pub(crate) fn b64_count(s: &[u8]) -> nom::IResult<&[u8], u16> {
+    let (rest, t) = map(nom::bytes::complete::take(2u8), |b64_count| {
+            b64_to_num(b64_count).map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))
+        })
+    (s)?;
+
+    Ok((rest, t?))
 }
 
 /// called on an attached signature stream starting with a sig count

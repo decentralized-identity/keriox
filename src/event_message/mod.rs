@@ -4,6 +4,7 @@ pub mod serialization_info;
 pub mod serializer;
 pub mod payload_size;
 pub mod signed_event_message;
+pub mod attachement;
 
 use std::cmp::Ordering;
 

@@ -113,5 +113,6 @@ fn num_to_b64_test() {
     assert_eq!("B", num_to_b64(1));
     assert_eq!("C", num_to_b64(2));
     assert_eq!("D", num_to_b64(3));
+    assert_eq!("b", num_to_b64(27));
     assert_eq!("AE", num_to_b64(64));
 }

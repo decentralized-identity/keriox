@@ -62,6 +62,8 @@ pub enum PayloadType {
     ME,
     #[serde(rename = "-F")]
     MF,
+    #[serde(rename = "-G")]
+    MG,
     #[serde(rename = "-U")]
     MU,
     #[serde(rename = "-V")]
@@ -235,6 +237,7 @@ impl Display for PayloadType {
             Self::MD => f.write_str("-D"),
             Self::ME => f.write_str("-E"),
             Self::MF => f.write_str("-F"),
+            Self::MG => f.write_str("-G"),
             Self::MU => f.write_str("-U"),
             Self::MV => f.write_str("-V"),
             Self::MW => f.write_str("-W"),

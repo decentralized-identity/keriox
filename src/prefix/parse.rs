@@ -139,7 +139,7 @@ pub fn self_signing_prefix(s: &[u8]) -> nom::IResult<&[u8], SelfSigningPrefix> {
     Ok((extra, code.derive(sig)))
 }
 
-fn attached_sn(s: &[u8]) -> nom::IResult<&[u8], u64> {
+pub fn attached_sn(s: &[u8]) -> nom::IResult<&[u8], u64> {
     let (more, type_c) = take(2u8)(s)?;
 
     const a: &'static [u8] = "0A".as_bytes();
@@ -149,7 +149,7 @@ fn attached_sn(s: &[u8]) -> nom::IResult<&[u8], u64> {
             let (rest, parsed_sn) = take(22u8)(more)?;
 
             let sn =
-                base64_to_num(parsed_sn).map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
+                base64_to_num(parsed_sn).map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))? as u64;
 
             Ok((rest, sn))
         }
@@ -157,11 +157,10 @@ fn attached_sn(s: &[u8]) -> nom::IResult<&[u8], u64> {
     }
 }
 
-fn base64_to_num(b64: &[u8]) -> Result<u64, Error> {
-    let b64decode = base64::decode_config(b64, URL_SAFE)?;
-    let mut sn_array: [u8; 8] = [0; 8];
-    sn_array.copy_from_slice(&b64decode[8..]);
-    Ok(u64::from_be_bytes(sn_array))
+fn base64_to_num(b64: &[u8]) -> Result<u16, Error> {
+    // TODO thats because b64_to_num works only for 4 or less characters
+    let last_four = &b64[b64.len() - 4..];
+    Ok(b64_to_num(last_four)?)
 }
 
 /// extracts the Event seal
