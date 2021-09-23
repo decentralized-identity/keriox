@@ -3,9 +3,12 @@ use std::str::FromStr;
 use base64::URL_SAFE_NO_PAD;
 use serde::{Deserialize, Serialize};
 
-use crate::{error::Error, prefix::{Prefix, SelfAddressingPrefix}};
+use crate::{
+    error::Error,
+    prefix::{Prefix, SelfAddressingPrefix},
+};
 
-use super::{parse::counter, payload_size::{PayloadType, num_to_base_64}};
+use super::{parse::counter, payload_size::PayloadType};
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub enum Attachement {
@@ -21,10 +24,13 @@ impl Attachement {
                     .into_iter()
                     .map(|s| s.serialize().unwrap())
                     .flatten();
-                Ok(payload_type.encode(sources.len() as u16).as_bytes().to_vec()
-                .into_iter()
-                .chain(serialzied_sources)
-                .collect::<Vec<_>>())
+                Ok(payload_type
+                    .encode(sources.len() as u16)
+                    .as_bytes()
+                    .to_vec()
+                    .into_iter()
+                    .chain(serialzied_sources)
+                    .collect::<Vec<_>>())
             }
         }
     }
@@ -36,7 +42,8 @@ impl FromStr for Attachement {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match &s[0..2] {
             "-G" => {
-                let (rest, counter) = counter(s.as_bytes()).map_err(|_e| Error::SemanticError("Can't parse counter".into()))?;
+                let (rest, counter) = counter(s.as_bytes())
+                    .map_err(|_e| Error::SemanticError("Can't parse counter".into()))?;
                 if rest.is_empty() {
                     Ok(counter)
                 } else {
@@ -56,26 +63,28 @@ pub struct SorceSeal {
 
 impl SorceSeal {
     pub fn new(sn: u64, digest: SelfAddressingPrefix) -> Self {
-        Self {sn, digest}
+        Self { sn, digest }
     }
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        let payload_type = PayloadType::OA;
-        Ok([
-            payload_type.to_string().as_bytes().to_vec(),
-            // TODO remove magic 22
-            sn_to_vec(self.sn, 22).as_bytes().to_vec(),
-            self.digest.to_str().as_bytes().to_vec(),
-        ]
-        .concat())
+        Ok([pack_sn(self.sn), self.digest.to_str()]
+            .join("")
+            .as_bytes()
+            .to_vec())
     }
 }
 
-fn sn_to_vec(sn: u64, len: usize) -> String {
+fn pack_sn(sn: u64) -> String {
+    let payload_type = PayloadType::OA;
+    let len = payload_type.size() - payload_type.master_code_size(false);
     let sn_raw: Vec<u8> = sn.to_be_bytes().into();
     let padding = 4 - len % 4;
     let len = (len + padding) / 4 * 3 - padding - sn_raw.len();
     let sn_vec: Vec<u8> = std::iter::repeat(0).take(len).chain(sn_raw).collect();
-    base64::encode_config(sn_vec, URL_SAFE_NO_PAD)
+    [
+        payload_type.to_string(),
+        base64::encode_config(sn_vec, URL_SAFE_NO_PAD),
+    ]
+    .join("")
 }
 
 #[test]
