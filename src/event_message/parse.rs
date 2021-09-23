@@ -218,11 +218,11 @@ pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], Deserialized> {
             }
         },
         EventData::Dip(_) | EventData::Drt(_) => {
+            let (rest, signatures) = signatures(rest)?;
             let (rest, source_seal) = counter(rest)?;
-            let (extra, signatures) = signatures(rest)?;
 
             Ok((
-                extra,
+                rest,
                 Deserialized::Event(DeserializedSignedEvent {
                     deserialized_event: e,
                     signatures,

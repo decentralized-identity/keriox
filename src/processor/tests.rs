@@ -2,6 +2,7 @@ use super::EventProcessor;
 use crate::derivation::self_addressing::SelfAddressing;
 use crate::event::sections::seal::EventSeal;
 use crate::event_message::parse::signed_message;
+use crate::prefix::Prefix;
 use crate::{database::sled::SledEventDatabase, error::Error};
 use crate::{
     event_message::{
@@ -173,97 +174,100 @@ fn test_process_receipt() -> Result<(), Error> {
 
     Ok(())
 }
-// TODO fix the test after updating delegation.
-// (https://github.com/decentralized-identity/keri/issues/146)
-// #[test]
-// fn test_process_delegated() -> Result<(), Error> {
-//     use tempfile::Builder;
-//     // Create test db and event processor.
-//     let root = Builder::new().prefix("test-db").tempdir().unwrap();
-//     fs::create_dir_all(root.path()).unwrap();
-//     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-//     let event_processor = EventProcessor::new(Arc::clone(&db));
+#[test]
+fn test_process_delegated() -> Result<(), Error> {
+    use tempfile::Builder;
+    // Create test db and event processor.
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    fs::create_dir_all(root.path()).unwrap();
+    let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+    let event_processor = EventProcessor::new(Arc::clone(&db));
 
-//     let raw_parsed = |des| -> Result<Vec<u8>, Error> {
-//         match &des {
-//             Deserialized::Event(e) => Ok(e.deserialized_event.raw.to_vec()),
-//             _ => Err(Error::SemanticError("bad deser".into()))?,
-//         }
-//     };
+    let raw_parsed = |des| -> Result<Vec<u8>, Error> {
+        match &des {
+            Deserialized::Event(e) => Ok(e.deserialized_event.raw.to_vec()),
+            _ => Err(Error::SemanticError("bad deser".into()))?,
+        }
+    };
 
-//     // Events and sigs are from keripy `test_delegation` test.
-//     // (keripy/tests/core/test_delegating.py#62)
-//     let bobs_pref: IdentifierPrefix = "EiBlVttjqvySMbA4ShN19rSrz3D0ioNW-Uj92Ri7XnFE".parse()?;
+    // Events and sigs are from keripy `test_delegation` test.
+    // (keripy/tests/core/test_delegating.py)
+    let bobs_pref: IdentifierPrefix = "Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI".parse()?;
 
-//     let bobs_icp = br#"{"v":"KERI10JSON0000ed_","i":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI","s":"0","t":"icp","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","bt":"0","b":[],"c":[],"a":[]}-AABAAp8S6RgfLwdCEiz0jL9cXaDwTJF6MLuKyXp7EfJtrp2myOikOJVUB-w9UGZc1Y8dnURxhXPSca-ZEUAV73XOaAw"#;
-//     let msg = signed_message(bobs_icp).unwrap().1;
-//     event_processor.process(msg)?;
+    let bobs_icp = br#"{"v":"KERI10JSON0000ed_","i":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI","s":"0","t":"icp","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","bt":"0","b":[],"c":[],"a":[]}-AABAAp8S6RgfLwdCEiz0jL9cXaDwTJF6MLuKyXp7EfJtrp2myOikOJVUB-w9UGZc1Y8dnURxhXPSca-ZEUAV73XOaAw"#;
+    let msg = signed_message(bobs_icp).unwrap().1;
+    event_processor.process(msg)?;
 
-//     // Delegated inception event.
-//     let dip_raw = br#"{"v":"KERI10JSON000121_","i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"0","t":"dip","kt":"1","k":["DuK1x8ydpucu3480Jpd1XBfjnCwb3dZ3x5b1CJmuUphA"],"n":"EWWkjZkZDXF74O2bOQ4H5hu4nXDlKg2m4CBEBkUxibiU","bt":"0","b":[],"c":[],"a":[],"di":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI"}-AABAA2_8Guj0Gf2JoNTq7hOs4u6eOOWhENALJWDfLxkVcS2uLh753FjtyE80lpeS3to1C9yvENyMnyN4q96ehA4exDA-GAB0AAAAAAAAAAAAAAAAAAAAAAQE3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII"#;
-//     let deserialized_dip = signed_message(dip_raw).unwrap().1;
+    // Delegated inception event.
+    let dip_raw = br#"{"v":"KERI10JSON000121_","i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"0","t":"dip","kt":"1","k":["DuK1x8ydpucu3480Jpd1XBfjnCwb3dZ3x5b1CJmuUphA"],"n":"EWWkjZkZDXF74O2bOQ4H5hu4nXDlKg2m4CBEBkUxibiU","bt":"0","b":[],"c":[],"a":[],"di":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI"}-AABAA2_8Guj0Gf2JoNTq7hOs4u6eOOWhENALJWDfLxkVcS2uLh753FjtyE80lpeS3to1C9yvENyMnyN4q96ehA4exDA-GAB0AAAAAAAAAAAAAAAAAAAAAAQE3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII"#;
+    let deserialized_dip = signed_message(dip_raw).unwrap().1;
 
-//     // Process dip event before delegating ixn event.
-//     let state = event_processor.process(deserialized_dip.clone());
-//     assert!(matches!(state, Err(Error::EventOutOfOrderError)));
+    // Process dip event before delegating ixn event.
+    let state = event_processor.process(deserialized_dip.clone());
+    assert!(matches!(state, Err(Error::EventOutOfOrderError)));
 
-//     let child_prefix: IdentifierPrefix = "ErLe2qWp4VCmDp7v_R01tC-ha13ZEZY0VGcgYtPRhqPs".parse()?;
+    let child_prefix: IdentifierPrefix = "E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U".parse()?;
 
-//     // Check if processed dip is in kel.
-//     let dip_from_db = event_processor.get_event_at_sn(&child_prefix, 0);
-//     assert!(matches!(dip_from_db, Ok(None)));
+    // Check if processed dip is in kel.
+    let dip_from_db = event_processor.get_event_at_sn(&child_prefix, 0);
+    assert!(matches!(dip_from_db, Ok(None)));
 
-//     // Bob's ixn event with delegating event seal.
-//     let bobs_ixn = br#"{"v":"KERI10JSON000107_","i":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI","s":"1","t":"ixn","p":"E1-QL0TCdsBTRaKoakLjFhjSlELK60Vv8WdRaG6zMnTM","a":[{"i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"0","d":"E1x1JOub6oEQkxAxTNFu1Pma6y-lrbprNsaILHJHoPmY"}]}-AABAAROVSK0qK2gqlr_OUsnHNW_ksCyLVmRaysRne2dI5dweECGIy3_ZuFHyOofiDRt5tRE09PlS0uZdot6byFNr-AA'"#;
-//     let deserialized_ixn = signed_message(bobs_ixn).unwrap().1;
-//     event_processor.process(deserialized_ixn.clone())?;
+    // Bob's ixn event with delegating event seal.
+    let bobs_ixn = br#"{"v":"KERI10JSON000107_","i":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI","s":"1","t":"ixn","p":"E1-QL0TCdsBTRaKoakLjFhjSlELK60Vv8WdRaG6zMnTM","a":[{"i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"0","d":"E1x1JOub6oEQkxAxTNFu1Pma6y-lrbprNsaILHJHoPmY"}]}-AABAAROVSK0qK2gqlr_OUsnHNW_ksCyLVmRaysRne2dI5dweECGIy3_ZuFHyOofiDRt5tRE09PlS0uZdot6byFNr-AA"#;
+    let deserialized_ixn = signed_message(bobs_ixn).unwrap().1;
+    event_processor.process(deserialized_ixn.clone())?;
 
-//     // Check if processed event is in db.
-//     let ixn_from_db = event_processor.get_event_at_sn(&bobs_pref, 1).unwrap().unwrap();
-//     assert_eq!(ixn_from_db.signed_event_message.serialize()?, raw_parsed(deserialized_ixn)?);
+    // Check if processed event is in db.
+    let ixn_from_db = event_processor.get_event_at_sn(&bobs_pref, 1).unwrap().unwrap();
+    assert_eq!(ixn_from_db.signed_event_message.event_message.serialize()?, raw_parsed(deserialized_ixn)?);
 
-//     // Process delegated inception event once again.
-//     event_processor.process(deserialized_dip.clone())?.unwrap();
+    let dip = br#"{"v":"KERI10JSON000121_","i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"0","t":"dip","kt":"1","k":["DuK1x8ydpucu3480Jpd1XBfjnCwb3dZ3x5b1CJmuUphA"],"n":"EWWkjZkZDXF74O2bOQ4H5hu4nXDlKg2m4CBEBkUxibiU","bt":"0","b":[],"c":[],"a":[],"di":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI"}"#;
+    let delegatd_dig = SelfAddressing::Blake3_256.derive(dip);
+    println!("{}", delegatd_dig.to_str());
 
-//     // Check if processed dip event is in db.
-//     let dip_from_db = event_processor
-//         .get_event_at_sn(&child_prefix, 0)?
-//         .unwrap();
-//     assert_eq!(dip_from_db.signed_event_message.serialize()?, raw_parsed(deserialized_dip)?);
+    // Process delegated inception event once again.
+    event_processor.process(deserialized_dip.clone())?;
 
-//     // Bobs interaction event with delegated event seal.
-//     let bob_ixn = br#"{"v":"KERI10JSON000107_","i":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI","s":"2","t":"ixn","p":"E3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII","a":[{"i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"1","d":"EPjLBcb4pp-3PGvSi_fTvLvsqUqFoJ0CVCHvIFfu93Xc"}]}-AABAAclMVE-bkIn-wPiAqfgR384nWmslQHQvmo2o3xQvd_4Bt6bflc4BAmfBa03KgrDVqmB7qG2VXQbOHevkzOgRdD"#;
-//     let deserialized_ixn_drt = signed_message(bob_ixn).unwrap().1;
+    // Check if processed dip event is in db.
+    let dip_from_db = event_processor
+        .get_event_at_sn(&child_prefix, 0)?
+        .unwrap();
+        
+    assert_eq!(dip_from_db.signed_event_message.event_message.serialize()?, raw_parsed(deserialized_dip.clone())?);
 
-//     // Delegated rotation event.
-//     let drt_raw = br#"{"v":"KERI10JSON000122_","i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"1","t":"drt","p":"E1x1JOub6oEQkxAxTNFu1Pma6y-lrbprNsaILHJHoPmY","kt":"1","k":["DTf6QZWoet154o9wvzeMuNhLQRr8JaAUeiC6wjB_4_08"],"n":"E8kyiXDfkE7idwWnAZQjHbUZMz-kd_yIMH0miptIFFPo","bt":"0","br":[],"ba":[],"a":[]}-AABAAAVUMNfOl9Fcqx-C3fAYnaxvsiJJO3zG6rP0FQ2WVp__hMEaprrQbJL6-Esnny3U5zvMOqbso17rvecTwmVIwDw-GAB0AAAAAAAAAAAAAAAAAAAAAAgEbOI0OIIFv2VV5bmeSq1pwCn-6b2k6TdWcCbJHE6Ly7o"#;
-//     let deserialized_drt = signed_message(drt_raw).unwrap().1;
+    // Bobs interaction event with delegated event seal.
+    let bob_ixn = br#"{"v":"KERI10JSON000107_","i":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI","s":"2","t":"ixn","p":"E3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII","a":[{"i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"1","d":"EPjLBcb4pp-3PGvSi_fTvLvsqUqFoJ0CVCHvIFfu93Xc"}]}-AABAAclMVE-bkIn-wPiAqfgR384nWmslQHQvmo2o3xQvd_4Bt6bflc4BAmfBa03KgrDVqmB7qG2VXQbOHevkzOgRdDA"#;
+    let deserialized_ixn_drt = signed_message(bob_ixn).unwrap().1;
 
-//     // Process drt event before delegating ixn event.
-//     let child_state = event_processor.process(deserialized_drt.clone());
-//     assert!(matches!(child_state, Err(Error::EventOutOfOrderError)));
+    // Delegated rotation event.
+    let drt_raw = br#"{"v":"KERI10JSON000122_","i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"1","t":"drt","p":"E1x1JOub6oEQkxAxTNFu1Pma6y-lrbprNsaILHJHoPmY","kt":"1","k":["DTf6QZWoet154o9wvzeMuNhLQRr8JaAUeiC6wjB_4_08"],"n":"E8kyiXDfkE7idwWnAZQjHbUZMz-kd_yIMH0miptIFFPo","bt":"0","br":[],"ba":[],"a":[]}-AABAAAVUMNfOl9Fcqx-C3fAYnaxvsiJJO3zG6rP0FQ2WVp__hMEaprrQbJL6-Esnny3U5zvMOqbso17rvecTwmVIwDw-GAB0AAAAAAAAAAAAAAAAAAAAAAgEbOI0OIIFv2VV5bmeSq1pwCn-6b2k6TdWcCbJHE6Ly7o"#;
+    let deserialized_drt = signed_message(drt_raw).unwrap().1;
 
-//     // Check if processed drt is in kel.
-//     let drt_from_db = event_processor.get_event_at_sn(&child_prefix, 1);
-//     assert!(matches!(drt_from_db, Ok(None)));
+    // Process drt event before delegating ixn event.
+    let child_state = event_processor.process(deserialized_drt.clone());
+    assert!(matches!(child_state, Err(Error::EventOutOfOrderError)));
 
-//     event_processor.process(deserialized_ixn_drt.clone())?;
+    // Check if processed drt is in kel.
+    let drt_from_db = event_processor.get_event_at_sn(&child_prefix, 1);
+    assert!(matches!(drt_from_db, Ok(None)));
 
-//     // Check if processed event is in db.
-//     let ixn_from_db = event_processor.get_event_at_sn(&bobs_pref, 2)?.unwrap();
-//     assert_eq!(ixn_from_db.signed_event_message.serialize()?, raw_parsed(deserialized_ixn_drt)?);
+    event_processor.process(deserialized_ixn_drt.clone())?;
 
-//     // Process delegated rotation event once again.
-//     event_processor.process(deserialized_drt.clone())?.unwrap();
+    // Check if processed event is in db.
+    let ixn_from_db = event_processor.get_event_at_sn(&bobs_pref, 2)?.unwrap();
+    assert_eq!(ixn_from_db.signed_event_message.event_message.serialize()?, raw_parsed(deserialized_ixn_drt)?);
 
-//     // Check if processed drt event is in db.
-//     let drt_from_db = event_processor
-//         .get_event_at_sn(&child_prefix, 1)?
-//         .unwrap();
-//     assert_eq!(drt_from_db.signed_event_message.serialize()?, raw_parsed(deserialized_drt)?);
+    // Process delegated rotation event once again.
+    event_processor.process(deserialized_drt.clone())?.unwrap();
 
-//     Ok(())
-// }
+    // Check if processed drt event is in db.
+    let drt_from_db = event_processor
+        .get_event_at_sn(&child_prefix, 1)?
+        .unwrap();
+    assert_eq!(drt_from_db.signed_event_message.event_message.serialize()?, raw_parsed(deserialized_drt)?);
+
+    Ok(())
+}
 
 #[test]
 fn test_validate_seal() -> Result<(), Error> {

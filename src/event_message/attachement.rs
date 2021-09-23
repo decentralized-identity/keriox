@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use base64::URL_SAFE_NO_PAD;
 use serde::{Deserialize, Serialize};
 
 use crate::{error::Error, prefix::{Prefix, SelfAddressingPrefix}};
@@ -62,14 +63,20 @@ impl SorceSeal {
         Ok([
             payload_type.to_string().as_bytes().to_vec(),
             // TODO remove magic 22
-            num_to_base_64(self.sn as u16, 22).as_bytes().to_vec(),
+            sn_to_vec(self.sn, 22).as_bytes().to_vec(),
             self.digest.to_str().as_bytes().to_vec(),
         ]
         .concat())
     }
 }
 
-
+fn sn_to_vec(sn: u64, len: usize) -> String {
+    let sn_raw: Vec<u8> = sn.to_be_bytes().into();
+    let padding = 4 - len % 4;
+    let len = (len + padding) / 4 * 3 - padding - sn_raw.len();
+    let sn_vec: Vec<u8> = std::iter::repeat(0).take(len).chain(sn_raw).collect();
+    base64::encode_config(sn_vec, URL_SAFE_NO_PAD)
+}
 
 #[test]
 fn test_parse_attachement() -> Result<(), Error> {
@@ -83,12 +90,12 @@ fn test_parse_attachement() -> Result<(), Error> {
         Attachement::SealSourceCouplets(sources) => {
             let s1 = sources[0].clone();
             let s2 = sources[1].clone();
-            assert_eq!(s1.sn, 16);
+            assert_eq!(s1.sn, 1);
             assert_eq!(
                 s1.digest.to_str(),
                 "E3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII"
             );
-            assert_eq!(s2.sn, 16);
+            assert_eq!(s2.sn, 1);
             assert_eq!(
                 s2.digest.to_str(),
                 "E3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII"
