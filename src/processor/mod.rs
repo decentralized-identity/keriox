@@ -7,7 +7,7 @@ use crate::{
     event::{
         event_data::EventData,
         sections::{
-            seal::{EventSeal, LocationSeal, Seal},
+            seal::{EventSeal, Seal},
             KeyConfig,
         },
         EventMessage,
