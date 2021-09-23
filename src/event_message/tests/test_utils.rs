@@ -85,7 +85,7 @@ fn test_update_identifier_state(
     };
 
     // Attach sign to event message.
-    let signed_event = event_msg.sign(PayloadType::MA, vec![attached_sig.clone()]);
+    let signed_event = event_msg.sign(PayloadType::MA, vec![attached_sig.clone()], None);
 
     // Apply event to current IdentifierState.
     let new_state = state_data.state.apply(&signed_event)?;

@@ -18,7 +18,7 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use serialization_info::*;
 
-use self::{payload_size::PayloadType, signed_event_message::SignedEventMessage};
+use self::{attachement::Counter, payload_size::PayloadType, signed_event_message::SignedEventMessage};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct EventMessage {
@@ -120,8 +120,8 @@ impl EventMessage {
         self.serialization().encode(self)
     }
 
-    pub fn sign(&self, payload_type: PayloadType, sigs: Vec<AttachedSignaturePrefix>) -> SignedEventMessage {
-        SignedEventMessage::new(self, payload_type, sigs)
+    pub fn sign(&self, payload_type: PayloadType, sigs: Vec<AttachedSignaturePrefix>, attachement: Option<Counter>) -> SignedEventMessage {
+        SignedEventMessage::new(self, payload_type, sigs, attachement)
     }
 }
 
@@ -297,7 +297,7 @@ mod tests {
 
         assert!(pref0.verify(&ser, &attached_sig.signature)?);
 
-        let signed_event = icp_m.sign(PayloadType::MA, vec![attached_sig]);
+        let signed_event = icp_m.sign(PayloadType::MA, vec![attached_sig], None);
 
         let s_ = IdentifierState::default();
 
@@ -380,7 +380,7 @@ mod tests {
 
         assert!(sig_pref_0.verify(&serialized, &attached_sig.signature)?);
 
-        let signed_event = icp.sign(PayloadType::MA, vec![attached_sig]);
+        let signed_event = icp.sign(PayloadType::MA, vec![attached_sig], None);
 
         let s_ = IdentifierState::default();
 

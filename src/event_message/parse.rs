@@ -1,4 +1,4 @@
-use super::{AttachedSignaturePrefix, EventMessage, SignedEventMessage, attachement::{AttachedSnDigest, Counter}, payload_size::PayloadType, signed_event_message::{SignedNontransferableReceipt, SignedTransferableReceipt}};
+use super::{AttachedSignaturePrefix, EventMessage, SignedEventMessage, attachement::{self, AttachedSnDigest, Counter}, payload_size::PayloadType, signed_event_message::{SignedNontransferableReceipt, SignedTransferableReceipt}};
 use crate::{derivation::attached_signature_code::b64_to_num, event::{event_data::EventData, sections::seal::EventSeal}, prefix::{BasicPrefix, SelfSigningPrefix, parse::{attached_signature, attached_sn, basic_prefix, event_seal, self_addressing_prefix, self_signing_prefix}}, state::IdentifierState};
 use nom::{
     branch::*,
@@ -23,12 +23,13 @@ pub struct DeserializedEvent<'a> {
 pub struct DeserializedSignedEvent<'a> {
     pub deserialized_event: DeserializedEvent<'a>,
     pub signatures: Vec<AttachedSignaturePrefix>,
+    pub attachement: Option<Counter>,
 }
 
 // FIXME: detect payload type
 impl From<DeserializedSignedEvent<'_>> for SignedEventMessage {
     fn from(de: DeserializedSignedEvent) -> SignedEventMessage {
-        SignedEventMessage::new(&de.deserialized_event.event_message, PayloadType::MA, de.signatures)
+        SignedEventMessage::new(&de.deserialized_event.event_message, PayloadType::MA, de.signatures, de.attachement)
     }
 }
 
@@ -215,7 +216,20 @@ pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], Deserialized> {
                     )
                 })
             }
-        }
+        },
+        EventData::Dip(_) | EventData::Drt(_) => {
+            let (rest, source_seal) = counter(rest)?;
+            let (extra, signatures) = signatures(rest)?;
+
+            Ok((
+                extra,
+                Deserialized::Event(DeserializedSignedEvent {
+                    deserialized_event: e,
+                    signatures,
+                    attachement: Some(source_seal)
+                }),
+            ))
+        },
         _ => {
             let (extra, signatures) = signatures(rest)?;
 
@@ -224,6 +238,7 @@ pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], Deserialized> {
                 Deserialized::Event(DeserializedSignedEvent {
                     deserialized_event: e,
                     signatures,
+                    attachement: None,
                 }),
             ))
         }

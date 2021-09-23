@@ -4,7 +4,7 @@ use std::cmp::Ordering;
 
 use crate::{derivation::attached_signature_code::{get_sig_count, num_to_b64}, error::Error, event::sections::seal::EventSeal, prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfSigningPrefix, attached_seal::AttachedEventSeal}, state::{EventSemantics, IdentifierState}};
 
-use super::{EventMessage, payload_size::PayloadType};
+use super::{EventMessage, attachement::Counter, payload_size::PayloadType};
 use super::serializer::to_string;
 
 // KERI serializer should be used to serialize this
@@ -15,6 +15,8 @@ pub struct SignedEventMessage {
     pub payload_type: PayloadType, 
     #[serde(skip_serializing)]
     pub signatures: Vec<AttachedSignaturePrefix>,
+    #[serde(skip_serializing)]
+    pub attachement: Option<Counter>,
 }
 
 impl Serialize for SignedEventMessage {
@@ -26,6 +28,7 @@ impl Serialize for SignedEventMessage {
             let mut em = serializer.serialize_struct("EventMessage", 2)?;
             em.serialize_field("", &self.event_message)?;
             let str_sigs = &self.signatures.iter().fold(String::default(), |accum, sig| accum + &sig.to_str());
+            // TODO Why first signatures string char?
             let code = self.calc_master_code(&str_sigs[..1]);
                 // .map_err(|e| serde::ser::Error::custom(&e.to_string()))?;
             em.serialize_field("-" , &format!("{}{}", Box::leak(code.into_boxed_str()), str_sigs))?;
@@ -118,11 +121,12 @@ impl Ord for TimestampedSignedEventMessage {
 impl Eq for TimestampedSignedEventMessage {}
 
 impl SignedEventMessage {
-    pub fn new(message: &EventMessage, payload_type: PayloadType, sigs: Vec<AttachedSignaturePrefix>) -> Self {
+    pub fn new(message: &EventMessage, payload_type: PayloadType, sigs: Vec<AttachedSignaturePrefix>, attachement: Option<Counter>) -> Self {
         Self {
             event_message: message.clone(),
             payload_type,
             signatures: sigs,
+            attachement,
         }
     }
 

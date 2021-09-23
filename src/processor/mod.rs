@@ -246,7 +246,7 @@ impl EventProcessor {
     ) -> Result<Option<IdentifierState>, Error> {
         // Log event.
         let signed_event = SignedEventMessage::new(
-                &event.deserialized_event.event_message, PayloadType::MA, event.signatures.clone());
+                &event.deserialized_event.event_message, PayloadType::MA, event.signatures.clone(), event.attachement.clone());
         let id = &event.deserialized_event.event_message.event.prefix;
         // If delegated event, check its delegator seal.
         match event.deserialized_event.event_message.event.event_data.clone() {

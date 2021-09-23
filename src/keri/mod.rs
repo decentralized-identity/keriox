@@ -121,7 +121,7 @@ impl<K: KeyManager> Keri<K> {
             SelfSigning::Ed25519Sha512,
             self.key_manager.borrow().sign(&icp.serialize()?)?,
             0,
-        )]);
+        )], None);
 
         self.processor
             .process(signed_message(&signed.serialize()?).unwrap().1)?;
@@ -160,7 +160,7 @@ impl<K: KeyManager> Keri<K> {
                     self.key_manager.borrow().sign(&icp.serialize()?)?,
                     0
                 )
-            ));
+            ), None);
             let serialized = signed.serialize()?;
             self.processor.process(signed_message(&serialized).unwrap().1)?;
             self.prefix = icp.event.prefix;
@@ -200,7 +200,7 @@ impl<K: KeyManager> Keri<K> {
             signature,
             0 // TODO: what is this?
         );
-        let signed = SignedEventMessage::new(&event, PayloadType::OC, vec!(asp));
+        let signed = SignedEventMessage::new(&event, PayloadType::OC, vec!(asp), None);
         self.processor.db.add_kel_finalized_event(signed.clone(), &self.prefix)?;
         Ok(signed)
     }
@@ -213,7 +213,7 @@ impl<K: KeyManager> Keri<K> {
             SelfSigning::Ed25519Sha512,
             self.key_manager.borrow().sign(&rot.serialize()?)?,
             0,
-        )]);
+        )], None);
 
         self.processor
             .process(signed_message(&rot.serialize()?).unwrap().1)?;
@@ -262,7 +262,7 @@ impl<K: KeyManager> Keri<K> {
             SelfSigning::Ed25519Sha512,
             self.key_manager.borrow().sign(&ev.serialize()?)?,
             0,
-        )]);
+        )], None);
 
         self.processor
             .process(signed_message(&ixn.serialize()?).unwrap().1)?;

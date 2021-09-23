@@ -79,7 +79,7 @@ pub enum PayloadType {
     // TODO: Indexed signatures
 }
 
-#[cfg(feature = "async")]
+// #[cfg(feature = "async")]
 impl PayloadType {
     pub(crate) fn size(&self) -> usize {
         match self {
@@ -140,6 +140,7 @@ impl PayloadType {
             | Self::MD
             | Self::ME
             | Self::MF
+            | Self::MG
             | Self::MU
             | Self::MV
             | Self::MW
@@ -147,6 +148,45 @@ impl PayloadType {
             | Self::MY
             | Self::MZ => if qb2 {3} else {4},
             _ => 0
+        }
+    }
+
+    pub(crate) fn index_length(&self) -> usize {
+        match self {
+            Self::A
+            | Self::B
+            | Self::C
+            | Self::D
+            | Self::E
+            | Self::F
+            | Self::G
+            | Self::H
+            | Self::I 
+            | Self::J
+            | Self::K
+            | Self::L
+            | Self::M => 0,
+            Self::OA
+            | Self::OB
+            | Self::OC
+            | Self::OD
+            | Self::OE
+            | Self::OF
+            | Self::OH => 0,
+            Self::MA
+            | Self::MB
+            | Self::MC
+            | Self::MD
+            | Self::ME
+            | Self::MF
+            | Self::MG
+            | Self::MU
+            | Self::MV
+            | Self::MW
+            | Self::MX
+            | Self::MY
+            | Self::MZ => 2,
+            _ => todo!()
         }
     }
 }

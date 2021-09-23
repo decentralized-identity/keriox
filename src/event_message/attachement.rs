@@ -2,12 +2,11 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{derivation::attached_signature_code::{num_to_b64}, error::Error, prefix::{
-        Prefix, SelfAddressingPrefix,
-    }};
+use crate::{derivation::attached_signature_code::{num_to_b64}, error::Error, prefix::{Prefix, SelfAddressingPrefix}};
 
 use super::{parse::counter, payload_size::PayloadType};
 
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 pub enum Counter {
     SealSourceCouplets(Vec<AttachedSnDigest>),
 }
@@ -16,13 +15,14 @@ impl Counter {
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         match self {
             Counter::SealSourceCouplets(sources) => {
+                let payload_type = PayloadType::MG;
                 let serialzied_sources = sources
                     .into_iter()
                     .map(|s| s.serialize().unwrap())
                     .flatten();
                 Ok(vec![
-                    PayloadType::MG.to_string().as_bytes().to_vec(),
-                    num_to_base_64(sources.len() as u16, 2)?.as_bytes().to_vec(),
+                   payload_type.to_string().as_bytes().to_vec(),
+                    num_to_base_64(sources.len() as u16, payload_type.index_length())?.as_bytes().to_vec(),
                 ]
                 .into_iter()
                 .flatten()
@@ -41,7 +41,8 @@ impl FromStr for Counter {
             "-G" => {
                 let (rest, counter) = counter(s.as_bytes()).map_err(|_e| Error::SemanticError("Can't parse counter".into()))?;
                 if rest.is_empty() {
-                    Ok(counter)} else {
+                    Ok(counter)
+                } else {
                     Err(Error::SemanticError("Can't parse counter".into()))
                 }
             }
