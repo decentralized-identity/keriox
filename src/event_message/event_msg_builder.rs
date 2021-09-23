@@ -26,7 +26,7 @@ pub struct EventMsgBuilder {
     next_keys: Vec<BasicPrefix>,
     prev_event: SelfAddressingPrefix,
     data: Vec<Seal>,
-    delegating_seal: LocationSeal,
+    delegator: IdentifierPrefix,
     format: SerializationFormats,
     derivation: SelfAddressing,
 }
@@ -77,7 +77,7 @@ impl EventMsgBuilder {
             sn: 1,
             prev_event: SelfAddressing::Blake3_256.derive(&[0u8; 32]),
             data: vec![],
-            delegating_seal: dummy_loc_seal,
+            delegator: IdentifierPrefix::default(),
             format: SerializationFormats::JSON,
             derivation: SelfAddressing::Blake3_256,
         })
@@ -107,9 +107,9 @@ impl EventMsgBuilder {
         EventMsgBuilder { ..self }
     }
 
-    pub fn with_delegating_seal(self, seal: LocationSeal) -> Self {
+    pub fn with_delegator(self, delegator: IdentifierPrefix) -> Self {
         EventMsgBuilder {
-            delegating_seal: seal,
+            delegator,
             ..self
         }
     }
@@ -187,7 +187,7 @@ impl EventMsgBuilder {
                 };
                 DelegatedInceptionEvent {
                     inception_data: icp_data,
-                    seal: self.delegating_seal,
+                    delegator: self.delegator,
                 }
                 .incept_self_addressing(self.derivation, self.format)?
             }
@@ -203,7 +203,6 @@ impl EventMsgBuilder {
                     sn: self.sn,
                     event_data: EventData::Drt(DelegatedRotationEvent {
                         rotation_data,
-                        seal: self.delegating_seal,
                     }),
                 }
                 .to_message(self.format)?

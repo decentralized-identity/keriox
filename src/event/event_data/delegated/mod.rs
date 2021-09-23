@@ -1,4 +1,4 @@
-use super::{super::sections::seal::LocationSeal, DummyEvent, EventData};
+use super::{DummyEvent, EventData};
 use super::{InceptionEvent, RotationEvent};
 use crate::{
     derivation::self_addressing::SelfAddressing,
@@ -14,17 +14,14 @@ pub struct DelegatedInceptionEvent {
     #[serde(flatten)]
     pub inception_data: InceptionEvent,
 
-    #[serde(rename = "da")]
-    pub seal: LocationSeal,
+    #[serde(rename = "di")]
+    pub delegator: IdentifierPrefix,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct DelegatedRotationEvent {
     #[serde(flatten)]
     pub rotation_data: RotationEvent,
-
-    #[serde(rename = "da")]
-    pub seal: LocationSeal,
 }
 
 impl DelegatedInceptionEvent {
@@ -58,17 +55,17 @@ impl DelegatedInceptionEvent {
 impl EventSemantics for DelegatedInceptionEvent {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         Ok(IdentifierState {
-            delegator: Some(self.seal.prefix.clone()),
+            delegator: Some(self.delegator.clone()),
             ..self.inception_data.apply_to(state)?
         })
     }
 }
 impl EventSemantics for DelegatedRotationEvent {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
-        if state.delegator == Some(self.seal.prefix.clone()) {
+        // if state.delegator == Some(self.delegator.prefix.clone()) {
             self.rotation_data.apply_to(state)
-        } else {
-            Err(Error::SemanticError("Wrong delegator".into()))
-        }
+        // } else {
+            // Err(Error::SemanticError("Wrong delegator".into()))
+        // }
     }
 }

@@ -49,8 +49,8 @@ impl FromStr for Attachement {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SorceSeal {
-    sn: u64,
-    digest: SelfAddressingPrefix,
+    pub sn: u64,
+    pub digest: SelfAddressingPrefix,
 }
 
 impl SorceSeal {

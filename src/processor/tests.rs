@@ -176,12 +176,12 @@ fn test_process_receipt() -> Result<(), Error> {
 //     // Create test db and event processor.
 //     let root = Builder::new().prefix("test-db").tempdir().unwrap();
 //     fs::create_dir_all(root.path()).unwrap();
-//     let db = SledEventDatabase::new(root.path()).unwrap();
-//     let event_processor = EventProcessor::new(&db);
+//     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+//     let event_processor = EventProcessor::new(Arc::clone(&db));
 
 //     let raw_parsed = |des| -> Result<Vec<u8>, Error> {
 //         match &des {
-//             Deserialized::Event(e) => Ok(e.event.raw.to_vec()),
+//             Deserialized::Event(e) => Ok(e.deserialized_event.raw.to_vec()),
 //             _ => Err(Error::SemanticError("bad deser".into()))?,
 //         }
 //     };
@@ -215,7 +215,7 @@ fn test_process_receipt() -> Result<(), Error> {
 
 //     // Check if processed event is in db.
 //     let ixn_from_db = event_processor.get_event_at_sn(&bobs_pref, 1).unwrap().unwrap();
-//     assert_eq!(ixn_from_db.event.serialize()?, raw_parsed(deserialized_ixn)?);
+//     assert_eq!(ixn_from_db.signed_event_message.serialize()?, raw_parsed(deserialized_ixn)?);
 
 //     // Process delegated inception event once again.
 //     event_processor.process(deserialized_dip.clone())?.unwrap();
@@ -224,7 +224,7 @@ fn test_process_receipt() -> Result<(), Error> {
 //     let dip_from_db = event_processor
 //         .get_event_at_sn(&child_prefix, 0)?
 //         .unwrap();
-//     assert_eq!(dip_from_db.event.serialize()?, raw_parsed(deserialized_dip)?);
+//     assert_eq!(dip_from_db.signed_event_message.serialize()?, raw_parsed(deserialized_dip)?);
 
 //     // Bobs interaction event with delegated event seal.
 //     let bob_ixn = br#"{"v":"KERI10JSON000107_","i":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI","s":"2","t":"ixn","p":"E3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII","a":[{"i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"1","d":"EPjLBcb4pp-3PGvSi_fTvLvsqUqFoJ0CVCHvIFfu93Xc"}]}-AABAAclMVE-bkIn-wPiAqfgR384nWmslQHQvmo2o3xQvd_4Bt6bflc4BAmfBa03KgrDVqmB7qG2VXQbOHevkzOgRdD"#;
@@ -246,7 +246,7 @@ fn test_process_receipt() -> Result<(), Error> {
 
 //     // Check if processed event is in db.
 //     let ixn_from_db = event_processor.get_event_at_sn(&bobs_pref, 2)?.unwrap();
-//     assert_eq!(ixn_from_db.event.serialize()?, raw_parsed(deserialized_ixn_drt)?);
+//     assert_eq!(ixn_from_db.signed_event_message.serialize()?, raw_parsed(deserialized_ixn_drt)?);
 
 //     // Process delegated rotation event once again.
 //     event_processor.process(deserialized_drt.clone())?.unwrap();
@@ -255,7 +255,7 @@ fn test_process_receipt() -> Result<(), Error> {
 //     let drt_from_db = event_processor
 //         .get_event_at_sn(&child_prefix, 1)?
 //         .unwrap();
-//     assert_eq!(drt_from_db.event.serialize()?, raw_parsed(deserialized_drt)?);
+//     assert_eq!(drt_from_db.signed_event_message.serialize()?, raw_parsed(deserialized_drt)?);
 
 //     Ok(())
 // }
