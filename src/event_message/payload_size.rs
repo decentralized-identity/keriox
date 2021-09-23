@@ -1,3 +1,4 @@
+use base64::encode_config;
 use serde::{Serialize, Deserialize};
 use crate::error::Error;
 use std::{convert::TryFrom, fmt::Display};
@@ -189,6 +190,34 @@ impl PayloadType {
             _ => todo!()
         }
     }
+
+
+
+pub fn encode(&self, sn: u16) -> String {
+    [self.to_string(), num_to_base_64(sn, self.index_length() as usize)].join("")
+}
+
+}
+
+pub fn num_to_base_64(sn: u16, len: usize) -> String {
+    let i = num_to_b64(sn);
+    // refill string to have proper size given in len argument
+    let part = if i.len() < len {
+        "A".repeat(len - i.len())
+    } else {
+        String::default()
+    };
+    [part, i].join("")
+}
+
+pub fn num_to_b64(num: u16) -> String {
+    match num {
+        n if n < 63 => 
+            encode_config([num.to_be_bytes()[1] << 2], base64::URL_SAFE_NO_PAD)[..1].to_string(),
+        n if n < 4095 => 
+            encode_config(num.to_be_bytes(), base64::URL_SAFE_NO_PAD)[..2].to_string(),
+        _ => encode_config(num.to_be_bytes(), base64::URL_SAFE_NO_PAD),
+    }
 }
 
 impl TryFrom<&str> for PayloadType {
@@ -286,4 +315,15 @@ impl Display for PayloadType {
             Self::MZ => f.write_str("-Z")
         }
     }
+}
+
+
+#[test]
+fn num_to_b64_test() {
+    assert_eq!("A", num_to_b64(0));
+    assert_eq!("B", num_to_b64(1));
+    assert_eq!("C", num_to_b64(2));
+    assert_eq!("D", num_to_b64(3));
+    assert_eq!("b", num_to_b64(27));
+    assert_eq!("AE", num_to_b64(64));
 }

@@ -2,9 +2,9 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{derivation::attached_signature_code::{num_to_b64}, error::Error, prefix::{Prefix, SelfAddressingPrefix}};
+use crate::{error::Error, prefix::{Prefix, SelfAddressingPrefix}};
 
-use super::{parse::counter, payload_size::PayloadType};
+use super::{parse::counter, payload_size::{PayloadType, num_to_base_64}};
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub enum Counter {
@@ -20,12 +20,8 @@ impl Counter {
                     .into_iter()
                     .map(|s| s.serialize().unwrap())
                     .flatten();
-                Ok(vec![
-                   payload_type.to_string().as_bytes().to_vec(),
-                    num_to_base_64(sources.len() as u16, payload_type.index_length())?.as_bytes().to_vec(),
-                ]
+                Ok(payload_type.encode(sources.len() as u16).as_bytes().to_vec()
                 .into_iter()
-                .flatten()
                 .chain(serialzied_sources)
                 .collect::<Vec<_>>())
             }
@@ -62,25 +58,18 @@ impl AttachedSnDigest {
         Self {sn, digest}
     }
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
+        let payload_type = PayloadType::OA;
         Ok([
-            PayloadType::OA.to_string().as_bytes().to_vec(),
-            num_to_base_64(self.sn as u16, 22)?.as_bytes().to_vec(),
+            payload_type.to_string().as_bytes().to_vec(),
+            // TODO remove magic 22
+            num_to_base_64(self.sn as u16, 22).as_bytes().to_vec(),
             self.digest.to_str().as_bytes().to_vec(),
         ]
         .concat())
     }
 }
 
-fn num_to_base_64(sn: u16, len: usize) -> Result<String, Error> {
-    let i = num_to_b64(sn);
-    // refill string to have proper size given in len argument
-    let part = if i.len() < len {
-        "A".repeat(len - i.len())
-    } else {
-        String::default()
-    };
-    Ok([part, i].join(""))
-}
+
 
 #[test]
 fn test_parse_attachement() -> Result<(), Error> {

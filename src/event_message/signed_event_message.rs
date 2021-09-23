@@ -2,7 +2,7 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize, ser::SerializeStruct};
 use std::cmp::Ordering;
 
-use crate::{derivation::attached_signature_code::{get_sig_count, num_to_b64}, error::Error, event::sections::seal::EventSeal, prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfSigningPrefix, attached_seal::AttachedEventSeal}, state::{EventSemantics, IdentifierState}};
+use crate::{derivation::attached_signature_code::{get_sig_count}, error::Error, event::sections::seal::EventSeal, prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfSigningPrefix, attached_seal::AttachedEventSeal}, state::{EventSemantics, IdentifierState}};
 
 use super::{EventMessage, attachement::Counter, payload_size::PayloadType};
 use super::serializer::to_string;
@@ -29,7 +29,7 @@ impl Serialize for SignedEventMessage {
             em.serialize_field("", &self.event_message)?;
             let str_sigs = &self.signatures.iter().fold(String::default(), |accum, sig| accum + &sig.to_str());
             // TODO Why first signatures string char?
-            let code = self.calc_master_code(&str_sigs[..1]);
+            let code = self.payload_type.encode(self.signatures.len() as u16);
                 // .map_err(|e| serde::ser::Error::custom(&e.to_string()))?;
             em.serialize_field("-" , &format!("{}{}", Box::leak(code.into_boxed_str()), str_sigs))?;
             em.end()
@@ -130,12 +130,6 @@ impl SignedEventMessage {
         }
     }
 
-    pub fn calc_master_code(&self, derivation: &str) -> String {
-        format!("{}{}{}", 
-            &self.payload_type.to_string(),
-            derivation,
-            num_to_b64(self.signatures.len() as u16))
-    }
 
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         Ok(to_string(&self)?.as_bytes().to_vec())
