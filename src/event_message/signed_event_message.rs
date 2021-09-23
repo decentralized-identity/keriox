@@ -4,7 +4,7 @@ use std::cmp::Ordering;
 
 use crate::{derivation::attached_signature_code::{get_sig_count}, error::Error, event::sections::seal::EventSeal, prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfSigningPrefix, attached_seal::AttachedEventSeal}, state::{EventSemantics, IdentifierState}};
 
-use super::{EventMessage, attachement::Counter, payload_size::PayloadType};
+use super::{EventMessage, attachement::Attachement, payload_size::PayloadType};
 use super::serializer::to_string;
 
 // KERI serializer should be used to serialize this
@@ -16,7 +16,7 @@ pub struct SignedEventMessage {
     #[serde(skip_serializing)]
     pub signatures: Vec<AttachedSignaturePrefix>,
     #[serde(skip_serializing)]
-    pub attachement: Option<Counter>,
+    pub attachement: Option<Attachement>,
 }
 
 impl Serialize for SignedEventMessage {
@@ -121,7 +121,7 @@ impl Ord for TimestampedSignedEventMessage {
 impl Eq for TimestampedSignedEventMessage {}
 
 impl SignedEventMessage {
-    pub fn new(message: &EventMessage, payload_type: PayloadType, sigs: Vec<AttachedSignaturePrefix>, attachement: Option<Counter>) -> Self {
+    pub fn new(message: &EventMessage, payload_type: PayloadType, sigs: Vec<AttachedSignaturePrefix>, attachement: Option<Attachement>) -> Self {
         Self {
             event_message: message.clone(),
             payload_type,

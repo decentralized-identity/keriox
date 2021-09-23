@@ -18,7 +18,7 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use serialization_info::*;
 
-use self::{attachement::Counter, payload_size::PayloadType, signed_event_message::SignedEventMessage};
+use self::{attachement::Attachement, payload_size::PayloadType, signed_event_message::SignedEventMessage};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct EventMessage {
@@ -120,7 +120,7 @@ impl EventMessage {
         self.serialization().encode(self)
     }
 
-    pub fn sign(&self, payload_type: PayloadType, sigs: Vec<AttachedSignaturePrefix>, attachement: Option<Counter>) -> SignedEventMessage {
+    pub fn sign(&self, payload_type: PayloadType, sigs: Vec<AttachedSignaturePrefix>, attachement: Option<Attachement>) -> SignedEventMessage {
         SignedEventMessage::new(self, payload_type, sigs, attachement)
     }
 }

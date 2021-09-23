@@ -1,4 +1,4 @@
-use super::{AttachedSignaturePrefix, EventMessage, SignedEventMessage, attachement::{self, AttachedSnDigest, Counter}, payload_size::PayloadType, signed_event_message::{SignedNontransferableReceipt, SignedTransferableReceipt}};
+use super::{AttachedSignaturePrefix, EventMessage, SignedEventMessage, attachement::{SorceSeal, Attachement}, payload_size::PayloadType, signed_event_message::{SignedNontransferableReceipt, SignedTransferableReceipt}};
 use crate::{derivation::attached_signature_code::b64_to_num, event::{event_data::EventData, sections::seal::EventSeal}, prefix::{BasicPrefix, SelfSigningPrefix, parse::{attached_signature, attached_sn, basic_prefix, event_seal, self_addressing_prefix, self_signing_prefix}}, state::IdentifierState};
 use nom::{
     branch::*,
@@ -23,7 +23,7 @@ pub struct DeserializedEvent<'a> {
 pub struct DeserializedSignedEvent<'a> {
     pub deserialized_event: DeserializedEvent<'a>,
     pub signatures: Vec<AttachedSignaturePrefix>,
-    pub attachement: Option<Counter>,
+    pub attachement: Option<Attachement>,
 }
 
 // FIXME: detect payload type
@@ -138,7 +138,7 @@ pub(crate) fn sig_count(s: &[u8]) -> nom::IResult<&[u8], u16> {
     Ok((rest, t.1))
 }
 
-pub(crate) fn counter(s: &[u8]) -> nom::IResult<&[u8], Counter> {
+pub(crate) fn counter(s: &[u8]) -> nom::IResult<&[u8], Attachement> {
     let (rest, sc) = tuple((
         map_parser(
             nom::bytes::complete::take(2u8),
@@ -156,10 +156,10 @@ pub(crate) fn counter(s: &[u8]) -> nom::IResult<&[u8], Counter> {
         sc.1 as usize ,
     )(rest)?;
     let attachements = attachement.into_iter().map(|(sn, digest)|
-        AttachedSnDigest::new(sn, digest)
+        SorceSeal::new(sn, digest)
     ).collect();
 
-    Ok((rest, Counter::SealSourceCouplets(attachements)))
+    Ok((rest, Attachement::SealSourceCouplets(attachements)))
 
 }
 

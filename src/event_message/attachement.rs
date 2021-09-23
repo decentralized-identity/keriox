@@ -7,14 +7,14 @@ use crate::{error::Error, prefix::{Prefix, SelfAddressingPrefix}};
 use super::{parse::counter, payload_size::{PayloadType, num_to_base_64}};
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
-pub enum Counter {
-    SealSourceCouplets(Vec<AttachedSnDigest>),
+pub enum Attachement {
+    SealSourceCouplets(Vec<SorceSeal>),
 }
 
-impl Counter {
+impl Attachement {
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         match self {
-            Counter::SealSourceCouplets(sources) => {
+            Attachement::SealSourceCouplets(sources) => {
                 let payload_type = PayloadType::MG;
                 let serialzied_sources = sources
                     .into_iter()
@@ -29,7 +29,7 @@ impl Counter {
     }
 }
 
-impl FromStr for Counter {
+impl FromStr for Attachement {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -48,12 +48,12 @@ impl FromStr for Counter {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct AttachedSnDigest {
+pub struct SorceSeal {
     sn: u64,
     digest: SelfAddressingPrefix,
 }
 
-impl AttachedSnDigest {
+impl SorceSeal {
     pub fn new(sn: u64, digest: SelfAddressingPrefix) -> Self {
         Self {sn, digest}
     }
@@ -74,13 +74,13 @@ impl AttachedSnDigest {
 #[test]
 fn test_parse_attachement() -> Result<(), Error> {
     let attached_str = "-GAC0AAAAAAAAAAAAAAAAAAAAAAQE3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII0AAAAAAAAAAAAAAAAAAAAAAQE3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII";
-    let attached_sn_dig: Counter = attached_str.parse()?;
+    let attached_sn_dig: Attachement = attached_str.parse()?;
     assert_eq!(
         attached_str,
         String::from_utf8(attached_sn_dig.serialize()?).unwrap()
     );
     match attached_sn_dig {
-        Counter::SealSourceCouplets(sources) => {
+        Attachement::SealSourceCouplets(sources) => {
             let s1 = sources[0].clone();
             let s2 = sources[1].clone();
             assert_eq!(s1.sn, 16);
