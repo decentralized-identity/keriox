@@ -4,7 +4,7 @@ use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing}, error::
             interaction::InteractionEvent,
             rotation::RotationEvent,
         },
-        sections::{threshold::SignatureThreshold, seal::LocationSeal, WitnessConfig},
+        sections::{threshold::SignatureThreshold, WitnessConfig},
         SerializationFormats,
     }, event::{
         event_data::{inception::InceptionEvent, EventData},
@@ -15,7 +15,6 @@ use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing}, error::
     }, keys::PublicKey, prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix}};
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
-use std::str::FromStr;
 
 pub struct EventMsgBuilder {
     event_type: EventType,
@@ -60,14 +59,6 @@ impl EventMsgBuilder {
         let pk = PublicKey::new(kp.public.to_bytes().to_vec());
         let npk = PublicKey::new(nkp.public.to_bytes().to_vec());
         let basic_pref = Basic::Ed25519.derive(pk);
-        let dummy_loc_seal = LocationSeal {
-            prefix: IdentifierPrefix::from_str("EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM")?,
-            sn: 2,
-            ilk: "ixn".into(),
-            prior_digest: SelfAddressingPrefix::from_str(
-                "E8JZAoTNZH3ULZ-i0dvaU6JR2nmwyYAfSVPzhzS6b5CM",
-            )?,
-        };
         Ok(EventMsgBuilder {
             event_type,
             prefix: IdentifierPrefix::default(),

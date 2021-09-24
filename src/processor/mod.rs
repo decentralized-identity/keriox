@@ -294,10 +294,10 @@ impl EventProcessor {
                 };
                 self.validate_seal(seal, &event.deserialized_event.raw)
             }
-            EventData::Drt(drt) => {
+            EventData::Drt(_drt) => {
                 let delegator = self
                     .compute_state(&event.deserialized_event.event_message.event.prefix)?
-                    .unwrap()
+                    .ok_or(Error::SemanticError("Missing state of delegated identifier".into()))?
                     .delegator
                     .ok_or(Error::SemanticError("Missing delegator".into()))?;
                 let (sn, dig) = match event.attachement.clone().ok_or(Error::SemanticError(

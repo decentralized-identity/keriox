@@ -28,9 +28,7 @@ impl Serialize for SignedEventMessage {
             let mut em = serializer.serialize_struct("EventMessage", 2)?;
             em.serialize_field("", &self.event_message)?;
             let str_sigs = &self.signatures.iter().fold(String::default(), |accum, sig| accum + &sig.to_str());
-            // TODO Why first signatures string char?
-            let code = self.payload_type.encode(self.signatures.len() as u16);
-                // .map_err(|e| serde::ser::Error::custom(&e.to_string()))?;
+            let code = self.payload_type.adjust_with_num(self.signatures.len() as u16);
             em.serialize_field("-" , &format!("{}{}", Box::leak(code.into_boxed_str()), str_sigs))?;
             em.end()
         // . else - we pack as it is for DB / CBOR purpose

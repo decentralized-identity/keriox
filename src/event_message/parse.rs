@@ -1,5 +1,5 @@
 use super::{AttachedSignaturePrefix, EventMessage, SignedEventMessage, attachement::{SorceSeal, Attachement}, payload_size::PayloadType, signed_event_message::{SignedNontransferableReceipt, SignedTransferableReceipt}};
-use crate::{derivation::attached_signature_code::b64_to_num, event::{event_data::EventData, sections::seal::EventSeal}, event_message::event_msg_builder::{EventMsgBuilder, EventType}, prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix, parse::{attached_signature, attached_sn, basic_prefix, event_seal, self_addressing_prefix, self_signing_prefix}}, state::IdentifierState};
+use crate::{derivation::attached_signature_code::b64_to_num, event::{event_data::EventData, sections::seal::EventSeal}, prefix::{BasicPrefix, SelfSigningPrefix, parse::{attached_signature, attached_sn, basic_prefix, event_seal, self_addressing_prefix, self_signing_prefix}}, state::IdentifierState};
 use nom::{
     branch::*,
     combinator::*,

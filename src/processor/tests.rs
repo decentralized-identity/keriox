@@ -2,7 +2,6 @@ use super::EventProcessor;
 use crate::derivation::self_addressing::SelfAddressing;
 use crate::event::sections::seal::EventSeal;
 use crate::event_message::parse::signed_message;
-use crate::prefix::Prefix;
 use crate::{database::sled::SledEventDatabase, error::Error};
 use crate::{
     event_message::{
@@ -220,10 +219,6 @@ fn test_process_delegated() -> Result<(), Error> {
     // Check if processed event is in db.
     let ixn_from_db = event_processor.get_event_at_sn(&bobs_pref, 1).unwrap().unwrap();
     assert_eq!(ixn_from_db.signed_event_message.event_message.serialize()?, raw_parsed(deserialized_ixn)?);
-
-    let dip = br#"{"v":"KERI10JSON000121_","i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"0","t":"dip","kt":"1","k":["DuK1x8ydpucu3480Jpd1XBfjnCwb3dZ3x5b1CJmuUphA"],"n":"EWWkjZkZDXF74O2bOQ4H5hu4nXDlKg2m4CBEBkUxibiU","bt":"0","b":[],"c":[],"a":[],"di":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI"}"#;
-    let delegatd_dig = SelfAddressing::Blake3_256.derive(dip);
-    println!("{}", delegatd_dig.to_str());
 
     // Process delegated inception event once again.
     event_processor.process(deserialized_dip.clone())?;
