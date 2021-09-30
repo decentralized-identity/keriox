@@ -263,7 +263,7 @@ impl EventProcessor {
             &event.deserialized_event.event_message,
             PayloadType::MA,
             event.signatures.clone(),
-            event.attachement.clone(),
+            event.attachment.clone(),
         );
         let id = &event.deserialized_event.event_message.event.prefix;
         // If delegated event, check its delegator seal.
@@ -275,10 +275,10 @@ impl EventProcessor {
             .clone()
         {
             EventData::Dip(dip) => {
-                let (sn, dig) = match event.attachement.clone().ok_or(Error::SemanticError(
+                let (sn, dig) = match event.attachment.clone().ok_or(Error::SemanticError(
                     "Missing source seal in delegating event".into(),
                 ))? {
-                    crate::event_message::attachement::Attachement::SealSourceCouplets(
+                    crate::event_message::attachment::Attachment::SealSourceCouplets(
                         ref source_seal_list,
                     ) => {
                         let ss = source_seal_list
@@ -300,10 +300,10 @@ impl EventProcessor {
                     .ok_or(Error::SemanticError("Missing state of delegated identifier".into()))?
                     .delegator
                     .ok_or(Error::SemanticError("Missing delegator".into()))?;
-                let (sn, dig) = match event.attachement.clone().ok_or(Error::SemanticError(
+                let (sn, dig) = match event.attachment.clone().ok_or(Error::SemanticError(
                     "Missing source seal in delegating event".into(),
                 ))? {
-                    crate::event_message::attachement::Attachement::SealSourceCouplets(
+                    crate::event_message::attachment::Attachment::SealSourceCouplets(
                         ref source_seal_list,
                     ) => {
                         let ss = source_seal_list

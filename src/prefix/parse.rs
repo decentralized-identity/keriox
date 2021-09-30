@@ -259,8 +259,8 @@ fn test_sn_parse() {
 
 #[test]
 fn test_seal_parse() {
-    let seal_attachement = r#"FABENlofRlu2VPul-tjDObk6bTia2deG6NMqeFmsXhAgFvA0AAAAAAAAAAAAAAAAAAAAAAAE_MT0wsz-_ju_DVK_SaMaZT9ZE7pP4auQYeo2PDaw9FI-AABAA0Q7bqPvenjWXo_YIikMBKOg-pghLKwBi1Plm0PEqdv67L1_c6dq9bll7OFnoLp0a74Nw1cBGdjIPcu-yAllHAw"#;
-    let seal = event_seal(seal_attachement.as_bytes()).unwrap().1;
+    let seal_attachment = r#"FABENlofRlu2VPul-tjDObk6bTia2deG6NMqeFmsXhAgFvA0AAAAAAAAAAAAAAAAAAAAAAAE_MT0wsz-_ju_DVK_SaMaZT9ZE7pP4auQYeo2PDaw9FI-AABAA0Q7bqPvenjWXo_YIikMBKOg-pghLKwBi1Plm0PEqdv67L1_c6dq9bll7OFnoLp0a74Nw1cBGdjIPcu-yAllHAw"#;
+    let seal = event_seal(seal_attachment.as_bytes()).unwrap().1;
     assert_eq!(
         seal.prefix,
         "ENlofRlu2VPul-tjDObk6bTia2deG6NMqeFmsXhAgFvA"

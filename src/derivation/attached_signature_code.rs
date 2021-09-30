@@ -1,6 +1,6 @@
 use super::{self_signing::SelfSigning, DerivationCode};
 use crate::{error::Error, event_message::payload_size::num_to_b64};
-use base64::{decode_config};
+use base64::decode_config;
 use core::str::FromStr;
 
 /// Attached Signature Derivation Codes

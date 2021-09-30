@@ -11,14 +11,14 @@ use crate::{
 use super::{parse::counter, payload_size::PayloadType};
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
-pub enum Attachement {
-    SealSourceCouplets(Vec<SorceSeal>),
+pub enum Attachment {
+    SealSourceCouplets(Vec<SourceSeal>),
 }
 
-impl Attachement {
+impl Attachment {
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         match self {
-            Attachement::SealSourceCouplets(sources) => {
+            Attachment::SealSourceCouplets(sources) => {
                 let payload_type = PayloadType::MG;
                 let serialzied_sources = sources
                     .into_iter()
@@ -36,7 +36,7 @@ impl Attachement {
     }
 }
 
-impl FromStr for Attachement {
+impl FromStr for Attachment {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -56,12 +56,12 @@ impl FromStr for Attachement {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SorceSeal {
+pub struct SourceSeal {
     pub sn: u64,
     pub digest: SelfAddressingPrefix,
 }
 
-impl SorceSeal {
+impl SourceSeal {
     pub fn new(sn: u64, digest: SelfAddressingPrefix) -> Self {
         Self { sn, digest }
     }
@@ -76,7 +76,7 @@ impl SorceSeal {
 fn pack_sn(sn: u64) -> String {
     let payload_type = PayloadType::OA;
     let sn_raw: Vec<u8> = sn.to_be_bytes().into();
-    // Calculate how many zeros are missing to achive expected base64 string
+    // Calculate how many zeros are missing to achieve expected base64 string
     // length. Master code size is expected padding size.
     let missing_zeros = payload_type.size() / 4 * 3 - payload_type.master_code_size(false) - sn_raw.len();
     let sn_vec: Vec<u8> = std::iter::repeat(0).take(missing_zeros).chain(sn_raw).collect();
@@ -90,13 +90,13 @@ fn pack_sn(sn: u64) -> String {
 #[test]
 fn test_parse_attachement() -> Result<(), Error> {
     let attached_str = "-GAC0AAAAAAAAAAAAAAAAAAAAAAQE3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII0AAAAAAAAAAAAAAAAAAAAAAQE3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII";
-    let attached_sn_dig: Attachement = attached_str.parse()?;
+    let attached_sn_dig: Attachment = attached_str.parse()?;
     assert_eq!(
         attached_str,
         String::from_utf8(attached_sn_dig.serialize()?).unwrap()
     );
     match attached_sn_dig {
-        Attachement::SealSourceCouplets(sources) => {
+        Attachment::SealSourceCouplets(sources) => {
             let s1 = sources[0].clone();
             let s2 = sources[1].clone();
             assert_eq!(s1.sn, 1);

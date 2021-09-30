@@ -1,4 +1,4 @@
-use super::{AttachedSignaturePrefix, EventMessage, SignedEventMessage, attachement::{SorceSeal, Attachement}, payload_size::PayloadType, signed_event_message::{SignedNontransferableReceipt, SignedTransferableReceipt}};
+use super::{AttachedSignaturePrefix, EventMessage, SignedEventMessage, attachment::{SourceSeal, Attachment}, payload_size::PayloadType, signed_event_message::{SignedNontransferableReceipt, SignedTransferableReceipt}};
 use crate::{derivation::attached_signature_code::b64_to_num, event::{event_data::EventData, sections::seal::EventSeal}, prefix::{BasicPrefix, SelfSigningPrefix, parse::{attached_signature, attached_sn, basic_prefix, event_seal, self_addressing_prefix, self_signing_prefix}}, state::IdentifierState};
 use nom::{
     branch::*,
@@ -23,13 +23,13 @@ pub struct DeserializedEvent<'a> {
 pub struct DeserializedSignedEvent<'a> {
     pub deserialized_event: DeserializedEvent<'a>,
     pub signatures: Vec<AttachedSignaturePrefix>,
-    pub attachement: Option<Attachement>,
+    pub attachment: Option<Attachment>,
 }
 
 // FIXME: detect payload type
 impl From<DeserializedSignedEvent<'_>> for SignedEventMessage {
     fn from(de: DeserializedSignedEvent) -> SignedEventMessage {
-        SignedEventMessage::new(&de.deserialized_event.event_message, PayloadType::MA, de.signatures, de.attachement)
+        SignedEventMessage::new(&de.deserialized_event.event_message, PayloadType::MA, de.signatures, de.attachment)
     }
 }
 
@@ -138,7 +138,7 @@ pub(crate) fn sig_count(s: &[u8]) -> nom::IResult<&[u8], u16> {
     Ok((rest, t.1))
 }
 
-pub(crate) fn counter(s: &[u8]) -> nom::IResult<&[u8], Attachement> {
+pub(crate) fn counter(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
     let (rest, sc) = tuple((
         map_parser(
             nom::bytes::complete::take(2u8),
@@ -151,15 +151,15 @@ pub(crate) fn counter(s: &[u8]) -> nom::IResult<&[u8], Attachement> {
         ,
     )(s)?;
 
-    let (rest, attachement) = count(
+    let (rest, attachment) = count(
         nom::sequence::tuple((attached_sn, self_addressing_prefix)),
         sc.1 as usize ,
     )(rest)?;
-    let attachements = attachement.into_iter().map(|(sn, digest)|
-        SorceSeal::new(sn, digest)
+    let attachments = attachment.into_iter().map(|(sn, digest)|
+        SourceSeal::new(sn, digest)
     ).collect();
 
-    Ok((rest, Attachement::SealSourceCouplets(attachements)))
+    Ok((rest, Attachment::SealSourceCouplets(attachments)))
 
 }
 
@@ -186,7 +186,7 @@ fn couplets(s: &[u8]) -> nom::IResult<&[u8], Vec<(BasicPrefix, SelfSigningPrefix
     )(rest)
 }
 
-fn transferable_receipt_attachement(
+fn transferable_receipt_attachment(
     s: &[u8],
 ) -> nom::IResult<&[u8], (EventSeal, Vec<AttachedSignaturePrefix>)> {
     tuple((event_seal, signatures))(s)
@@ -205,13 +205,13 @@ pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], Deserialized> {
                     }),
                 ))
             } else {
-                transferable_receipt_attachement(&rest[1..]).map(|(rest, attachement)| {
+                transferable_receipt_attachment(&rest[1..]).map(|(rest, attachment)| {
                     (
                         rest,
                         Deserialized::TransferableRct(SignedTransferableReceipt::new(
                             &e.event_message,
-                            attachement.0,
-                            attachement.1,
+                            attachment.0,
+                            attachment.1,
                         )),
                     )
                 })
@@ -226,7 +226,7 @@ pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], Deserialized> {
                 Deserialized::Event(DeserializedSignedEvent {
                     deserialized_event: e,
                     signatures,
-                    attachement: Some(source_seal)
+                    attachment: Some(source_seal)
                 }),
             ))
         },
@@ -238,7 +238,7 @@ pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], Deserialized> {
                 Deserialized::Event(DeserializedSignedEvent {
                     deserialized_event: e,
                     signatures,
-                    attachement: None,
+                    attachment: None,
                 }),
             ))
         }
