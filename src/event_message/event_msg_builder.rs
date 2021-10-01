@@ -1,6 +1,6 @@
 use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing}, error::Error, event::sections::key_config::nxt_commitment, event::{
         event_data::{
-            delegated::{DelegatedInceptionEvent, DelegatedRotationEvent},
+            delegated::{DelegatedInceptionEvent},
             interaction::InteractionEvent,
             rotation::RotationEvent,
         },
@@ -198,9 +198,7 @@ impl EventMsgBuilder {
                 Event {
                     prefix,
                     sn: self.sn,
-                    event_data: EventData::Drt(DelegatedRotationEvent {
-                        rotation_data,
-                    }),
+                    event_data: EventData::Drt(rotation_data),
                 }
                 .to_message(self.format)?
             }

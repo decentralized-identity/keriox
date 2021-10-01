@@ -18,12 +18,6 @@ pub struct DelegatedInceptionEvent {
     pub delegator: IdentifierPrefix,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct DelegatedRotationEvent {
-    #[serde(flatten)]
-    pub rotation_data: RotationEvent,
-}
-
 impl DelegatedInceptionEvent {
     /// Incept Self Addressing
     ///
@@ -58,10 +52,5 @@ impl EventSemantics for DelegatedInceptionEvent {
             delegator: Some(self.delegator.clone()),
             ..self.inception_data.apply_to(state)?
         })
-    }
-}
-impl EventSemantics for DelegatedRotationEvent {
-    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
-            self.rotation_data.apply_to(state)
     }
 }

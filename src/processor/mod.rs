@@ -165,7 +165,7 @@ impl EventProcessor {
                         EventData::Icp(icp) => icp.key_config,
                         EventData::Rot(rot) => rot.key_config,
                         EventData::Dip(dip) => dip.inception_data.key_config,
-                        EventData::Drt(drt) => drt.rotation_data.key_config,
+                        EventData::Drt(drt) => drt.key_config,
                         // the receipt has a binding but it's NOT an establishment event
                         _ => Err(Error::SemanticError("Receipt binding incorrect".into()))?,
                     },
@@ -191,7 +191,7 @@ impl EventProcessor {
             let data = match event.signed_event_message.event_message.event.event_data {
                 EventData::Rot(rot) => rot.data,
                 EventData::Ixn(ixn) => ixn.data,
-                EventData::Drt(drt) => drt.rotation_data.data,
+                EventData::Drt(drt) => drt.data,
                 _ => return Err(Error::SemanticError("Improper event type".to_string())),
             };
 

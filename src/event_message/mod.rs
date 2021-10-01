@@ -171,7 +171,6 @@ impl EventSemantics for EventMessage {
                         "Applying delegated rotation to non-delegated state.".into(),
                     ))
                 } else if drt
-                    .rotation_data
                     .previous_event_hash
                     .verify_binding(&state.last)
                 {

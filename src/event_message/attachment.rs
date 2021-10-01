@@ -50,7 +50,7 @@ impl FromStr for Attachment {
                     Err(Error::SemanticError("Can't parse counter".into()))
                 }
             }
-            _ => todo!(),
+            _ => Err(Error::DeserializeError("Unknown prefix code".into())),
         }
     }
 }
