@@ -1,5 +1,5 @@
 use super::{DummyEvent, EventData};
-use super::{InceptionEvent, RotationEvent};
+use super::InceptionEvent;
 use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
