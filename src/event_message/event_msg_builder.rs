@@ -74,8 +74,11 @@ impl EventMsgBuilder {
         })
     }
 
-    pub fn with_prefix(self, prefix: IdentifierPrefix) -> Self {
-        EventMsgBuilder { prefix, ..self }
+    pub fn with_prefix(self, prefix: &IdentifierPrefix) -> Self {
+        EventMsgBuilder {
+            prefix: prefix.clone(),
+            ..self
+        }
     }
 
     pub fn with_keys(self, keys: Vec<BasicPrefix>) -> Self {
@@ -89,8 +92,11 @@ impl EventMsgBuilder {
     pub fn with_sn(self, sn: u64) -> Self {
         EventMsgBuilder { sn, ..self }
     }
-    pub fn with_previous_event(self, prev_event: SelfAddressingPrefix) -> Self {
-        EventMsgBuilder { prev_event, ..self }
+    pub fn with_previous_event(self, prev_event: &SelfAddressingPrefix) -> Self {
+        EventMsgBuilder {
+            prev_event: prev_event.clone(),
+            ..self
+        }
     }
 
     pub fn with_seal(mut self, seals: Vec<Seal>) -> Self {
@@ -98,16 +104,16 @@ impl EventMsgBuilder {
         EventMsgBuilder { ..self }
     }
 
-    pub fn with_delegator(self, delegator: IdentifierPrefix) -> Self {
+    pub fn with_delegator(self, delegator: &IdentifierPrefix) -> Self {
         EventMsgBuilder {
-            delegator,
+            delegator: delegator.clone(),
             ..self
         }
     }
 
-    pub fn with_threshold(self, threshold: SignatureThreshold) -> Self {
+    pub fn with_threshold(self, threshold: &SignatureThreshold) -> Self {
         EventMsgBuilder {
-            key_threshold: threshold,
+            key_threshold: threshold.clone(),
             ..self
         }
     }
