@@ -67,8 +67,8 @@ fn test_update_identifier_state(
     // Build event msg of given type.
     let event_msg = EventMsgBuilder::new(event_type.clone())?
         .with_sn(state_data.sn)
-        .with_previous_event(state_data.prev_event_hash)
-        .with_prefix(state_data.prefix.clone())
+        .with_previous_event(&state_data.prev_event_hash)
+        .with_prefix(&state_data.prefix)
         .with_keys(vec![current_key_pref.clone()])
         .with_next_keys(vec![next_key_prefix])
         .build()?;
@@ -85,7 +85,7 @@ fn test_update_identifier_state(
     };
 
     // Attach sign to event message.
-    let signed_event = event_msg.sign(PayloadType::MA, vec![attached_sig.clone()]);
+    let signed_event = event_msg.sign(PayloadType::MA, vec![attached_sig.clone()], None);
 
     // Apply event to current IdentifierState.
     let new_state = state_data.state.apply(&signed_event)?;

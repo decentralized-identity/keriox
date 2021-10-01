@@ -1,10 +1,10 @@
 use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing}, error::Error, event::sections::key_config::nxt_commitment, event::{
         event_data::{
-            delegated::{DelegatedInceptionEvent, DelegatedRotationEvent},
+            delegated::{DelegatedInceptionEvent},
             interaction::InteractionEvent,
             rotation::RotationEvent,
         },
-        sections::{threshold::SignatureThreshold, seal::LocationSeal, WitnessConfig},
+        sections::{threshold::SignatureThreshold, WitnessConfig},
         SerializationFormats,
     }, event::{
         event_data::{inception::InceptionEvent, EventData},
@@ -15,7 +15,6 @@ use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing}, error::
     }, keys::PublicKey, prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix}};
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
-use std::str::FromStr;
 
 pub struct EventMsgBuilder {
     event_type: EventType,
@@ -26,7 +25,7 @@ pub struct EventMsgBuilder {
     next_keys: Vec<BasicPrefix>,
     prev_event: SelfAddressingPrefix,
     data: Vec<Seal>,
-    delegating_seal: LocationSeal,
+    delegator: IdentifierPrefix,
     format: SerializationFormats,
     derivation: SelfAddressing,
 }
@@ -60,14 +59,6 @@ impl EventMsgBuilder {
         let pk = PublicKey::new(kp.public.to_bytes().to_vec());
         let npk = PublicKey::new(nkp.public.to_bytes().to_vec());
         let basic_pref = Basic::Ed25519.derive(pk);
-        let dummy_loc_seal = LocationSeal {
-            prefix: IdentifierPrefix::from_str("EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM")?,
-            sn: 2,
-            ilk: "ixn".into(),
-            prior_digest: SelfAddressingPrefix::from_str(
-                "E8JZAoTNZH3ULZ-i0dvaU6JR2nmwyYAfSVPzhzS6b5CM",
-            )?,
-        };
         Ok(EventMsgBuilder {
             event_type,
             prefix: IdentifierPrefix::default(),
@@ -77,14 +68,17 @@ impl EventMsgBuilder {
             sn: 1,
             prev_event: SelfAddressing::Blake3_256.derive(&[0u8; 32]),
             data: vec![],
-            delegating_seal: dummy_loc_seal,
+            delegator: IdentifierPrefix::default(),
             format: SerializationFormats::JSON,
             derivation: SelfAddressing::Blake3_256,
         })
     }
 
-    pub fn with_prefix(self, prefix: IdentifierPrefix) -> Self {
-        EventMsgBuilder { prefix, ..self }
+    pub fn with_prefix(self, prefix: &IdentifierPrefix) -> Self {
+        EventMsgBuilder {
+            prefix: prefix.clone(),
+            ..self
+        }
     }
 
     pub fn with_keys(self, keys: Vec<BasicPrefix>) -> Self {
@@ -98,8 +92,11 @@ impl EventMsgBuilder {
     pub fn with_sn(self, sn: u64) -> Self {
         EventMsgBuilder { sn, ..self }
     }
-    pub fn with_previous_event(self, prev_event: SelfAddressingPrefix) -> Self {
-        EventMsgBuilder { prev_event, ..self }
+    pub fn with_previous_event(self, prev_event: &SelfAddressingPrefix) -> Self {
+        EventMsgBuilder {
+            prev_event: prev_event.clone(),
+            ..self
+        }
     }
 
     pub fn with_seal(mut self, seals: Vec<Seal>) -> Self {
@@ -107,16 +104,16 @@ impl EventMsgBuilder {
         EventMsgBuilder { ..self }
     }
 
-    pub fn with_delegating_seal(self, seal: LocationSeal) -> Self {
+    pub fn with_delegator(self, delegator: &IdentifierPrefix) -> Self {
         EventMsgBuilder {
-            delegating_seal: seal,
+            delegator: delegator.clone(),
             ..self
         }
     }
 
-    pub fn with_threshold(self, threshold: SignatureThreshold) -> Self {
+    pub fn with_threshold(self, threshold: &SignatureThreshold) -> Self {
         EventMsgBuilder {
-            key_threshold: threshold,
+            key_threshold: threshold.clone(),
             ..self
         }
     }
@@ -187,7 +184,7 @@ impl EventMsgBuilder {
                 };
                 DelegatedInceptionEvent {
                     inception_data: icp_data,
-                    seal: self.delegating_seal,
+                    delegator: self.delegator,
                 }
                 .incept_self_addressing(self.derivation, self.format)?
             }
@@ -201,10 +198,7 @@ impl EventMsgBuilder {
                 Event {
                     prefix,
                     sn: self.sn,
-                    event_data: EventData::Drt(DelegatedRotationEvent {
-                        rotation_data,
-                        seal: self.delegating_seal,
-                    }),
+                    event_data: EventData::Drt(rotation_data),
                 }
                 .to_message(self.format)?
             }

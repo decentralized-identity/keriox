@@ -2,7 +2,7 @@
 use crate::{derivation::{
         attached_signature_code::b64_to_num, basic::Basic, self_addressing::SelfAddressing,
         self_signing::SelfSigning, DerivationCode,
-    }, error::Error, event::sections::seal::EventSeal, keys::PublicKey, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix}};
+    }, event::sections::seal::EventSeal, keys::PublicKey, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix}};
 use base64::URL_SAFE;
 use nom::{bytes::complete::take, error::ErrorKind};
 
@@ -139,7 +139,7 @@ pub fn self_signing_prefix(s: &[u8]) -> nom::IResult<&[u8], SelfSigningPrefix> {
     Ok((extra, code.derive(sig)))
 }
 
-fn attached_sn(s: &[u8]) -> nom::IResult<&[u8], u64> {
+pub fn attached_sn(s: &[u8]) -> nom::IResult<&[u8], u64> {
     let (more, type_c) = take(2u8)(s)?;
 
     const a: &'static [u8] = "0A".as_bytes();
@@ -147,21 +147,19 @@ fn attached_sn(s: &[u8]) -> nom::IResult<&[u8], u64> {
     match type_c {
         a => {
             let (rest, parsed_sn) = take(22u8)(more)?;
-
-            let sn =
-                base64_to_num(parsed_sn).map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
+            
+            let sn = {
+                let b64decode = base64::decode_config(parsed_sn, URL_SAFE)
+                    .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
+                let mut sn_array: [u8; 8] = [0; 8];
+                sn_array.copy_from_slice(&b64decode[8..]);
+                u64::from_be_bytes(sn_array)
+            };
 
             Ok((rest, sn))
         }
         _ => Err(nom::Err::Error((type_c, ErrorKind::IsNot))),
     }
-}
-
-fn base64_to_num(b64: &[u8]) -> Result<u64, Error> {
-    let b64decode = base64::decode_config(b64, URL_SAFE)?;
-    let mut sn_array: [u8; 8] = [0; 8];
-    sn_array.copy_from_slice(&b64decode[8..]);
-    Ok(u64::from_be_bytes(sn_array))
 }
 
 /// extracts the Event seal
@@ -261,8 +259,8 @@ fn test_sn_parse() {
 
 #[test]
 fn test_seal_parse() {
-    let seal_attachement = r#"FABENlofRlu2VPul-tjDObk6bTia2deG6NMqeFmsXhAgFvA0AAAAAAAAAAAAAAAAAAAAAAAE_MT0wsz-_ju_DVK_SaMaZT9ZE7pP4auQYeo2PDaw9FI-AABAA0Q7bqPvenjWXo_YIikMBKOg-pghLKwBi1Plm0PEqdv67L1_c6dq9bll7OFnoLp0a74Nw1cBGdjIPcu-yAllHAw"#;
-    let seal = event_seal(seal_attachement.as_bytes()).unwrap().1;
+    let seal_attachment = r#"FABENlofRlu2VPul-tjDObk6bTia2deG6NMqeFmsXhAgFvA0AAAAAAAAAAAAAAAAAAAAAAAE_MT0wsz-_ju_DVK_SaMaZT9ZE7pP4auQYeo2PDaw9FI-AABAA0Q7bqPvenjWXo_YIikMBKOg-pghLKwBi1Plm0PEqdv67L1_c6dq9bll7OFnoLp0a74Nw1cBGdjIPcu-yAllHAw"#;
+    let seal = event_seal(seal_attachment.as_bytes()).unwrap().1;
     assert_eq!(
         seal.prefix,
         "ENlofRlu2VPul-tjDObk6bTia2deG6NMqeFmsXhAgFvA"

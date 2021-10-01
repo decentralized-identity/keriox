@@ -17,15 +17,9 @@ use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivat
             InteractionEvent,
         },
         sections::seal::EventSeal
-    }, event_message::{
-        SignedNontransferableReceipt,
-        parse::signed_message,
-        payload_size::PayloadType
-    }, event_message::{
+    }, event_message::{parse::signed_message, payload_size::PayloadType, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt}}, event_message::{
         event_msg_builder::{EventMsgBuilder, EventType},
         parse::{signed_event_stream, Deserialized},
-        SignedEventMessage,
-        SignedTransferableReceipt,
     }, keys::PublicKey, prefix::AttachedSignaturePrefix, prefix::{
         BasicPrefix,
         IdentifierPrefix,
@@ -116,7 +110,7 @@ impl<K: KeyManager> Keri<K> {
 
     pub fn incept(&mut self) -> Result<SignedEventMessage, Error> {
         let icp = EventMsgBuilder::new(EventType::Inception)?
-            .with_prefix(self.prefix.clone())
+            .with_prefix(&self.prefix)
             .with_keys(vec![Basic::Ed25519.derive(self.key_manager.borrow().public_key())])
             .with_next_keys(vec![
                 Basic::Ed25519.derive(self.key_manager.borrow().next_public_key())
@@ -127,7 +121,7 @@ impl<K: KeyManager> Keri<K> {
             SelfSigning::Ed25519Sha512,
             self.key_manager.borrow().sign(&icp.serialize()?)?,
             0,
-        )]);
+        )], None);
 
         self.processor
             .process(signed_message(&signed.serialize()?).unwrap().1)?;
@@ -155,7 +149,7 @@ impl<K: KeyManager> Keri<K> {
             // Signing key must be first
             keys.insert(0, Basic::Ed25519.derive(self.key_manager.borrow().public_key()));
             let icp = EventMsgBuilder::new(EventType::Inception)?
-                .with_prefix(self.prefix.clone())
+                .with_prefix(&self.prefix)
                 .with_keys(keys)
                 .with_next_keys(vec!(Basic::Ed25519.derive(self.key_manager.borrow().next_public_key())))
                 .build()?;
@@ -166,7 +160,7 @@ impl<K: KeyManager> Keri<K> {
                     self.key_manager.borrow().sign(&icp.serialize()?)?,
                     0
                 )
-            ));
+            ), None);
             let serialized = signed.serialize()?;
             self.processor.process(signed_message(&serialized).unwrap().1)?;
             self.prefix = icp.event.prefix;
@@ -206,7 +200,7 @@ impl<K: KeyManager> Keri<K> {
             signature,
             0 // TODO: what is this?
         );
-        let signed = SignedEventMessage::new(&event, PayloadType::OC, vec!(asp));
+        let signed = SignedEventMessage::new(&event, PayloadType::OC, vec!(asp), None);
         self.processor.db.add_kel_finalized_event(signed.clone(), &self.prefix)?;
         Ok(signed)
     }
@@ -219,7 +213,7 @@ impl<K: KeyManager> Keri<K> {
             SelfSigning::Ed25519Sha512,
             self.key_manager.borrow().sign(&rot.serialize()?)?,
             0,
-        )]);
+        )], None);
 
         self.processor
             .process(signed_message(&rot.serialize()?).unwrap().1)?;
@@ -233,9 +227,9 @@ impl<K: KeyManager> Keri<K> {
             .compute_state(&self.prefix)?
             .ok_or(Error::SemanticError("There is no state".into()))?;
         EventMsgBuilder::new(EventType::Rotation)?
-            .with_prefix(self.prefix.clone())
+            .with_prefix(&self.prefix)
             .with_sn(state.sn + 1)
-            .with_previous_event(SelfAddressing::Blake3_256.derive(&state.last))
+            .with_previous_event(&SelfAddressing::Blake3_256.derive(&state.last))
             .with_keys(vec![Basic::Ed25519.derive(self.key_manager.borrow().public_key())])
             .with_next_keys(vec![
                 Basic::Ed25519.derive(self.key_manager.borrow().next_public_key())
@@ -258,9 +252,9 @@ impl<K: KeyManager> Keri<K> {
             .ok_or(Error::SemanticError("There is no state".into()))?;
 
         let ev = EventMsgBuilder::new(EventType::Interaction)?
-            .with_prefix(self.prefix.clone())
+            .with_prefix(&self.prefix)
             .with_sn(state.sn + 1)
-            .with_previous_event(SelfAddressing::Blake3_256.derive(&state.last))
+            .with_previous_event(&SelfAddressing::Blake3_256.derive(&state.last))
             .with_seal(seal_list)
             .build()?;
 
@@ -268,7 +262,7 @@ impl<K: KeyManager> Keri<K> {
             SelfSigning::Ed25519Sha512,
             self.key_manager.borrow().sign(&ev.serialize()?)?,
             0,
-        )]);
+        )], None);
 
         self.processor
             .process(signed_message(&ixn.serialize()?).unwrap().1)?;

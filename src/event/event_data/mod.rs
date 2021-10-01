@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
 
 pub use self::{
-    delegated::{DelegatedInceptionEvent, DelegatedRotationEvent},
+    delegated::DelegatedInceptionEvent,
     inception::InceptionEvent,
     interaction::InteractionEvent,
     receipt::Receipt,
@@ -31,7 +31,7 @@ pub enum EventData {
     Rot(RotationEvent),
     Ixn(InteractionEvent),
     Dip(DelegatedInceptionEvent),
-    Drt(DelegatedRotationEvent),
+    Drt(RotationEvent),
     Rct(Receipt),
 }
 
