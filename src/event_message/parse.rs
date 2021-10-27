@@ -1,17 +1,38 @@
-use super::{AttachedSignaturePrefix, EventMessage, SignedEventMessage, attachment::{SourceSeal, Attachment}, payload_size::PayloadType, signed_event_message::{SignedNontransferableReceipt, SignedTransferableReceipt}};
-use crate::{derivation::attached_signature_code::b64_to_num, event::{event_data::EventData, sections::seal::EventSeal}, prefix::{BasicPrefix, SelfSigningPrefix, parse::{attached_signature, attached_sn, basic_prefix, event_seal, self_addressing_prefix, self_signing_prefix}}, state::IdentifierState};
-use nom::{
-    branch::*,
-    combinator::*,
-    error::ErrorKind,
-    multi::*,
-    sequence::*,
-};
-use rmp_serde as serde_mgpk;
-use serde::Deserialize;
-use std::io::Cursor;
 #[cfg(feature = "async")]
 use super::serialization_info::SerializationInfo;
+use super::{
+    attachment::{Attachment, SourceSeal},
+    payload_size::PayloadType,
+    signed_event_message::{SignedNontransferableReceipt, SignedTransferableReceipt},
+    AttachedSignaturePrefix, EventMessage, SignedEventMessage,
+};
+use crate::{
+    derivation::{
+        attached_signature_code::b64_to_num, basic::Basic, self_addressing::SelfAddressing,
+        self_signing::SelfSigning,
+    },
+    event::{
+        event_data::{EventData, Receipt},
+        sections::seal::EventSeal,
+        Event, SerializationFormats,
+    },
+    keys::{PrivateKey, PublicKey},
+    prefix::{
+        parse::{
+            attached_signature, attached_sn, basic_prefix, event_seal, self_addressing_prefix,
+            self_signing_prefix,
+        },
+        BasicPrefix, SelfSigningPrefix,
+    },
+    state::IdentifierState,
+};
+use nom::{
+    branch::*, bytes::complete::take, combinator::*, error::ErrorKind, multi::*, sequence::*,
+};
+use rand::rngs::OsRng;
+use rmp_serde as serde_mgpk;
+use serde::Deserialize;
+use std::{convert::TryFrom, io::Cursor};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DeserializedEvent<'a> {
@@ -29,7 +50,12 @@ pub struct DeserializedSignedEvent<'a> {
 // FIXME: detect payload type
 impl From<DeserializedSignedEvent<'_>> for SignedEventMessage {
     fn from(de: DeserializedSignedEvent) -> SignedEventMessage {
-        SignedEventMessage::new(&de.deserialized_event.event_message, PayloadType::MA, de.signatures, de.attachment)
+        SignedEventMessage::new(
+            &de.deserialized_event.event_message,
+            PayloadType::MA,
+            de.signatures,
+            de.attachment,
+        )
     }
 }
 
@@ -94,7 +120,7 @@ pub fn message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], DeserializedEvent> {
 fn json_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
     match serde_json::from_slice(data) {
         Ok(vi) => Ok((data, vi)),
-        _ => Err(nom::Err::Error((data, ErrorKind::IsNot)))
+        _ => Err(nom::Err::Error((data, ErrorKind::IsNot))),
     }
 }
 
@@ -103,7 +129,7 @@ fn json_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
 fn cbor_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
     match serde_cbor::from_slice(data) {
         Ok(vi) => Ok((data, vi)),
-        _ => Err(nom::Err::Error((data, ErrorKind::IsNot)))
+        _ => Err(nom::Err::Error((data, ErrorKind::IsNot))),
     }
 }
 
@@ -112,7 +138,7 @@ fn cbor_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
 fn mgpk_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
     match serde_mgpk::from_slice(data) {
         Ok(vi) => Ok((data, vi)),
-        _ => Err(nom::Err::Error((data, ErrorKind::IsNot)))
+        _ => Err(nom::Err::Error((data, ErrorKind::IsNot))),
     }
 }
 
@@ -138,48 +164,48 @@ pub(crate) fn sig_count(s: &[u8]) -> nom::IResult<&[u8], u16> {
     Ok((rest, t.1))
 }
 
+/// returst attached source seals
 pub(crate) fn counter(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
     let (rest, sc) = tuple((
         map_parser(
             nom::bytes::complete::take(2u8),
-                tuple((
+            tuple((
                 nom::bytes::complete::tag("-"),
                 nom::bytes::complete::tag("G"),
-            ))),
-            b64_count,
-        )
-        ,
-    )(s)?;
+            )),
+        ),
+        b64_count,
+    ))(s)?;
 
     let (rest, attachment) = count(
         nom::sequence::tuple((attached_sn, self_addressing_prefix)),
-        sc.1 as usize ,
+        sc.1 as usize,
     )(rest)?;
-    let attachments = attachment.into_iter().map(|(sn, digest)|
-        SourceSeal::new(sn, digest)
-    ).collect();
+    let attachments = attachment
+        .into_iter()
+        .map(|(sn, digest)| SourceSeal::new(sn, digest))
+        .collect();
 
     Ok((rest, Attachment::SealSourceCouplets(attachments)))
-
 }
 
 pub(crate) fn b64_count(s: &[u8]) -> nom::IResult<&[u8], u16> {
     let (rest, t) = map(nom::bytes::complete::take(2u8), |b64_count| {
-            b64_to_num(b64_count).map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))
-        })
-    (s)?;
+        b64_to_num(b64_count).map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))
+    })(s)?;
 
     Ok((rest, t?))
 }
 
 /// called on an attached signature stream starting with a sig count
 fn signatures(s: &[u8]) -> nom::IResult<&[u8], Vec<AttachedSignaturePrefix>> {
-    let (rest, sc) = sig_count(s)?;
+    let (rest, sc) = b64_count(s)?;
     count(attached_signature, sc as usize)(rest)
 }
 
 fn couplets(s: &[u8]) -> nom::IResult<&[u8], Vec<(BasicPrefix, SelfSigningPrefix)>> {
-    let (rest, sc) = sig_count(s)?;
+    let (rest, sc) = b64_count(s)?;
+
     count(
         nom::sequence::tuple((basic_prefix, self_signing_prefix)),
         sc as usize,
@@ -196,27 +222,51 @@ pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], Deserialized> {
     let (rest, e) = message(s)?;
     match e.event_message.event.event_data {
         EventData::Rct(_) => {
-            if let Ok((rest, couplets)) = couplets(rest) {
-                Ok((
-                    rest,
-                    Deserialized::NontransferableRct(SignedNontransferableReceipt {
-                        body: e.event_message,
-                        couplets,
-                    }),
-                ))
-            } else {
-                transferable_receipt_attachment(&rest[1..]).map(|(rest, attachment)| {
-                    (
+            let (rest, type_c) = take(2u8)(rest)?;
+
+            let code: PayloadType = PayloadType::try_from(
+                std::str::from_utf8(&type_c.to_vec())
+                    .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?,
+            )
+            .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
+
+            match code {
+                PayloadType::MC => {
+                    // Nontrans receipt
+                    // Parse couplets
+                    let (rest, couplets) = couplets(rest)?;
+                    Ok((
                         rest,
-                        Deserialized::TransferableRct(SignedTransferableReceipt::new(
-                            &e.event_message,
-                            attachment.0,
-                            attachment.1,
-                        )),
-                    )
-                })
+                        Deserialized::NontransferableRct(SignedNontransferableReceipt {
+                            body: e.event_message,
+                            couplets,
+                        }),
+                    ))
+                }
+                PayloadType::MB => {
+                    // witness receipt
+                    // parse witness signatures
+                    let (rest, witness_sigs) = signatures(s)?;
+                    // TODO Missing witness receipt struct
+                    todo!()
+                }
+                PayloadType::MF => {
+                    // Attached seal, so transferable receipt
+                    // TODO wont work bcause of seal parser
+                    transferable_receipt_attachment(&rest[..]).map(|(rest, attachment)| {
+                        (
+                            rest,
+                            Deserialized::TransferableRct(SignedTransferableReceipt::new(
+                                &e.event_message,
+                                attachment.0,
+                                attachment.1,
+                            )),
+                        )
+                    })
+                }
+                _ => todo!(),
             }
-        },
+        }
         EventData::Dip(_) | EventData::Drt(_) => {
             let (rest, signatures) = signatures(rest)?;
             let (rest, source_seal) = counter(rest)?;
@@ -226,10 +276,10 @@ pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], Deserialized> {
                 Deserialized::Event(DeserializedSignedEvent {
                     deserialized_event: e,
                     signatures,
-                    attachment: Some(source_seal)
+                    attachment: Some(source_seal),
                 }),
             ))
-        },
+        }
         _ => {
             let (extra, signatures) = signatures(rest)?;
 
@@ -365,7 +415,11 @@ fn test_stream1() {
         Deserialized::Event(signed_event) => {
             assert_eq!(
                 signed_event.deserialized_event.raw.len(),
-                signed_event.deserialized_event.event_message.serialization_info.size
+                signed_event
+                    .deserialized_event
+                    .event_message
+                    .serialization_info
+                    .size
             );
 
             assert!(signed_message(stream).is_ok());
@@ -386,14 +440,18 @@ fn test_stream2() {
     let stream = br#"{"v":"KERI10JSON00014b_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"0","t":"icp","kt":"2","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"E9izzBkXX76sqt0N-tfLzJeRqj0W56p4pDQ_ZqNCDpyw","bt":"0","b":[],"c":[],"a":[]}-AADAAhcaP-l0DkIKlJ87iIVcDx-m0iKPdSArEu63b-2cSEn9wXVGNpWw9nfwxodQ9G8J3q_Pm-AWfDwZGD9fobWuHBAAB6mz7zP0xFNBEBfSKG4mjpPbeOXktaIyX8mfsEa1A3Psf7eKxSrJ5Woj3iUB2AhhLg412-zkk795qxsK2xfdxBAACj5wdW-EyUJNgW0LHePQcSFNxW3ZyPregL4H2FoOrsPxLa3MZx6xYTh6i7YRMGY50ezEjV81hkI1Yce75M_bPCQ"#;
     assert!(signed_message(stream).is_ok());
     assert!(signed_event_stream_validate(stream).is_ok());
-    
+
     let parsed = signed_message(stream).unwrap().1;
 
     match parsed {
         Deserialized::Event(signed_event) => {
             assert_eq!(
                 signed_event.deserialized_event.raw.len(),
-                signed_event.deserialized_event.event_message.serialization_info.size
+                signed_event
+                    .deserialized_event
+                    .event_message
+                    .serialization_info
+                    .size
             );
 
             assert!(signed_message(stream).is_ok());
@@ -413,6 +471,19 @@ fn test_signed_trans_receipt() {
     let trans_receipt_event = r#"{"v":"KERI10JSON000091_","i":"E7WIS0e4Tx1PcQW5Um5s3Mb8uPSzsyPODhByXzgvmAdQ","s":"0","t":"rct","d":"ErDNDBG7x2xYAH2i4AOnhVe44RS3lC1mRRdkyolFFHJk"}-FABENlofRlu2VPul-tjDObk6bTia2deG6NMqeFmsXhAgFvA0AAAAAAAAAAAAAAAAAAAAAAAE_MT0wsz-_ju_DVK_SaMaZT9ZE7pP4auQYeo2PDaw9FI-AABAA0Q7bqPvenjWXo_YIikMBKOg-pghLKwBi1Plm0PEqdv67L1_c6dq9bll7OFnoLp0a74Nw1cBGdjIPcu-yAllHAw"#;
     let msg = signed_message(trans_receipt_event.as_bytes());
     assert!(msg.is_ok());
+
+    // Taken from keripy/core/test_witness.py
+    let nontrans_rcp = r#"{"v":"KERI10JSON000091_","i":"EpU9D_puIW_QhgOf3WKUy-gXQnXeTQcJCO_Igcxi1YBg","s":"0","t":"rct","d":"EIt0xQQf-o-9E1B9VTDHiicQzVWk1CptvnewcnuhSd0M"}-CABB389hKezugU2LFKiFVbitoHAxXqJh6HQ8Rn9tH7fxd680BCZrTPLvG7sNaxtV8ZGdIHABFHCZ9FlnG6b4J6a9GcyzJIJOjuGNphW2zyC_WWU6CGMG7V52UeJxPqLpaYdP7Cg"#;
+    // let nontrans_rcp = r#"{"v":"KERI10JSON000091_","i":"EpU9D_puIW_QhgOf3WKUy-gXQnXeTQcJCO_Igcxi1YBg","s":"0","t":"rct","d":"EIt0xQQf-o-9E1B9VTDHiicQzVWk1CptvnewcnuhSd0M"}-CABBljDbmdNfb63KOpGV4mmPKwyyp3OzDsRzpNrdL1BRQts0BM4bMcLjcDtD0fmLOGDx2oxBloc2FujbyllA7GuPLm-RQbyPPQr70_Y7DXzlWgs8gaYotUATeR-dj1ru9qFwADA"#;
+    let msg = signed_message(nontrans_rcp.as_bytes());
+    println!("{:?}", msg);
+    assert!(msg.is_ok());
+
+    // witness receipt not implemented yet
+    // let witness_receipts = r#"{"v":"KERI10JSON000091_","i":"EpU9D_puIW_QhgOf3WKUy-gXQnXeTQcJCO_Igcxi1YBg","s":"0","t":"rct","d":"EIt0xQQf-o-9E1B9VTDHiicQzVWk1CptvnewcnuhSd0M"}-BADAACZrTPLvG7sNaxtV8ZGdIHABFHCZ9FlnG6b4J6a9GcyzJIJOjuGNphW2zyC_WWU6CGMG7V52UeJxPqLpaYdP7CgAB8npsG58rX1ex73gaGe-jvRnw58RQGsDLzoSXaGn-kHRRNu6Kb44zXDtMnx-_8CjnHqskvDbz6pbEbed3JTOnCQACM4bMcLjcDtD0fmLOGDx2oxBloc2FujbyllA7GuPLm-RQbyPPQr70_Y7DXzlWgs8gaYotUATeR-dj1ru9qFwADA"#;
+    // let msg = signed_message(witness_receipts.as_bytes());
+    // println!("{:?}", msg);
+    // assert!(msg.is_ok());
 }
 
 #[test]
@@ -431,4 +502,39 @@ fn test_version_parse() {
     let json = br#""KERI10JSON00014b_""#;
     let json_result = version(json);
     assert!(json_result.is_ok());
+}
+
+#[test]
+fn tete() {
+    let kp = ed25519_dalek::Keypair::generate(&mut OsRng {});
+    let (vk, sk) = (kp.public, kp.secret);
+    let vk = PublicKey::new(vk.to_bytes().to_vec());
+    let sk = PrivateKey::new(sk.to_bytes().to_vec());
+    let keypair = (sk, vk.clone());
+    let prefix = Basic::Ed25519.derive(vk);
+
+    let stream = r#"{"v":"KERI10JSON00011c_","i":"EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM","s":"0","t":"icp","kt":"1","k":["DaU6JR2nmwyZ-i0d8JZAoTNZH3ULvYAfSVPzhzS6b5CM"],"n":"EZ-i0d8JZAoTNZH3ULvaU6JR2nmwyYAfSVPzhzS6b5CM","bt":"1","b":["DTNZH3ULvaU6JR2nmwyYAfSVPzhzS6bZ-i0d8JZAo5CM"],"c":["EO"],"a":[]}"#.as_bytes();
+    let (_rest, ev) = message(&stream).unwrap();
+    // if let Deserialized::Event(ev) = message {
+    let signature = keypair.0.sign_ed(&stream).unwrap();
+    let rcp = Event {
+        prefix: ev.event_message.event.prefix,
+        sn: ev.event_message.event.sn,
+        event_data: EventData::Rct(Receipt {
+            receipted_event_digest: SelfAddressing::Blake3_256.derive(&stream),
+        }),
+    }
+    .to_message(SerializationFormats::JSON)
+    .unwrap();
+
+    let signature = SelfSigning::Ed25519Sha512.derive(signature);
+
+    let signed_rcp = SignedNontransferableReceipt::new(&rcp, vec![(prefix.clone(), signature)]);
+
+    println!(
+        "rcp: {}",
+        String::from_utf8(signed_rcp.serialize().unwrap()).unwrap()
+    );
+
+    signed_message(&signed_rcp.serialize().unwrap()).unwrap();
 }

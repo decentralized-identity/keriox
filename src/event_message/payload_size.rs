@@ -51,16 +51,22 @@ pub enum PayloadType {
     IAAF,
     #[serde(rename = "1AAG")]
     IAAG,
+    // Count of attached qualified Base64 indexed controller signatures
     #[serde(rename = "-A")]
     MA,
+    // Count of attached qualified Base64 indexed witness signatures
     #[serde(rename = "-B")]
     MB,
+    // Count of attached qualified Base64 nontransferable identifier receipt
+    // couples pre+sig
     #[serde(rename = "-C")]
     MC,
     #[serde(rename = "-D")]
     MD,
     #[serde(rename = "-E")]
     ME,
+    // Count of attached qualified Base64 transferable indexed sig groups
+    // pre+snu+dig + idx sig group
     #[serde(rename = "-F")]
     MF,
     #[serde(rename = "-G")]
@@ -96,12 +102,7 @@ impl PayloadType {
             Self::K | Self::L => 76,
             Self::M => 4,
             Self::OA => 24,
-            Self::OB
-            | Self::OC
-            | Self::OD
-            | Self::OE
-            | Self::OF
-            | Self::OG => 88,
+            Self::OB | Self::OC | Self::OD | Self::OE | Self::OF | Self::OG => 88,
             Self::OH | Self::IAAF => 8,
             Self::IAAA | Self::IAAB => 48,
             Self::IAAC | Self::IAAD => 80,
@@ -127,13 +128,7 @@ impl PayloadType {
             | Self::K
             | Self::L
             | Self::M => 1,
-            Self::OA
-            | Self::OB
-            | Self::OC
-            | Self::OD
-            | Self::OE
-            | Self::OF
-            | Self::OH => 2,
+            Self::OA | Self::OB | Self::OC | Self::OD | Self::OE | Self::OF | Self::OH => 2,
             Self::MA
             | Self::MB
             | Self::MC
@@ -146,8 +141,14 @@ impl PayloadType {
             | Self::MW
             | Self::MX
             | Self::MY
-            | Self::MZ => if qb2 {3} else {4},
-            _ => 0
+            | Self::MZ => {
+                if qb2 {
+                    3
+                } else {
+                    4
+                }
+            }
+            _ => 0,
         }
     }
 
@@ -168,13 +169,7 @@ impl PayloadType {
             | Self::K
             | Self::L
             | Self::M => 0,
-            Self::OA
-            | Self::OB
-            | Self::OC
-            | Self::OD
-            | Self::OE
-            | Self::OF
-            | Self::OH => 0,
+            Self::OA | Self::OB | Self::OC | Self::OD | Self::OE | Self::OF | Self::OH => 0,
             Self::MA
             | Self::MB
             | Self::MC

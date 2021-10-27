@@ -170,9 +170,9 @@ impl SignedTransferableReceipt {
         Ok([
             self.body.serialize()?,
             self.validator_seal.serialize()?,
-            get_sig_count(self.signatures.len() as u16)
-                .as_bytes()
-                .to_vec(),
+            PayloadType::MA.adjust_with_num(self.signatures.len() as u16)
+                    .as_bytes()
+                    .to_vec(), 
             self.signatures
                 .iter()
                 .map(|sig| sig.to_str().as_bytes().to_vec())
@@ -209,12 +209,12 @@ impl SignedNontransferableReceipt {
         Ok(
             [
                 self.body.serialize()?,
-                get_sig_count(self.couplets.len() as u16)
+                PayloadType::MC.adjust_with_num(self.couplets.len() as u16)
                     .as_bytes()
                     .to_vec(),
                 self.couplets
                     .iter()
-                    .map(|(_, sp)| sp.to_str().as_bytes().to_vec())
+                    .map(|(bp, sp)| [bp.to_str(), sp.to_str()].join("").as_bytes().to_vec())
                     .fold(vec!(), |acc, next| [acc, next].concat()),
             ].concat()
         )
