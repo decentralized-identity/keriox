@@ -2,7 +2,7 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize, ser::SerializeStruct};
 use std::cmp::Ordering;
 
-use crate::{derivation::attached_signature_code::{get_sig_count}, error::Error, event::sections::seal::EventSeal, prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfSigningPrefix, attached_seal::AttachedEventSeal}, state::{EventSemantics, IdentifierState}};
+use crate::{error::Error, event::sections::seal::EventSeal, prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfSigningPrefix, attached_seal::AttachedEventSeal}, state::{EventSemantics, IdentifierState}};
 
 use super::{EventMessage, attachment::Attachment, payload_size::PayloadType};
 use super::serializer::to_string;

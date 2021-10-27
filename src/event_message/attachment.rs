@@ -1,18 +1,16 @@
-use std::str::FromStr;
+use std::{convert::TryFrom, str::FromStr};
 
 use base64::URL_SAFE_NO_PAD;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    error::Error,
-    prefix::{Prefix, SelfAddressingPrefix},
-};
+use crate::{error::Error, event::sections::seal::EventSeal, prefix::{Prefix, SelfAddressingPrefix}};
 
-use super::{parse::counter, payload_size::PayloadType};
+use super::{parse::{event_seals, source_seal}, payload_size::PayloadType};
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub enum Attachment {
     SealSourceCouplets(Vec<SourceSeal>),
+    AttachedEventSeal(Vec<EventSeal>),
 }
 
 impl Attachment {
@@ -32,6 +30,24 @@ impl Attachment {
                     .chain(serialzied_sources)
                     .collect::<Vec<_>>())
             }
+            Attachment::AttachedEventSeal(seal) => {
+                let payload_type = PayloadType::MF;
+                let serialized_seals: String = seal.iter().fold("".into(), |acc, seal| {
+                    [
+                    acc,
+                    seal.prefix.to_str(),
+                    pack_sn(seal.sn),
+                    seal.event_digest.to_str(),
+                    ].join("")
+                });
+                Ok(payload_type
+                    .adjust_with_num(seal.len() as u16)
+                    .as_bytes()
+                    .to_vec()
+                    .into_iter()
+                    .chain(serialized_seals.as_bytes().to_vec())
+                    .collect::<Vec<_>>())
+            },
         }
     }
 }
@@ -40,16 +56,26 @@ impl FromStr for Attachment {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match &s[0..2] {
-            "-G" => {
-                let (rest, counter) = counter(s.as_bytes())
-                    .map_err(|_e| Error::SemanticError("Can't parse counter".into()))?;
+        let payload_type: PayloadType = PayloadType::try_from(&s[0..2])?;
+        match  payload_type {
+            PayloadType::MG => {
+                let (rest, source_seals) = source_seal(&s[2..].as_bytes())
+                    .map_err(|_e| Error::SemanticError("Can't parse source seal".into()))?;
                 if rest.is_empty() {
-                    Ok(counter)
+                    Ok(Attachment::SealSourceCouplets(source_seals))
                 } else {
-                    Err(Error::SemanticError("Can't parse counter".into()))
+                    Err(Error::SemanticError("Can't parse source seal".into()))
                 }
-            }
+            },
+            PayloadType::MF => {
+                let (rest, event_seals) = event_seals(&s[2..].as_bytes())
+                    .map_err(|_e| Error::SemanticError("Can't parse event seal".into()))?;
+                    if rest.is_empty() {
+                    Ok(Attachment::AttachedEventSeal(event_seals))
+                } else {
+                    Err(Error::SemanticError("Can't parse event seal".into()))
+                }
+            },
             _ => Err(Error::DeserializeError("Unknown counter code".into())),
         }
     }
@@ -109,7 +135,8 @@ fn test_parse_attachement() -> Result<(), Error> {
                 s2.digest.to_str(),
                 "E3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII"
             );
-        }
+        },
+        _ => {}
     };
     Ok(())
 }

@@ -162,6 +162,18 @@ pub fn attached_sn(s: &[u8]) -> nom::IResult<&[u8], u64> {
     }
 }
 
+/// extracts Identifier preffx
+pub fn prefix(s: &[u8]) -> nom::IResult<&[u8], IdentifierPrefix> {
+    let (rest, identifier) = match self_addressing_prefix(s) {
+        Ok(sap) => Ok((sap.0, IdentifierPrefix::SelfAddressing(sap.1))),
+        Err(_) => match basic_prefix(s) {
+            Ok(bp) => Ok((bp.0, IdentifierPrefix::Basic(bp.1))),
+            Err(e) => Err(e),
+        },
+    }?;
+    Ok((rest, identifier))
+}
+
 /// extracts the Event seal
 pub fn event_seal(s: &[u8]) -> nom::IResult<&[u8], EventSeal> {
     let (more, type_c) = take(3u8)(s)?;

@@ -6,30 +6,11 @@ use super::{
     signed_event_message::{SignedNontransferableReceipt, SignedTransferableReceipt},
     AttachedSignaturePrefix, EventMessage, SignedEventMessage,
 };
-use crate::{
-    derivation::{
-        attached_signature_code::b64_to_num, basic::Basic, self_addressing::SelfAddressing,
-        self_signing::SelfSigning,
-    },
-    event::{
-        event_data::{EventData, Receipt},
+use crate::{derivation::{attached_signature_code::b64_to_num}, event::{
+        event_data::EventData,
         sections::seal::EventSeal,
-        Event, SerializationFormats,
-    },
-    keys::{PrivateKey, PublicKey},
-    prefix::{
-        parse::{
-            attached_signature, attached_sn, basic_prefix, event_seal, self_addressing_prefix,
-            self_signing_prefix,
-        },
-        BasicPrefix, SelfSigningPrefix,
-    },
-    state::IdentifierState,
-};
-use nom::{
-    branch::*, bytes::complete::take, combinator::*, error::ErrorKind, multi::*, sequence::*,
-};
-use rand::rngs::OsRng;
+    }, prefix::{BasicPrefix, SelfSigningPrefix, parse::{attached_signature, attached_sn, basic_prefix, prefix, self_addressing_prefix, self_signing_prefix}}, state::IdentifierState};
+use nom::{branch::*, bytes::complete::take, combinator::*, error::ErrorKind, multi::*, sequence::*};
 use rmp_serde as serde_mgpk;
 use serde::Deserialize;
 use std::{convert::TryFrom, io::Cursor};
@@ -164,29 +145,42 @@ pub(crate) fn sig_count(s: &[u8]) -> nom::IResult<&[u8], u16> {
     Ok((rest, t.1))
 }
 
-/// returst attached source seals
-pub(crate) fn counter(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
-    let (rest, sc) = tuple((
-        map_parser(
-            nom::bytes::complete::take(2u8),
-            tuple((
-                nom::bytes::complete::tag("-"),
-                nom::bytes::complete::tag("G"),
-            )),
-        ),
-        b64_count,
-    ))(s)?;
+/// returns attached source seals
+pub(crate) fn source_seal(s: &[u8]) -> nom::IResult<&[u8], Vec<SourceSeal>> {
+    let (rest, sc) = b64_count(s)?;
 
     let (rest, attachment) = count(
         nom::sequence::tuple((attached_sn, self_addressing_prefix)),
-        sc.1 as usize,
+        sc as usize,
     )(rest)?;
-    let attachments = attachment
+    Ok((rest, attachment
         .into_iter()
         .map(|(sn, digest)| SourceSeal::new(sn, digest))
-        .collect();
+        .collect()))
+}
 
-    Ok((rest, Attachment::SealSourceCouplets(attachments)))
+fn event_seal(s: &[u8]) -> nom::IResult<&[u8], EventSeal> {
+    let (rest, identifier) = prefix(s)?;
+
+    let (rest, sn) = attached_sn(rest)?;
+    let (rest, event_digest) = self_addressing_prefix(rest)?;
+    let seal = EventSeal {
+        prefix: identifier,
+        sn: u64::from(sn),
+        event_digest,
+    };
+
+    Ok((rest, seal))
+}
+
+/// returst attached event seals
+pub(crate) fn event_seals(s: &[u8]) -> nom::IResult<&[u8], Vec<EventSeal>> {
+    let (rest, sc) = b64_count(s)?;
+
+    count(
+        event_seal,
+        sc as usize,
+    )(rest)
 }
 
 pub(crate) fn b64_count(s: &[u8]) -> nom::IResult<&[u8], u16> {
@@ -197,10 +191,25 @@ pub(crate) fn b64_count(s: &[u8]) -> nom::IResult<&[u8], u16> {
     Ok((rest, t?))
 }
 
-/// called on an attached signature stream starting with a sig count
 fn signatures(s: &[u8]) -> nom::IResult<&[u8], Vec<AttachedSignaturePrefix>> {
     let (rest, sc) = b64_count(s)?;
     count(attached_signature, sc as usize)(rest)
+}
+
+/// called on an attached signature stream starting with a sig count (with payload type)
+fn controller_signatures(s: &[u8]) -> nom::IResult<&[u8], Vec<AttachedSignaturePrefix>> {
+    let (rest, t) = tuple((
+        map_parser(
+            nom::bytes::complete::take(2u8),
+            tuple((
+                nom::bytes::complete::tag("-"),
+                nom::bytes::complete::tag("A"),
+            )),
+        ),
+        signatures,
+    ))(s)?;
+
+    Ok((rest, t.1))
 }
 
 fn couplets(s: &[u8]) -> nom::IResult<&[u8], Vec<(BasicPrefix, SelfSigningPrefix)>> {
@@ -214,8 +223,8 @@ fn couplets(s: &[u8]) -> nom::IResult<&[u8], Vec<(BasicPrefix, SelfSigningPrefix
 
 fn transferable_receipt_attachment(
     s: &[u8],
-) -> nom::IResult<&[u8], (EventSeal, Vec<AttachedSignaturePrefix>)> {
-    tuple((event_seal, signatures))(s)
+) -> nom::IResult<&[u8], (Vec<EventSeal>, Vec<AttachedSignaturePrefix>)> {
+    tuple((event_seals, controller_signatures))(s)
 }
 
 pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], Deserialized> {
@@ -252,13 +261,14 @@ pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], Deserialized> {
                 }
                 PayloadType::MF => {
                     // Attached seal, so transferable receipt
-                    // TODO wont work bcause of seal parser
                     transferable_receipt_attachment(&rest[..]).map(|(rest, attachment)| {
+                        // TODO what if more than one?
+                        let ev_seal = attachment.0.last().unwrap().to_owned();
                         (
                             rest,
                             Deserialized::TransferableRct(SignedTransferableReceipt::new(
                                 &e.event_message,
-                                attachment.0,
+                                ev_seal,
                                 attachment.1,
                             )),
                         )
@@ -268,19 +278,48 @@ pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], Deserialized> {
             }
         }
         EventData::Dip(_) | EventData::Drt(_) => {
-            let (rest, signatures) = signatures(rest)?;
-            let (rest, source_seal) = counter(rest)?;
+
+            enum DelegatedAttachement {
+                Seals(Vec<SourceSeal>),
+                Signs(Vec<AttachedSignaturePrefix>),
+            }
+
+            fn delegated_attachment(s: &[u8]) -> nom::IResult<&[u8], DelegatedAttachement> {
+                let (rest, payload_type) = take(2u8)(s)?;
+                match PayloadType::try_from(std::str::from_utf8(payload_type).unwrap()).unwrap() {
+                    PayloadType::MG => {
+                        let (rest, seals_list) = source_seal(rest)?;
+                        Ok((rest, DelegatedAttachement::Seals(seals_list)))
+                    },
+                    PayloadType::MA => {
+                        let (rest, sigs) = signatures(rest)?;
+                        Ok((rest, DelegatedAttachement::Signs(sigs)))
+                    },
+                    _ => todo!()
+                }
+            }
+
+            let (rest, att1) = delegated_attachment(rest)?;
+            let (rest, att2) = delegated_attachment(rest)?;
+
+            let (seals, signatures) = match (att1, att2) {
+                (DelegatedAttachement::Seals(sigs), DelegatedAttachement::Signs(seals)) => (sigs, seals),
+                (DelegatedAttachement::Signs(seals), DelegatedAttachement::Seals(sigs)) => (sigs, seals),
+                _ => todo!(),
+            };
 
             Ok((
                 rest,
                 Deserialized::Event(DeserializedSignedEvent {
                     deserialized_event: e,
                     signatures,
-                    attachment: Some(source_seal),
+                    attachment: Some(Attachment::SealSourceCouplets(seals)),
                 }),
             ))
         }
         _ => {
+            // TODO probably payload_type should be used somehow.
+            let (rest, _payload_type) = take(2u8)(rest)?;
             let (extra, signatures) = signatures(rest)?;
 
             Ok((
@@ -337,15 +376,15 @@ fn test_sigs() {
     );
 
     assert_eq!(
-        signatures("-AABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".as_bytes()),
+        controller_signatures("-AABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".as_bytes()),
         Ok(("".as_bytes(), vec![AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, vec![0u8; 64], 0)]))
     );
 
-    assert!(signatures("-AABAA0Q7bqPvenjWXo_YIikMBKOg-pghLKwBi1Plm0PEqdv67L1_c6dq9bll7OFnoLp0a74Nw1cBGdjIPcu-yAllHAw".as_bytes()).is_ok());
+    assert!(controller_signatures("-AABAA0Q7bqPvenjWXo_YIikMBKOg-pghLKwBi1Plm0PEqdv67L1_c6dq9bll7OFnoLp0a74Nw1cBGdjIPcu-yAllHAw".as_bytes()).is_ok());
     // -AABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
     assert_eq!(
-        signatures("-AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAextra data".as_bytes()),
+        controller_signatures("-AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAextra data".as_bytes()),
         Ok(("extra data".as_bytes(), vec![
             AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, vec![0u8; 64], 0),
             AttachedSignaturePrefix::new(SelfSigning::Ed448, vec![0u8; 114], 2)
@@ -353,7 +392,7 @@ fn test_sigs() {
     );
 
     assert_eq!(
-        signatures("-AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".as_bytes()),
+        controller_signatures("-AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".as_bytes()),
         Ok(("".as_bytes(), vec![
             AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, vec![0u8; 64], 0),
             AttachedSignaturePrefix::new(SelfSigning::Ed448, vec![0u8; 114], 2)
@@ -506,6 +545,12 @@ fn test_version_parse() {
 
 #[test]
 fn tete() {
+    use crate::keys::{PublicKey, PrivateKey};
+    use crate::derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning};
+    use crate::event::{SerializationFormats, Event, event_data::{EventData, Receipt}};
+    use rand::rngs::OsRng;
+
+
     let kp = ed25519_dalek::Keypair::generate(&mut OsRng {});
     let (vk, sk) = (kp.public, kp.secret);
     let vk = PublicKey::new(vk.to_bytes().to_vec());

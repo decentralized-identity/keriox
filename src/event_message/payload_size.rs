@@ -51,22 +51,22 @@ pub enum PayloadType {
     IAAF,
     #[serde(rename = "1AAG")]
     IAAG,
-    // Count of attached qualified Base64 indexed controller signatures
+    /// Count of attached qualified Base64 indexed controller signatures
     #[serde(rename = "-A")]
     MA,
-    // Count of attached qualified Base64 indexed witness signatures
+    /// Count of attached qualified Base64 indexed witness signatures
     #[serde(rename = "-B")]
     MB,
-    // Count of attached qualified Base64 nontransferable identifier receipt
-    // couples pre+sig
+    /// Count of attached qualified Base64 nontransferable identifier receipt
+    /// couples pre+sig
     #[serde(rename = "-C")]
     MC,
     #[serde(rename = "-D")]
     MD,
     #[serde(rename = "-E")]
     ME,
-    // Count of attached qualified Base64 transferable indexed sig groups
-    // pre+snu+dig + idx sig group
+    /// Count of attached qualified Base64 transferable indexed sig groups
+    /// pre+snu+dig + idx sig group
     #[serde(rename = "-F")]
     MF,
     #[serde(rename = "-G")]
@@ -252,6 +252,7 @@ impl TryFrom<&str> for PayloadType {
             "-D" => Ok(Self::MD),
             "-E" => Ok(Self::ME),
             "-F" => Ok(Self::MF),
+            "-G" => Ok(Self::MG),
             "-U" => Ok(Self::MU),
             "-V" => Ok(Self::MV),
             "-W" => Ok(Self::MW),
