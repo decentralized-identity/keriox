@@ -6,11 +6,21 @@ use super::{
     signed_event_message::{SignedNontransferableReceipt, SignedTransferableReceipt},
     AttachedSignaturePrefix, EventMessage, SignedEventMessage,
 };
-use crate::{derivation::{attached_signature_code::b64_to_num}, event::{
-        event_data::EventData,
-        sections::seal::EventSeal,
-    }, prefix::{BasicPrefix, SelfSigningPrefix, parse::{attached_signature, attached_sn, basic_prefix, prefix, self_addressing_prefix, self_signing_prefix}}, state::IdentifierState};
-use nom::{branch::*, bytes::complete::take, combinator::*, error::ErrorKind, multi::*, sequence::*};
+use crate::{
+    derivation::attached_signature_code::b64_to_num,
+    event::{event_data::EventData, sections::seal::EventSeal},
+    prefix::{
+        parse::{
+            attached_signature, attached_sn, basic_prefix, prefix, self_addressing_prefix,
+            self_signing_prefix,
+        },
+        BasicPrefix, SelfSigningPrefix,
+    },
+    state::IdentifierState,
+};
+use nom::{
+    branch::*, bytes::complete::take, combinator::*, error::ErrorKind, multi::*, sequence::*,
+};
 use rmp_serde as serde_mgpk;
 use serde::Deserialize;
 use std::{convert::TryFrom, io::Cursor};
@@ -153,10 +163,13 @@ pub(crate) fn source_seal(s: &[u8]) -> nom::IResult<&[u8], Vec<SourceSeal>> {
         nom::sequence::tuple((attached_sn, self_addressing_prefix)),
         sc as usize,
     )(rest)?;
-    Ok((rest, attachment
-        .into_iter()
-        .map(|(sn, digest)| SourceSeal::new(sn, digest))
-        .collect()))
+    Ok((
+        rest,
+        attachment
+            .into_iter()
+            .map(|(sn, digest)| SourceSeal::new(sn, digest))
+            .collect(),
+    ))
 }
 
 fn event_seal(s: &[u8]) -> nom::IResult<&[u8], EventSeal> {
@@ -177,10 +190,7 @@ fn event_seal(s: &[u8]) -> nom::IResult<&[u8], EventSeal> {
 pub(crate) fn event_seals(s: &[u8]) -> nom::IResult<&[u8], Vec<EventSeal>> {
     let (rest, sc) = b64_count(s)?;
 
-    count(
-        event_seal,
-        sc as usize,
-    )(rest)
+    count(event_seal, sc as usize)(rest)
 }
 
 pub(crate) fn b64_count(s: &[u8]) -> nom::IResult<&[u8], u16> {
@@ -191,7 +201,7 @@ pub(crate) fn b64_count(s: &[u8]) -> nom::IResult<&[u8], u16> {
     Ok((rest, t?))
 }
 
-fn signatures(s: &[u8]) -> nom::IResult<&[u8], Vec<AttachedSignaturePrefix>> {
+pub fn signatures(s: &[u8]) -> nom::IResult<&[u8], Vec<AttachedSignaturePrefix>> {
     let (rest, sc) = b64_count(s)?;
     count(attached_signature, sc as usize)(rest)
 }
@@ -221,115 +231,115 @@ fn couplets(s: &[u8]) -> nom::IResult<&[u8], Vec<(BasicPrefix, SelfSigningPrefix
     )(rest)
 }
 
-fn transferable_receipt_attachment(
-    s: &[u8],
-) -> nom::IResult<&[u8], (Vec<EventSeal>, Vec<AttachedSignaturePrefix>)> {
-    tuple((event_seals, controller_signatures))(s)
+fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
+    let (rest, payload_type) = take(2u8)(s)?;
+    let payload_type: PayloadType =
+        PayloadType::try_from(std::str::from_utf8(payload_type).unwrap()).unwrap();
+    match payload_type {
+        PayloadType::MG => {
+            let (rest, source_seals) = source_seal(rest)?;
+            Ok((rest, Attachment::SealSourceCouplets(source_seals)))
+        }
+        PayloadType::MF => {
+            let (rest, event_seals) = event_seals(rest)?;
+            Ok((rest, Attachment::AttachedEventSeal(event_seals)))
+        }
+        PayloadType::MA => {
+            let (rest, sigs) = signatures(rest)?;
+            Ok((rest, Attachment::AttachedSignatures(sigs)))
+        }
+        PayloadType::MC => {
+            let (rest, couplets) = couplets(rest)?;
+            Ok((rest, Attachment::ReceiptCouplets(couplets)))
+        }
+        _ => todo!(),
+    }
 }
 
 pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], Deserialized> {
     let (rest, e) = message(s)?;
     match e.event_message.event.event_data {
         EventData::Rct(_) => {
-            let (rest, type_c) = take(2u8)(rest)?;
+            let (rest, att) = attachment(rest)?;
+            match att {
+                // Should be nontransferable receipt
+                Attachment::ReceiptCouplets(couplets) => Ok((
+                    rest,
+                    Deserialized::NontransferableRct(SignedNontransferableReceipt {
+                        body: e.event_message,
+                        couplets,
+                    }),
+                )),
+                Attachment::AttachedEventSeal(_) | Attachment::AttachedSignatures(_) => {
+                    // Should be transferable receipt
+                    let (rest, second_att) = attachment(rest)?;
 
-            let code: PayloadType = PayloadType::try_from(
-                std::str::from_utf8(&type_c.to_vec())
-                    .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?,
-            )
-            .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
+                    let (seals, sigs) = match (att, second_att) {
+                        (
+                            Attachment::AttachedEventSeal(seals),
+                            Attachment::AttachedSignatures(sigs),
+                        ) => Ok((seals, sigs)),
+                        (
+                            Attachment::AttachedSignatures(sigs),
+                            Attachment::AttachedEventSeal(seals),
+                        ) => Ok((seals, sigs)),
+                        _ => {
+                            // improper attachements
+                            Err(nom::Err::Failure((s, ErrorKind::IsNot)))
+                        }
+                    }?;
 
-            match code {
-                PayloadType::MC => {
-                    // Nontrans receipt
-                    // Parse couplets
-                    let (rest, couplets) = couplets(rest)?;
                     Ok((
                         rest,
-                        Deserialized::NontransferableRct(SignedNontransferableReceipt {
-                            body: e.event_message,
-                            couplets,
-                        }),
+                        Deserialized::TransferableRct(SignedTransferableReceipt::new(
+                            &e.event_message,
+                            // TODO what if more than one?
+                            seals.last().unwrap().to_owned(),
+                            sigs,
+                        )),
                     ))
                 }
-                PayloadType::MB => {
-                    // witness receipt
-                    // parse witness signatures
-                    let (rest, witness_sigs) = signatures(s)?;
-                    // TODO Missing witness receipt struct
-                    todo!()
+                _ => {
+                    // Improper payload type
+                    Err(nom::Err::Failure((s, ErrorKind::IsNot)))
                 }
-                PayloadType::MF => {
-                    // Attached seal, so transferable receipt
-                    transferable_receipt_attachment(&rest[..]).map(|(rest, attachment)| {
-                        // TODO what if more than one?
-                        let ev_seal = attachment.0.last().unwrap().to_owned();
-                        (
-                            rest,
-                            Deserialized::TransferableRct(SignedTransferableReceipt::new(
-                                &e.event_message,
-                                ev_seal,
-                                attachment.1,
-                            )),
-                        )
-                    })
-                }
-                _ => todo!(),
             }
         }
         EventData::Dip(_) | EventData::Drt(_) => {
+            let (rest, (att1, att2)) = tuple((attachment, attachment))(rest)?;
 
-            enum DelegatedAttachement {
-                Seals(Vec<SourceSeal>),
-                Signs(Vec<AttachedSignaturePrefix>),
-            }
-
-            fn delegated_attachment(s: &[u8]) -> nom::IResult<&[u8], DelegatedAttachement> {
-                let (rest, payload_type) = take(2u8)(s)?;
-                match PayloadType::try_from(std::str::from_utf8(payload_type).unwrap()).unwrap() {
-                    PayloadType::MG => {
-                        let (rest, seals_list) = source_seal(rest)?;
-                        Ok((rest, DelegatedAttachement::Seals(seals_list)))
-                    },
-                    PayloadType::MA => {
-                        let (rest, sigs) = signatures(rest)?;
-                        Ok((rest, DelegatedAttachement::Signs(sigs)))
-                    },
-                    _ => todo!()
+            let (seals, sigs) = match (att1, att2) {
+                (Attachment::SealSourceCouplets(seals), Attachment::AttachedSignatures(sigs)) => {
+                    (seals, sigs)
                 }
-            }
-
-            let (rest, att1) = delegated_attachment(rest)?;
-            let (rest, att2) = delegated_attachment(rest)?;
-
-            let (seals, signatures) = match (att1, att2) {
-                (DelegatedAttachement::Seals(sigs), DelegatedAttachement::Signs(seals)) => (sigs, seals),
-                (DelegatedAttachement::Signs(seals), DelegatedAttachement::Seals(sigs)) => (sigs, seals),
+                (Attachment::AttachedSignatures(sigs), Attachment::SealSourceCouplets(seals)) => {
+                    (seals, sigs)
+                }
                 _ => todo!(),
             };
-
             Ok((
                 rest,
                 Deserialized::Event(DeserializedSignedEvent {
                     deserialized_event: e,
-                    signatures,
+                    signatures: sigs,
                     attachment: Some(Attachment::SealSourceCouplets(seals)),
                 }),
             ))
         }
         _ => {
-            // TODO probably payload_type should be used somehow.
-            let (rest, _payload_type) = take(2u8)(rest)?;
-            let (extra, signatures) = signatures(rest)?;
-
-            Ok((
-                extra,
-                Deserialized::Event(DeserializedSignedEvent {
-                    deserialized_event: e,
-                    signatures,
-                    attachment: None,
-                }),
-            ))
+            let (rest, sigs) = attachment(rest)?;
+            if let Attachment::AttachedSignatures(sigs) = sigs {
+                Ok((
+                    rest,
+                    Deserialized::Event(DeserializedSignedEvent {
+                        deserialized_event: e,
+                        signatures: sigs,
+                        attachment: None,
+                    }),
+                ))
+            } else {
+                todo!()
+            }
         }
     }
 }
@@ -444,6 +454,35 @@ fn test_event() {
 }
 
 #[test]
+fn test_attachement() {
+    use crate::prefix::Prefix;
+
+    let attached_str = "-GAC0AAAAAAAAAAAAAAAAAAAAAAQE3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII0AAAAAAAAAAAAAAAAAAAAAAQE3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII";
+    let (_rest, attached_sn_dig): (_, Attachment) = attachment(attached_str.as_bytes()).unwrap();
+    assert_eq!(
+        attached_str,
+        String::from_utf8(attached_sn_dig.serialize().unwrap()).unwrap()
+    );
+    match attached_sn_dig {
+        Attachment::SealSourceCouplets(sources) => {
+            let s1 = sources[0].clone();
+            let s2 = sources[1].clone();
+            assert_eq!(s1.sn, 1);
+            assert_eq!(
+                s1.digest.to_str(),
+                "E3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII"
+            );
+            assert_eq!(s2.sn, 1);
+            assert_eq!(
+                s2.digest.to_str(),
+                "E3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII"
+            );
+        }
+        _ => {}
+    };
+}
+
+#[test]
 fn test_stream1() {
     // taken from KERIPY: tests/core/test_eventing.py::test_kevery#1998
     let stream = br#"{"v":"KERI10JSON0000ed_","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"0","t":"icp","kt":"1","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"n":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","bt":"0","b":[],"c":[],"a":[]}-AABAAmagesCSY8QhYYHCJXEWpsGD62qoLt2uyT0_Mq5lZPR88JyS5UrwFKFdcjPqyKc_SKaKDJhkGWCk07k_kVkjyCA"#;
@@ -545,11 +584,15 @@ fn test_version_parse() {
 
 #[test]
 fn tete() {
-    use crate::keys::{PublicKey, PrivateKey};
-    use crate::derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning};
-    use crate::event::{SerializationFormats, Event, event_data::{EventData, Receipt}};
+    use crate::derivation::{
+        basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning,
+    };
+    use crate::event::{
+        event_data::{EventData, Receipt},
+        Event, SerializationFormats,
+    };
+    use crate::keys::{PrivateKey, PublicKey};
     use rand::rngs::OsRng;
-
 
     let kp = ed25519_dalek::Keypair::generate(&mut OsRng {});
     let (vk, sk) = (kp.public, kp.secret);

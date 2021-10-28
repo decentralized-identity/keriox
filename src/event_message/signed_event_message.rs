@@ -1,18 +1,23 @@
 use chrono::{DateTime, Local};
-use serde::{Deserialize, Serialize, ser::SerializeStruct};
+use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use std::cmp::Ordering;
 
-use crate::{error::Error, event::sections::seal::EventSeal, prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfSigningPrefix}, state::{EventSemantics, IdentifierState}};
+use crate::{
+    error::Error,
+    event::sections::seal::EventSeal,
+    prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfSigningPrefix},
+    state::{EventSemantics, IdentifierState},
+};
 
-use super::{EventMessage, attachment::Attachment, payload_size::PayloadType};
 use super::serializer::to_string;
+use super::{attachment::Attachment, payload_size::PayloadType, EventMessage};
 
 // KERI serializer should be used to serialize this
 #[derive(Debug, Clone, Deserialize)]
 pub struct SignedEventMessage {
     pub event_message: EventMessage,
     #[serde(skip_serializing)]
-    pub payload_type: PayloadType, 
+    pub payload_type: PayloadType,
     #[serde(skip_serializing)]
     pub signatures: Vec<AttachedSignaturePrefix>,
     #[serde(skip_serializing)]
@@ -22,14 +27,23 @@ pub struct SignedEventMessage {
 impl Serialize for SignedEventMessage {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer {
+        S: serde::Serializer,
+    {
         // if JSON - we pack qb64 KERI
         if serializer.is_human_readable() {
             let mut em = serializer.serialize_struct("EventMessage", 2)?;
             em.serialize_field("", &self.event_message)?;
-            let str_sigs = &self.signatures.iter().fold(String::default(), |accum, sig| accum + &sig.to_str());
-            let code = self.payload_type.adjust_with_num(self.signatures.len() as u16);
-            em.serialize_field("-" , &format!("{}{}", Box::leak(code.into_boxed_str()), str_sigs))?;
+            let str_sigs = &self
+                .signatures
+                .iter()
+                .fold(String::default(), |accum, sig| accum + &sig.to_str());
+            let code = self
+                .payload_type
+                .adjust_with_num(self.signatures.len() as u16);
+            em.serialize_field(
+                "-",
+                &format!("{}{}", Box::leak(code.into_boxed_str()), str_sigs),
+            )?;
             em.end()
         // . else - we pack as it is for DB / CBOR purpose
         } else {
@@ -44,8 +58,7 @@ impl Serialize for SignedEventMessage {
 
 impl PartialEq for SignedEventMessage {
     fn eq(&self, other: &Self) -> bool {
-        self.event_message == other.event_message
-        && self.signatures == other.signatures
+        self.event_message == other.event_message && self.signatures == other.signatures
     }
 }
 
@@ -91,10 +104,14 @@ impl PartialEq for TimestampedSignedEventMessage {
 impl PartialOrd for TimestampedSignedEventMessage {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(
-            match self.signed_event_message.event_message.event.sn == other.signed_event_message.event_message.event.sn {
+            match self.signed_event_message.event_message.event.sn
+                == other.signed_event_message.event_message.event.sn
+            {
                 true => Ordering::Equal,
                 false => {
-                    match self.signed_event_message.event_message.event.sn > other.signed_event_message.event_message.event.sn {
+                    match self.signed_event_message.event_message.event.sn
+                        > other.signed_event_message.event_message.event.sn
+                    {
                         true => Ordering::Greater,
                         false => Ordering::Less,
                     }
@@ -106,9 +123,13 @@ impl PartialOrd for TimestampedSignedEventMessage {
 
 impl Ord for TimestampedSignedEventMessage {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.signed_event_message.event_message.event.sn == other.signed_event_message.event_message.event.sn {
+        match self.signed_event_message.event_message.event.sn
+            == other.signed_event_message.event_message.event.sn
+        {
             true => Ordering::Equal,
-            false => match self.signed_event_message.event_message.event.sn > other.signed_event_message.event_message.event.sn {
+            false => match self.signed_event_message.event_message.event.sn
+                > other.signed_event_message.event_message.event.sn
+            {
                 true => Ordering::Greater,
                 false => Ordering::Less,
             },
@@ -119,7 +140,12 @@ impl Ord for TimestampedSignedEventMessage {
 impl Eq for TimestampedSignedEventMessage {}
 
 impl SignedEventMessage {
-    pub fn new(message: &EventMessage, payload_type: PayloadType, sigs: Vec<AttachedSignaturePrefix>, attachment: Option<Attachment>) -> Self {
+    pub fn new(
+        message: &EventMessage,
+        payload_type: PayloadType,
+        sigs: Vec<AttachedSignaturePrefix>,
+        attachment: Option<Attachment>,
+    ) -> Self {
         Self {
             event_message: message.clone(),
             payload_type,
@@ -127,7 +153,6 @@ impl SignedEventMessage {
             attachment,
         }
     }
-
 
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         Ok(to_string(&self)?.as_bytes().to_vec())
@@ -170,13 +195,7 @@ impl SignedTransferableReceipt {
         Ok([
             self.body.serialize()?,
             Attachment::AttachedEventSeal(vec![self.validator_seal.clone()]).serialize()?,
-            PayloadType::MA.adjust_with_num(self.signatures.len() as u16)
-                    .as_bytes()
-                    .to_vec(), 
-            self.signatures
-                .iter()
-                .map(|sig| sig.to_str().as_bytes().to_vec())
-                .fold(vec![], |acc, next| [acc, next].concat()),
+            Attachment::AttachedSignatures(self.signatures.clone()).serialize()?,
         ]
         .concat())
     }
@@ -195,28 +214,18 @@ pub struct SignedNontransferableReceipt {
 }
 
 impl SignedNontransferableReceipt {
-    pub fn new(
-        message: &EventMessage,
-        couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
-    ) -> Self {
+    pub fn new(message: &EventMessage, couplets: Vec<(BasicPrefix, SelfSigningPrefix)>) -> Self {
         Self {
             body: message.clone(),
-            couplets
+            couplets,
         }
     }
 
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        Ok(
-            [
-                self.body.serialize()?,
-                PayloadType::MC.adjust_with_num(self.couplets.len() as u16)
-                    .as_bytes()
-                    .to_vec(),
-                self.couplets
-                    .iter()
-                    .map(|(bp, sp)| [bp.to_str(), sp.to_str()].join("").as_bytes().to_vec())
-                    .fold(vec!(), |acc, next| [acc, next].concat()),
-            ].concat()
-        )
+        Ok([
+            self.body.serialize()?,
+            Attachment::ReceiptCouplets(self.couplets.clone()).serialize()?,
+        ]
+        .concat())
     }
 }
