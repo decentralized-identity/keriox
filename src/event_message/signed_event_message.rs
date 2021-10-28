@@ -2,7 +2,7 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize, ser::SerializeStruct};
 use std::cmp::Ordering;
 
-use crate::{error::Error, event::sections::seal::EventSeal, prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfSigningPrefix, attached_seal::AttachedEventSeal}, state::{EventSemantics, IdentifierState}};
+use crate::{error::Error, event::sections::seal::EventSeal, prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfSigningPrefix}, state::{EventSemantics, IdentifierState}};
 
 use super::{EventMessage, attachment::Attachment, payload_size::PayloadType};
 use super::serializer::to_string;
@@ -149,7 +149,7 @@ impl EventSemantics for SignedEventMessage {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SignedTransferableReceipt {
     pub body: EventMessage,
-    pub validator_seal: AttachedEventSeal,
+    pub validator_seal: EventSeal,
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
 
@@ -161,7 +161,7 @@ impl SignedTransferableReceipt {
     ) -> Self {
         Self {
             body: message.clone(),
-            validator_seal: AttachedEventSeal::new(event_seal),
+            validator_seal: event_seal,
             signatures: sigs,
         }
     }
@@ -169,7 +169,7 @@ impl SignedTransferableReceipt {
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         Ok([
             self.body.serialize()?,
-            self.validator_seal.serialize()?,
+            Attachment::AttachedEventSeal(vec![self.validator_seal.clone()]).serialize()?,
             PayloadType::MA.adjust_with_num(self.signatures.len() as u16)
                     .as_bytes()
                     .to_vec(), 

@@ -207,7 +207,7 @@ impl EventProcessor {
         Ok(if let Some(receipts) = self.db.get_receipts_t(id) {
             receipts
                 .filter(|r| r.body.event.sn.eq(&sn))
-                .any(|receipt| receipt.validator_seal.event_seal.prefix.eq(validator_pref))
+                .any(|receipt| receipt.validator_seal.prefix.eq(validator_pref))
         } else {
             false
         })
@@ -356,9 +356,9 @@ impl EventProcessor {
                     self.get_event_at_sn(&vrc.body.event.prefix, vrc.body.event.sn)
                 {
                     let kp = self.get_keys_at_event(
-                        &vrc.validator_seal.event_seal.prefix,
-                        vrc.validator_seal.event_seal.sn,
-                        &vrc.validator_seal.event_seal.event_digest,
+                        &vrc.validator_seal.prefix,
+                        vrc.validator_seal.sn,
+                        &vrc.validator_seal.event_digest,
                     )?;
                     if kp.is_some()
                         && kp.unwrap().verify(
