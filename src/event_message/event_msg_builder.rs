@@ -5,7 +5,7 @@ use crate::{
     event::{
         event_data::{
             delegated::DelegatedInceptionEvent, interaction::InteractionEvent,
-            rotation::RotationEvent,
+            rotation::RotationEvent, Receipt,
         },
         sections::{threshold::SignatureThreshold, WitnessConfig},
         SerializationFormats,
@@ -224,6 +224,54 @@ impl EventMsgBuilder {
                 .to_message(self.format)?
             }
         })
+    }
+}
+
+pub struct ReceiptBuilder {
+    format: SerializationFormats,
+    derivation: SelfAddressing,
+    receipted_event: EventMessage,
+}
+
+impl ReceiptBuilder {
+    pub fn new() -> Self {
+        let default_event = EventMsgBuilder::new(EventType::Inception)
+            .unwrap()
+            .build()
+            .unwrap();
+        Self {
+            format: SerializationFormats::JSON,
+            derivation: SelfAddressing::Blake3_256,
+            receipted_event: default_event,
+        }
+    }
+
+    pub fn with_format(self, format: SerializationFormats) -> Self {
+        Self { format, ..self }
+    }
+
+    pub fn with_derivation(self, derivation: SelfAddressing) -> Self {
+        Self { derivation, ..self }
+    }
+
+    pub fn with_receipted_event(self, receipted_event: EventMessage) -> Self {
+        Self {
+            receipted_event,
+            ..self
+        }
+    }
+
+    pub fn build(&self) -> Result<EventMessage, Error> {
+        Event {
+            prefix: self.receipted_event.event.prefix.clone(),
+            sn: self.receipted_event.event.sn,
+            event_data: EventData::Rct(Receipt {
+                receipted_event_digest: self
+                    .derivation
+                    .derive(&self.receipted_event.serialize().unwrap()),
+            }),
+        }
+        .to_message(self.format)
     }
 }
 
