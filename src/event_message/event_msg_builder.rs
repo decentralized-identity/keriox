@@ -60,14 +60,14 @@ impl EventType {
 }
 
 impl EventMsgBuilder {
-    pub fn new(event_type: EventType) -> Result<Self, Error> {
+    pub fn new(event_type: EventType) -> Self {
         let mut rng = OsRng {};
         let kp = Keypair::generate(&mut rng);
         let nkp = Keypair::generate(&mut rng);
         let pk = PublicKey::new(kp.public.to_bytes().to_vec());
         let npk = PublicKey::new(nkp.public.to_bytes().to_vec());
         let basic_pref = Basic::Ed25519.derive(pk);
-        Ok(EventMsgBuilder {
+        EventMsgBuilder {
             event_type,
             prefix: IdentifierPrefix::default(),
             keys: vec![basic_pref],
@@ -80,7 +80,7 @@ impl EventMsgBuilder {
             delegator: IdentifierPrefix::default(),
             format: SerializationFormats::JSON,
             derivation: SelfAddressing::Blake3_256,
-        })
+        }
     }
 
     pub fn with_prefix(self, prefix: &IdentifierPrefix) -> Self {
@@ -236,7 +236,6 @@ pub struct ReceiptBuilder {
 impl ReceiptBuilder {
     pub fn new() -> Self {
         let default_event = EventMsgBuilder::new(EventType::Inception)
-            .unwrap()
             .build()
             .unwrap();
         Self {
@@ -268,7 +267,7 @@ impl ReceiptBuilder {
             event_data: EventData::Rct(Receipt {
                 receipted_event_digest: self
                     .derivation
-                    .derive(&self.receipted_event.serialize().unwrap()),
+                    .derive(&self.receipted_event.serialize()?),
             }),
         }
         .to_message(self.format)
@@ -303,7 +302,6 @@ fn test_multisig_prefix_derivation() {
     ];
 
     let msg_builder = EventMsgBuilder::new(EventType::Inception)
-        .unwrap()
         .with_keys(keys)
         .with_next_keys(next_keys)
         .with_threshold(&SignatureThreshold::Simple(2))

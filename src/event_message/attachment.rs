@@ -25,7 +25,7 @@ impl Attachment {
             Attachment::SealSourceCouplets(sources) => {
                 let serialzied_sources: Vec<u8> = sources
                     .into_iter()
-                    .map(|s| s.pack().unwrap())
+                    .map(|s| s.pack() )
                     .flatten()
                     .collect();
 
@@ -85,11 +85,11 @@ impl SourceSeal {
     pub fn new(sn: u64, digest: SelfAddressingPrefix) -> Self {
         Self { sn, digest }
     }
-    pub fn pack(&self) -> Result<Vec<u8>, Error> {
-        Ok([pack_sn(self.sn), self.digest.to_str()]
+    pub fn pack(&self) -> Vec<u8> {
+        [pack_sn(self.sn), self.digest.to_str()]
             .join("")
             .as_bytes()
-            .to_vec())
+            .to_vec()
     }
 }
 

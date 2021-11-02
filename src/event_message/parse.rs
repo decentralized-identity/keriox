@@ -6,18 +6,13 @@ use super::{
     signed_event_message::{SignedNontransferableReceipt, SignedTransferableReceipt},
     AttachedSignaturePrefix, EventMessage, SignedEventMessage,
 };
-use crate::{
-    derivation::attached_signature_code::b64_to_num,
-    event::{event_data::EventData, sections::seal::EventSeal},
-    prefix::{
+use crate::{derivation::attached_signature_code::b64_to_num, event::{event_data::EventData, sections::seal::EventSeal}, prefix::{
         parse::{
             attached_signature, attached_sn, basic_prefix, prefix, self_addressing_prefix,
             self_signing_prefix,
         },
         BasicPrefix, SelfSigningPrefix,
-    },
-    state::IdentifierState,
-};
+    }, state::IdentifierState};
 use nom::{
     branch::*, bytes::complete::take, combinator::*, error::ErrorKind, multi::*, sequence::*,
 };
@@ -201,7 +196,8 @@ fn couplets(s: &[u8]) -> nom::IResult<&[u8], Vec<(BasicPrefix, SelfSigningPrefix
 fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
     let (rest, payload_type) = take(2u8)(s)?;
     let payload_type: PayloadType =
-        PayloadType::try_from(std::str::from_utf8(payload_type).unwrap()).unwrap();
+        PayloadType::try_from(std::str::from_utf8(payload_type).unwrap())
+        .map_err(|_e| nom::Err::Failure((s, ErrorKind::IsNot)))?;
     match payload_type {
         PayloadType::MG => {
             let (rest, source_seals) = source_seal(rest)?;
@@ -568,49 +564,4 @@ fn test_version_parse() {
     let json = br#""KERI10JSON00014b_""#;
     let json_result = version(json);
     assert!(json_result.is_ok());
-}
-
-#[test]
-fn tete() {
-    use crate::derivation::{
-        basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning,
-    };
-    use crate::event::{
-        event_data::{EventData, Receipt},
-        Event, SerializationFormats,
-    };
-    use crate::keys::{PrivateKey, PublicKey};
-    use rand::rngs::OsRng;
-
-    let kp = ed25519_dalek::Keypair::generate(&mut OsRng {});
-    let (vk, sk) = (kp.public, kp.secret);
-    let vk = PublicKey::new(vk.to_bytes().to_vec());
-    let sk = PrivateKey::new(sk.to_bytes().to_vec());
-    let keypair = (sk, vk.clone());
-    let prefix = Basic::Ed25519.derive(vk);
-
-    let stream = r#"{"v":"KERI10JSON00011c_","i":"EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM","s":"0","t":"icp","kt":"1","k":["DaU6JR2nmwyZ-i0d8JZAoTNZH3ULvYAfSVPzhzS6b5CM"],"n":"EZ-i0d8JZAoTNZH3ULvaU6JR2nmwyYAfSVPzhzS6b5CM","bt":"1","b":["DTNZH3ULvaU6JR2nmwyYAfSVPzhzS6bZ-i0d8JZAo5CM"],"c":["EO"],"a":[]}"#.as_bytes();
-    let (_rest, ev) = message(&stream).unwrap();
-    // if let Deserialized::Event(ev) = message {
-    let signature = keypair.0.sign_ed(&stream).unwrap();
-    let rcp = Event {
-        prefix: ev.event_message.event.prefix,
-        sn: ev.event_message.event.sn,
-        event_data: EventData::Rct(Receipt {
-            receipted_event_digest: SelfAddressing::Blake3_256.derive(&stream),
-        }),
-    }
-    .to_message(SerializationFormats::JSON)
-    .unwrap();
-
-    let signature = SelfSigning::Ed25519Sha512.derive(signature);
-
-    let signed_rcp = SignedNontransferableReceipt::new(&rcp, vec![(prefix.clone(), signature)]);
-
-    println!(
-        "rcp: {}",
-        String::from_utf8(signed_rcp.serialize().unwrap()).unwrap()
-    );
-
-    signed_message(&signed_rcp.serialize().unwrap()).unwrap();
 }

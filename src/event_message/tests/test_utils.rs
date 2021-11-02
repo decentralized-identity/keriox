@@ -65,7 +65,7 @@ fn test_update_identifier_state(
     );
 
     // Build event msg of given type.
-    let event_msg = EventMsgBuilder::new(event_type.clone())?
+    let event_msg = EventMsgBuilder::new(event_type.clone())
         .with_sn(state_data.sn)
         .with_previous_event(&state_data.prev_event_hash)
         .with_prefix(&state_data.prefix)
