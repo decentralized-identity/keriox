@@ -72,7 +72,7 @@ impl Keri<UnlockedWallet> {
 
 impl<K: KeyManager> Keri<K> {
     // incept a state and keys
-    pub fn new(db: Arc<SledEventDatabase>, key_manager: Arc<RefCell<K>>, prefix: IdentifierPrefix)
+    pub fn new(db: Arc<SledEventDatabase>, key_manager: Arc<RefCell<K>>)
         -> Result<Keri<K>, Error> {
         Ok(Keri {
             prefix: IdentifierPrefix::default(),

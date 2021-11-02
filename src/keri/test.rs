@@ -6,7 +6,6 @@ use crate::{
     database::sled::SledEventDatabase,
     error::Error,
     keri::Keri,
-    prefix::IdentifierPrefix,
 };
 use std::{
     sync::Arc,
@@ -40,8 +39,7 @@ fn test_direct_mode() -> Result<(), Error> {
     // Init alice.
     let mut alice = Keri::new(
         Arc::clone(&db),
-        Arc::new(RefCell::new(alice_key_manager)),
-        IdentifierPrefix::default())?;
+        Arc::new(RefCell::new(alice_key_manager)))?;
 
     assert_eq!(alice.get_state()?, None);
 
@@ -63,8 +61,7 @@ fn test_direct_mode() -> Result<(), Error> {
     // Init bob.
     let mut bob = Keri::new(
         Arc::clone(&db),
-        Arc::new(RefCell::new(bob_key_manager)),
-        IdentifierPrefix::default())?;
+        Arc::new(RefCell::new(bob_key_manager)))?;
 
     bob.incept().unwrap();
     let bob_state = bob.get_state()?;
