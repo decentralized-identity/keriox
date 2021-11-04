@@ -130,7 +130,7 @@ impl SignatureThreshold {
 
 impl Default for SignatureThreshold {
     fn default() -> Self {
-        Self::Simple(0)
+        Self::Simple(1)
     }
 }
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

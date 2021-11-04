@@ -1,18 +1,25 @@
-use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing}, error::Error, event::sections::key_config::nxt_commitment, event::{
+use crate::{
+    derivation::{basic::Basic, self_addressing::SelfAddressing},
+    error::Error,
+    event::sections::key_config::nxt_commitment,
+    event::{
         event_data::{
-            delegated::{DelegatedInceptionEvent},
-            interaction::InteractionEvent,
+            delegated::DelegatedInceptionEvent, interaction::InteractionEvent,
             rotation::RotationEvent,
         },
         sections::{threshold::SignatureThreshold, WitnessConfig},
         SerializationFormats,
-    }, event::{
+    },
+    event::{
         event_data::{inception::InceptionEvent, EventData},
         sections::seal::Seal,
         sections::InceptionWitnessConfig,
         sections::KeyConfig,
         Event, EventMessage,
-    }, keys::PublicKey, prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix}};
+    },
+    keys::PublicKey,
+    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
+};
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
 
@@ -21,6 +28,7 @@ pub struct EventMsgBuilder {
     prefix: IdentifierPrefix,
     sn: u64,
     key_threshold: SignatureThreshold,
+    next_key_threshold: SignatureThreshold,
     keys: Vec<BasicPrefix>,
     next_keys: Vec<BasicPrefix>,
     prev_event: SelfAddressingPrefix,
@@ -64,7 +72,8 @@ impl EventMsgBuilder {
             prefix: IdentifierPrefix::default(),
             keys: vec![basic_pref],
             next_keys: vec![Basic::Ed25519.derive(npk)],
-            key_threshold: SignatureThreshold::Simple(1),
+            key_threshold: SignatureThreshold::default(),
+            next_key_threshold: SignatureThreshold::default(),
             sn: 1,
             prev_event: SelfAddressing::Blake3_256.derive(&[0u8; 32]),
             data: vec![],
@@ -118,19 +127,31 @@ impl EventMsgBuilder {
         }
     }
 
+    pub fn with_next_threshold(self, threshold: &SignatureThreshold) -> Self {
+        EventMsgBuilder {
+            next_key_threshold: threshold.clone(),
+            ..self
+        }
+    }
+
     pub fn build(self) -> Result<EventMessage, Error> {
         let next_key_hash = nxt_commitment(
-            &self.key_threshold,
+            &self.next_key_threshold,
             &self.next_keys,
-            &SelfAddressing::Blake3_256,
+            &self.derivation,
         );
         let key_config = KeyConfig::new(self.keys, Some(next_key_hash), Some(self.key_threshold));
-        let prefix =
-            if self.prefix == IdentifierPrefix::default() && key_config.public_keys.len() == 1 {
+        let prefix = if self.prefix == IdentifierPrefix::default() {
+            if key_config.public_keys.len() == 1 {
                 IdentifierPrefix::Basic(key_config.clone().public_keys[0].clone())
             } else {
-                self.prefix
-            };
+                let icp_data = InceptionEvent::new(key_config.clone(), None, None)
+                    .incept_self_addressing(self.derivation.clone(), self.format)?;
+                icp_data.event.prefix
+            }
+        } else {
+            self.prefix
+        };
 
         Ok(match self.event_type {
             EventType::Inception => {
@@ -204,4 +225,42 @@ impl EventMsgBuilder {
             }
         })
     }
+}
+
+#[test]
+fn test_multisig_prefix_derivation() {
+    // Keys taken from keripy: keripy/tests/core/test_eventing.py::2405-2406
+    let expected_event = br#"{"v":"KERI10JSON00014b_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"0","t":"icp","kt":"2","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"E9izzBkXX76sqt0N-tfLzJeRqj0W56p4pDQ_ZqNCDpyw","bt":"0","b":[],"c":[],"a":[]}"#;
+    let keys: Vec<BasicPrefix> = vec![
+        "DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"
+            .parse()
+            .unwrap(),
+        "DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI"
+            .parse()
+            .unwrap(),
+        "DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"
+            .parse()
+            .unwrap(),
+    ];
+    let next_keys: Vec<BasicPrefix> = vec![
+        "DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ"
+            .parse()
+            .unwrap(),
+        "D1kcBE7h0ImWW6_Sp7MQxGYSshZZz6XM7OiUE5DXm0dU"
+            .parse()
+            .unwrap(),
+        "D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM"
+            .parse()
+            .unwrap(),
+    ];
+
+    let msg_builder = EventMsgBuilder::new(EventType::Inception)
+        .unwrap()
+        .with_keys(keys)
+        .with_next_keys(next_keys)
+        .with_threshold(&SignatureThreshold::Simple(2))
+        .with_next_threshold(&SignatureThreshold::Simple(2));
+    let msg = msg_builder.build().unwrap();
+
+    assert_eq!(expected_event.to_vec(), msg.serialize().unwrap());
 }
