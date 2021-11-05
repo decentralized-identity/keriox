@@ -1,24 +1,32 @@
+pub mod attachment;
 pub mod event_msg_builder;
 pub mod parse;
+pub mod payload_size;
 pub mod serialization_info;
 pub mod serializer;
-pub mod payload_size;
 pub mod signed_event_message;
-pub mod attachment;
 
 use std::cmp::Ordering;
 
-use crate::{error::Error, event::{
+use crate::{
+    error::Error,
+    event::{
         event_data::{DummyEvent, EventData},
         Event,
-    }, prefix::{
-       AttachedSignaturePrefix, IdentifierPrefix,
-    }, state::{EventSemantics, IdentifierState}};
+    },
+    prefix::{AttachedSignaturePrefix, IdentifierPrefix},
+    state::{EventSemantics, IdentifierState},
+};
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use serialization_info::*;
 
-use self::{attachment::Attachment, payload_size::PayloadType, signed_event_message::SignedEventMessage};
+use self::{
+    attachment::Attachment,
+    event_msg_builder::{EventMsgBuilder, EventType},
+    payload_size::PayloadType,
+    signed_event_message::SignedEventMessage,
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct EventMessage {
@@ -35,6 +43,12 @@ pub struct EventMessage {
     // TODO: Currently seems to be bugged, it captures and duplicates every element in the event
     // #[serde(flatten)]
     // pub extra: HashMap<String, Value>,
+}
+
+impl Default for EventMessage {
+    fn default() -> Self {
+        EventMsgBuilder::new(EventType::Inception).build().unwrap()
+    }
 }
 
 #[derive(Serialize, Deserialize, PartialEq)]
@@ -54,13 +68,15 @@ impl TimestampedEventMessage {
 
 impl PartialOrd for TimestampedEventMessage {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(match self.event_message.event.sn == other.event_message.event.sn {
-            true => Ordering::Equal,
-            false => match self.event_message.event.sn > other.event_message.event.sn {
-                true => Ordering::Greater,
-                false => Ordering::Less,
+        Some(
+            match self.event_message.event.sn == other.event_message.event.sn {
+                true => Ordering::Equal,
+                false => match self.event_message.event.sn > other.event_message.event.sn {
+                    true => Ordering::Greater,
+                    false => Ordering::Less,
+                },
             },
-        })
+        )
     }
 }
 
@@ -120,7 +136,12 @@ impl EventMessage {
         self.serialization().encode(self)
     }
 
-    pub fn sign(&self, payload_type: PayloadType, sigs: Vec<AttachedSignaturePrefix>, attachment: Option<Attachment>) -> SignedEventMessage {
+    pub fn sign(
+        &self,
+        payload_type: PayloadType,
+        sigs: Vec<AttachedSignaturePrefix>,
+        attachment: Option<Attachment>,
+    ) -> SignedEventMessage {
         SignedEventMessage::new(self, payload_type, sigs, attachment)
     }
 }
@@ -170,10 +191,7 @@ impl EventSemantics for EventMessage {
                     Err(Error::SemanticError(
                         "Applying delegated rotation to non-delegated state.".into(),
                     ))
-                } else if drt
-                    .previous_event_hash
-                    .verify_binding(&state.last)
-                {
+                } else if drt.previous_event_hash.verify_binding(&state.last) {
                     Ok(IdentifierState {
                         last: self.serialize()?,
                         ..next_state
@@ -240,11 +258,16 @@ mod tests {
 
     use self::{event_msg_builder::EventType, test_utils::test_mock_event_sequence};
     use super::*;
-    use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning}, event::{
+    use crate::{
+        derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
+        event::{
             event_data::{inception::InceptionEvent, EventData},
             sections::KeyConfig,
             sections::{threshold::SignatureThreshold, InceptionWitnessConfig},
-        }, keys::{PrivateKey, PublicKey}, prefix::{Prefix, AttachedSignaturePrefix, IdentifierPrefix }};
+        },
+        keys::{PrivateKey, PublicKey},
+        prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix},
+    };
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
 

@@ -1,8 +1,12 @@
 #![allow(non_upper_case_globals)]
-use crate::{derivation::{
+use crate::{
+    derivation::{
         attached_signature_code::b64_to_num, basic::Basic, self_addressing::SelfAddressing,
         self_signing::SelfSigning, DerivationCode,
-    }, event::sections::seal::EventSeal, keys::PublicKey, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix}};
+    },
+    keys::PublicKey,
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+};
 use base64::URL_SAFE;
 use nom::{bytes::complete::take, error::ErrorKind};
 
@@ -147,7 +151,7 @@ pub fn attached_sn(s: &[u8]) -> nom::IResult<&[u8], u64> {
     match type_c {
         a => {
             let (rest, parsed_sn) = take(22u8)(more)?;
-            
+
             let sn = {
                 let b64decode = base64::decode_config(parsed_sn, URL_SAFE)
                     .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
@@ -174,35 +178,6 @@ pub fn prefix(s: &[u8]) -> nom::IResult<&[u8], IdentifierPrefix> {
     Ok((rest, identifier))
 }
 
-/// extracts the Event seal
-pub fn event_seal(s: &[u8]) -> nom::IResult<&[u8], EventSeal> {
-    let (more, type_c) = take(3u8)(s)?;
-    const a: &'static [u8] = "FAB".as_bytes();
-
-    match type_c {
-        a => {
-            let (rest, identifier) = match self_addressing_prefix(more) {
-                Ok(sap) => Ok((sap.0, IdentifierPrefix::SelfAddressing(sap.1))),
-                Err(_) => match basic_prefix(more) {
-                    Ok(bp) => Ok((bp.0, IdentifierPrefix::Basic(bp.1))),
-                    Err(e) => Err(e),
-                },
-            }?;
-
-            let (rest, sn) = attached_sn(rest)?;
-            let (rest, event_digest) = self_addressing_prefix(rest)?;
-            let seal = EventSeal {
-                prefix: identifier,
-                sn: u64::from(sn),
-                event_digest,
-            };
-
-            Ok((rest, seal))
-        }
-        _ => Err(nom::Err::Error((type_c, ErrorKind::IsNot))),
-    }
-}
-
 #[test]
 fn test() {
     assert_eq!(
@@ -218,9 +193,9 @@ fn test() {
 
 #[test]
 fn test_basic_prefix() {
+    use crate::prefix::Prefix;
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
-    use crate::prefix::Prefix;
 
     let kp = Keypair::generate(&mut OsRng);
 
@@ -267,21 +242,4 @@ fn test_self_signing() {
 fn test_sn_parse() {
     let sn = attached_sn("0AAAAAAAAAAAAAAAAAAAAAAw".as_bytes()).unwrap();
     assert_eq!(sn, ("".as_bytes(), 3));
-}
-
-#[test]
-fn test_seal_parse() {
-    let seal_attachment = r#"FABENlofRlu2VPul-tjDObk6bTia2deG6NMqeFmsXhAgFvA0AAAAAAAAAAAAAAAAAAAAAAAE_MT0wsz-_ju_DVK_SaMaZT9ZE7pP4auQYeo2PDaw9FI-AABAA0Q7bqPvenjWXo_YIikMBKOg-pghLKwBi1Plm0PEqdv67L1_c6dq9bll7OFnoLp0a74Nw1cBGdjIPcu-yAllHAw"#;
-    let seal = event_seal(seal_attachment.as_bytes()).unwrap().1;
-    assert_eq!(
-        seal.prefix,
-        "ENlofRlu2VPul-tjDObk6bTia2deG6NMqeFmsXhAgFvA"
-            .parse()
-            .unwrap()
-    );
-    assert_eq!(seal.sn, 0);
-    let ev_digest: SelfAddressingPrefix = "E_MT0wsz-_ju_DVK_SaMaZT9ZE7pP4auQYeo2PDaw9FI"
-        .parse()
-        .unwrap();
-    assert_eq!(seal.event_digest, ev_digest);
 }

@@ -69,6 +69,7 @@ pub enum PayloadType {
     /// pre+snu+dig + idx sig group
     #[serde(rename = "-F")]
     MF,
+    /// Count of attached source seals (sn + dig)
     #[serde(rename = "-G")]
     MG,
     #[serde(rename = "-U")]

@@ -6,13 +6,18 @@ use super::{
     signed_event_message::{SignedNontransferableReceipt, SignedTransferableReceipt},
     AttachedSignaturePrefix, EventMessage, SignedEventMessage,
 };
-use crate::{derivation::attached_signature_code::b64_to_num, event::{event_data::EventData, sections::seal::EventSeal}, prefix::{
+use crate::{
+    derivation::attached_signature_code::b64_to_num,
+    event::{event_data::EventData, sections::seal::EventSeal},
+    prefix::{
         parse::{
             attached_signature, attached_sn, basic_prefix, prefix, self_addressing_prefix,
             self_signing_prefix,
         },
         BasicPrefix, SelfSigningPrefix,
-    }, state::IdentifierState};
+    },
+    state::IdentifierState,
+};
 use nom::{
     branch::*, bytes::complete::take, combinator::*, error::ErrorKind, multi::*, sequence::*,
 };
@@ -195,9 +200,12 @@ fn couplets(s: &[u8]) -> nom::IResult<&[u8], Vec<(BasicPrefix, SelfSigningPrefix
 
 fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
     let (rest, payload_type) = take(2u8)(s)?;
-    let payload_type: PayloadType =
-        PayloadType::try_from(std::str::from_utf8(payload_type).unwrap())
-        .map_err(|_e| nom::Err::Failure((s, ErrorKind::IsNot)))?;
+    let payload_type: PayloadType = PayloadType::try_from(
+        std::str::from_utf8(payload_type)
+        .map_err(|_e| nom::Err::Failure((s, ErrorKind::IsNot)))?,
+    )
+    // Can't parse payload type
+    .map_err(|_e| nom::Err::Failure((s, ErrorKind::IsNot)))?;
     match payload_type {
         PayloadType::MG => {
             let (rest, source_seals) = source_seal(rest)?;
@@ -257,7 +265,10 @@ pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], Deserialized> {
                         Deserialized::TransferableRct(SignedTransferableReceipt::new(
                             &e.event_message,
                             // TODO what if more than one?
-                            seals.last().unwrap().to_owned(),
+                            seals
+                                .last()
+                                .ok_or(nom::Err::Failure((s, ErrorKind::IsNot)))?
+                                .to_owned(),
                             sigs,
                         )),
                     ))
@@ -273,13 +284,16 @@ pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], Deserialized> {
 
             let (seals, sigs) = match (att1, att2) {
                 (Attachment::SealSourceCouplets(seals), Attachment::AttachedSignatures(sigs)) => {
-                    (seals, sigs)
+                    Ok((seals, sigs))
                 }
                 (Attachment::AttachedSignatures(sigs), Attachment::SealSourceCouplets(seals)) => {
-                    (seals, sigs)
+                    Ok((seals, sigs))
                 }
-                _ => todo!(),
-            };
+                _ => {
+                    // Improper attachment type
+                    Err(nom::Err::Failure((s, ErrorKind::IsNot)))
+                }
+            }?;
             Ok((
                 rest,
                 Deserialized::Event(DeserializedSignedEvent {
@@ -301,7 +315,8 @@ pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], Deserialized> {
                     }),
                 ))
             } else {
-                todo!()
+                // Improper attachment type
+                Err(nom::Err::Failure((s, ErrorKind::IsNot)))
             }
         }
     }
@@ -536,15 +551,13 @@ fn test_signed_trans_receipt() {
 
     // Taken from keripy/core/test_witness.py
     let nontrans_rcp = r#"{"v":"KERI10JSON000091_","i":"EpU9D_puIW_QhgOf3WKUy-gXQnXeTQcJCO_Igcxi1YBg","s":"0","t":"rct","d":"EIt0xQQf-o-9E1B9VTDHiicQzVWk1CptvnewcnuhSd0M"}-CABB389hKezugU2LFKiFVbitoHAxXqJh6HQ8Rn9tH7fxd680BCZrTPLvG7sNaxtV8ZGdIHABFHCZ9FlnG6b4J6a9GcyzJIJOjuGNphW2zyC_WWU6CGMG7V52UeJxPqLpaYdP7Cg"#;
-    // let nontrans_rcp = r#"{"v":"KERI10JSON000091_","i":"EpU9D_puIW_QhgOf3WKUy-gXQnXeTQcJCO_Igcxi1YBg","s":"0","t":"rct","d":"EIt0xQQf-o-9E1B9VTDHiicQzVWk1CptvnewcnuhSd0M"}-CABBljDbmdNfb63KOpGV4mmPKwyyp3OzDsRzpNrdL1BRQts0BM4bMcLjcDtD0fmLOGDx2oxBloc2FujbyllA7GuPLm-RQbyPPQr70_Y7DXzlWgs8gaYotUATeR-dj1ru9qFwADA"#;
     let msg = signed_message(nontrans_rcp.as_bytes());
     println!("{:?}", msg);
     assert!(msg.is_ok());
 
-    // witness receipt not implemented yet
+    // Nontrans receipt with alternative attachment with -B payload type. Not implemented yet.
     // let witness_receipts = r#"{"v":"KERI10JSON000091_","i":"EpU9D_puIW_QhgOf3WKUy-gXQnXeTQcJCO_Igcxi1YBg","s":"0","t":"rct","d":"EIt0xQQf-o-9E1B9VTDHiicQzVWk1CptvnewcnuhSd0M"}-BADAACZrTPLvG7sNaxtV8ZGdIHABFHCZ9FlnG6b4J6a9GcyzJIJOjuGNphW2zyC_WWU6CGMG7V52UeJxPqLpaYdP7CgAB8npsG58rX1ex73gaGe-jvRnw58RQGsDLzoSXaGn-kHRRNu6Kb44zXDtMnx-_8CjnHqskvDbz6pbEbed3JTOnCQACM4bMcLjcDtD0fmLOGDx2oxBloc2FujbyllA7GuPLm-RQbyPPQr70_Y7DXzlWgs8gaYotUATeR-dj1ru9qFwADA"#;
     // let msg = signed_message(witness_receipts.as_bytes());
-    // println!("{:?}", msg);
     // assert!(msg.is_ok());
 }
 

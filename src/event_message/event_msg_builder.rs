@@ -135,11 +135,8 @@ impl EventMsgBuilder {
     }
 
     pub fn build(self) -> Result<EventMessage, Error> {
-        let next_key_hash = nxt_commitment(
-            &self.next_key_threshold,
-            &self.next_keys,
-            &self.derivation,
-        );
+        let next_key_hash =
+            nxt_commitment(&self.next_key_threshold, &self.next_keys, &self.derivation);
         let key_config = KeyConfig::new(self.keys, Some(next_key_hash), Some(self.key_threshold));
         let prefix = if self.prefix == IdentifierPrefix::default() {
             if key_config.public_keys.len() == 1 {
@@ -235,9 +232,7 @@ pub struct ReceiptBuilder {
 
 impl ReceiptBuilder {
     pub fn new() -> Self {
-        let default_event = EventMsgBuilder::new(EventType::Inception)
-            .build()
-            .unwrap();
+        let default_event = EventMessage::default();
         Self {
             format: SerializationFormats::JSON,
             derivation: SelfAddressing::Blake3_256,
@@ -265,9 +260,7 @@ impl ReceiptBuilder {
             prefix: self.receipted_event.event.prefix.clone(),
             sn: self.receipted_event.event.sn,
             event_data: EventData::Rct(Receipt {
-                receipted_event_digest: self
-                    .derivation
-                    .derive(&self.receipted_event.serialize()?),
+                receipted_event_digest: self.derivation.derive(&self.receipted_event.serialize()?),
             }),
         }
         .to_message(self.format)

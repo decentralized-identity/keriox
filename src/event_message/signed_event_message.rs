@@ -5,7 +5,7 @@ use std::cmp::Ordering;
 use crate::{
     error::Error,
     event::sections::seal::EventSeal,
-    prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfSigningPrefix},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix},
     state::{EventSemantics, IdentifierState},
 };
 
@@ -33,17 +33,8 @@ impl Serialize for SignedEventMessage {
         if serializer.is_human_readable() {
             let mut em = serializer.serialize_struct("EventMessage", 2)?;
             em.serialize_field("", &self.event_message)?;
-            let str_sigs = &self
-                .signatures
-                .iter()
-                .fold(String::default(), |accum, sig| accum + &sig.to_str());
-            let code = self
-                .payload_type
-                .adjust_with_num(self.signatures.len() as u16);
-            em.serialize_field(
-                "-",
-                &format!("{}{}", Box::leak(code.into_boxed_str()), str_sigs),
-            )?;
+            let att_sigs = Attachment::AttachedSignatures(self.signatures.clone());
+            em.serialize_field("-", &att_sigs.to_str())?;
             em.end()
         // . else - we pack as it is for DB / CBOR purpose
         } else {
@@ -193,9 +184,13 @@ impl SignedTransferableReceipt {
 
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         Ok([
-            self.body.serialize()?,
-            Attachment::AttachedEventSeal(vec![self.validator_seal.clone()]).serialize()?,
-            Attachment::AttachedSignatures(self.signatures.clone()).serialize()?,
+            &self.body.serialize()?,
+            Attachment::AttachedEventSeal(vec![self.validator_seal.clone()])
+                .to_str()
+                .as_bytes(),
+            Attachment::AttachedSignatures(self.signatures.clone())
+                .to_str()
+                .as_bytes(),
         ]
         .concat())
     }
@@ -223,8 +218,10 @@ impl SignedNontransferableReceipt {
 
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         Ok([
-            self.body.serialize()?,
-            Attachment::ReceiptCouplets(self.couplets.clone()).serialize()?,
+            &self.body.serialize()?,
+            Attachment::ReceiptCouplets(self.couplets.clone())
+                .to_str()
+                .as_bytes(),
         ]
         .concat())
     }

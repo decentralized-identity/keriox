@@ -2,7 +2,6 @@ use base64::URL_SAFE_NO_PAD;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    error::Error,
     event::sections::seal::EventSeal,
     prefix::{
         AttachedSignaturePrefix, BasicPrefix, Prefix, SelfAddressingPrefix, SelfSigningPrefix,
@@ -20,58 +19,46 @@ pub enum Attachment {
 }
 
 impl Attachment {
-    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
+    pub fn to_str(&self) -> String {
         let (payload_type, att_len, serialized_attachment) = match self {
             Attachment::SealSourceCouplets(sources) => {
-                let serialzied_sources: Vec<u8> = sources
+                let serialzied_sources = sources
                     .into_iter()
-                    .map(|s| s.pack() )
-                    .flatten()
-                    .collect();
+                    .fold("".into(), |acc, s| [acc, s.pack()].join(""));
 
                 (PayloadType::MG, sources.len(), serialzied_sources)
             }
             Attachment::AttachedEventSeal(seal) => {
-                let serialized_seals: Vec<u8> = seal
-                    .iter()
-                    .map(|seal| {
-                        [
-                            seal.prefix.to_str(),
-                            pack_sn(seal.sn),
-                            seal.event_digest.to_str(),
-                        ]
-                        .join("")
-                        .as_bytes()
-                        .to_vec()
-                    })
-                    .flatten()
-                    .collect();
+                let serialized_seals = seal.iter().fold("".into(), |acc, seal| {
+                    [
+                        acc,
+                        seal.prefix.to_str(),
+                        pack_sn(seal.sn),
+                        seal.event_digest.to_str(),
+                    ]
+                    .join("")
+                });
                 (PayloadType::MF, seal.len(), serialized_seals)
             }
             Attachment::AttachedSignatures(sigs) => {
-                let serialized_sigs: Vec<u8> = sigs
+                let serialized_sigs = sigs
                     .iter()
-                    .map(|sig| sig.to_str().as_bytes().to_vec())
-                    .flatten()
-                    .collect();
+                    .fold("".into(), |acc, sig| [acc, sig.to_str()].join(""));
                 (PayloadType::MA, sigs.len(), serialized_sigs)
             }
             Attachment::ReceiptCouplets(couplets) => {
-                let packed_couplets = couplets
-                    .iter()
-                    .map(|(bp, sp)| [bp.to_str(), sp.to_str()].join("").as_bytes().to_vec())
-                    .fold(vec![], |acc, next| [acc, next].concat());
+                let packed_couplets = couplets.iter().fold("".into(), |acc, (bp, sp)| {
+                    [acc, bp.to_str(), sp.to_str()].join("")
+                });
 
                 (PayloadType::MC, couplets.len(), packed_couplets)
             }
         };
-        Ok(payload_type
-            .adjust_with_num(att_len as u16)
-            .as_bytes()
-            .to_vec()
-            .into_iter()
-            .chain(serialized_attachment)
-            .collect::<Vec<_>>())
+        [
+            payload_type.adjust_with_num(att_len as u16),
+            serialized_attachment,
+        ]
+        .join("")
     }
 }
 
@@ -85,11 +72,8 @@ impl SourceSeal {
     pub fn new(sn: u64, digest: SelfAddressingPrefix) -> Self {
         Self { sn, digest }
     }
-    pub fn pack(&self) -> Vec<u8> {
-        [pack_sn(self.sn), self.digest.to_str()]
-            .join("")
-            .as_bytes()
-            .to_vec()
+    pub fn pack(&self) -> String {
+        [pack_sn(self.sn), self.digest.to_str()].join("")
     }
 }
 
