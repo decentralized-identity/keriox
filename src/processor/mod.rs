@@ -1,28 +1,16 @@
 use std::sync::Arc;
 
-use crate::{
-    database::sled::SledEventDatabase,
-    derivation::self_addressing::SelfAddressing,
-    error::Error,
-    event::{
+use crate::{database::sled::SledEventDatabase, derivation::self_addressing::SelfAddressing, error::Error, event::{
         event_data::EventData,
         sections::{
             seal::{EventSeal, Seal},
             KeyConfig,
         },
         EventMessage,
-    },
-    event_message::{
-        parse::{Deserialized, DeserializedSignedEvent},
-        payload_size::PayloadType,
-        signed_event_message::{
+    }, event_message::{attachment::Attachment, parse::{Deserialized, DeserializedSignedEvent}, payload_size::PayloadType, signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
             TimestampedSignedEventMessage,
-        },
-    },
-    prefix::{IdentifierPrefix, SelfAddressingPrefix},
-    state::{EventSemantics, IdentifierState},
-};
+        }}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
 
 #[cfg(feature = "async")]
 pub mod async_processing;
@@ -219,7 +207,7 @@ impl EventProcessor {
         Ok(if let Some(receipts) = self.db.get_receipts_t(id) {
             receipts
                 .filter(|r| r.body.event.sn.eq(&sn))
-                .any(|receipt| receipt.validator_seal.event_seal.prefix.eq(validator_pref))
+                .any(|receipt| receipt.validator_seal.prefix.eq(validator_pref))
         } else {
             false
         })
@@ -248,6 +236,22 @@ impl EventProcessor {
         }
     }
 
+    fn find_source_seal(event: &DeserializedSignedEvent) -> Result<(u64, SelfAddressingPrefix), Error> {
+        match event.attachment.clone().ok_or(Error::SemanticError(
+                "Missing source seal.".into(),
+            ))? {
+                Attachment::SealSourceCouplets(
+                    ref source_seal_list,
+                ) => {
+                    let ss = source_seal_list
+                        .last()
+                        .ok_or(Error::SemanticError("Missing source seal".into()))?;
+                    Ok((ss.sn, ss.digest.clone()))
+                }
+                _ => Err(Error::SemanticError("Missing source seal.".into())),
+            }
+    }
+
     /// Process Event
     ///
     /// Validates a Key Event against the latest state
@@ -266,6 +270,7 @@ impl EventProcessor {
             event.attachment.clone(),
         );
         let id = &event.deserialized_event.event_message.event.prefix;
+
         // If delegated event, check its delegator seal.
         match event
             .deserialized_event
@@ -275,18 +280,7 @@ impl EventProcessor {
             .clone()
         {
             EventData::Dip(dip) => {
-                let (sn, dig) = match event.attachment.clone().ok_or(Error::SemanticError(
-                    "Missing source seal in delegating event".into(),
-                ))? {
-                    crate::event_message::attachment::Attachment::SealSourceCouplets(
-                        ref source_seal_list,
-                    ) => {
-                        let ss = source_seal_list
-                            .last()
-                            .ok_or(Error::SemanticError("Missing source seal".into()))?;
-                        (ss.sn, ss.digest.clone())
-                    }
-                };
+                let (sn, dig) = Self::find_source_seal(&event)?;
                 let seal = EventSeal {
                     prefix: dip.delegator,
                     sn,
@@ -300,18 +294,7 @@ impl EventProcessor {
                     .ok_or(Error::SemanticError("Missing state of delegated identifier".into()))?
                     .delegator
                     .ok_or(Error::SemanticError("Missing delegator".into()))?;
-                let (sn, dig) = match event.attachment.clone().ok_or(Error::SemanticError(
-                    "Missing source seal in delegating event".into(),
-                ))? {
-                    crate::event_message::attachment::Attachment::SealSourceCouplets(
-                        ref source_seal_list,
-                    ) => {
-                        let ss = source_seal_list
-                            .last()
-                            .ok_or(Error::SemanticError("Missing source seal".into()))?;
-                        (ss.sn, ss.digest.clone())
-                    }
-                };
+                let (sn, dig) = Self::find_source_seal(&event)?;
                 let seal = EventSeal {
                     prefix: delegator,
                     sn,
@@ -373,9 +356,9 @@ impl EventProcessor {
                     self.get_event_at_sn(&vrc.body.event.prefix, vrc.body.event.sn)
                 {
                     let kp = self.get_keys_at_event(
-                        &vrc.validator_seal.event_seal.prefix,
-                        vrc.validator_seal.event_seal.sn,
-                        &vrc.validator_seal.event_seal.event_digest,
+                        &vrc.validator_seal.prefix,
+                        vrc.validator_seal.sn,
+                        &vrc.validator_seal.event_digest,
                     )?;
                     if kp.is_some()
                         && kp.unwrap().verify(

@@ -92,9 +92,3 @@ pub fn b64_to_num(b64: &[u8]) -> Result<u16, Error> {
         _ => [slice[len - 2], slice[len - 1]],
     }))
 }
-
-
-
-pub fn get_sig_count(num: u16) -> String {
-    ["-A", &num_to_b64(num)].join("")
-}

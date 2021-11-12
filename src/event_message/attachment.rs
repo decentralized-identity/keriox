@@ -1,57 +1,64 @@
-use std::str::FromStr;
-
 use base64::URL_SAFE_NO_PAD;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    error::Error,
-    prefix::{Prefix, SelfAddressingPrefix},
+    event::sections::seal::EventSeal,
+    prefix::{
+        AttachedSignaturePrefix, BasicPrefix, Prefix, SelfAddressingPrefix, SelfSigningPrefix,
+    },
 };
 
-use super::{parse::counter, payload_size::PayloadType};
+use super::payload_size::PayloadType;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub enum Attachment {
     SealSourceCouplets(Vec<SourceSeal>),
+    AttachedEventSeal(Vec<EventSeal>),
+    AttachedSignatures(Vec<AttachedSignaturePrefix>),
+    ReceiptCouplets(Vec<(BasicPrefix, SelfSigningPrefix)>),
 }
 
 impl Attachment {
-    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        match self {
+    pub fn to_str(&self) -> String {
+        let (payload_type, att_len, serialized_attachment) = match self {
             Attachment::SealSourceCouplets(sources) => {
-                let payload_type = PayloadType::MG;
                 let serialzied_sources = sources
                     .into_iter()
-                    .map(|s| s.serialize().unwrap())
-                    .flatten();
-                Ok(payload_type
-                    .adjust_with_num(sources.len() as u16)
-                    .as_bytes()
-                    .to_vec()
-                    .into_iter()
-                    .chain(serialzied_sources)
-                    .collect::<Vec<_>>())
-            }
-        }
-    }
-}
+                    .fold("".into(), |acc, s| [acc, s.pack()].join(""));
 
-impl FromStr for Attachment {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match &s[0..2] {
-            "-G" => {
-                let (rest, counter) = counter(s.as_bytes())
-                    .map_err(|_e| Error::SemanticError("Can't parse counter".into()))?;
-                if rest.is_empty() {
-                    Ok(counter)
-                } else {
-                    Err(Error::SemanticError("Can't parse counter".into()))
-                }
+                (PayloadType::MG, sources.len(), serialzied_sources)
             }
-            _ => Err(Error::DeserializeError("Unknown counter code".into())),
-        }
+            Attachment::AttachedEventSeal(seal) => {
+                let serialized_seals = seal.iter().fold("".into(), |acc, seal| {
+                    [
+                        acc,
+                        seal.prefix.to_str(),
+                        pack_sn(seal.sn),
+                        seal.event_digest.to_str(),
+                    ]
+                    .join("")
+                });
+                (PayloadType::MF, seal.len(), serialized_seals)
+            }
+            Attachment::AttachedSignatures(sigs) => {
+                let serialized_sigs = sigs
+                    .iter()
+                    .fold("".into(), |acc, sig| [acc, sig.to_str()].join(""));
+                (PayloadType::MA, sigs.len(), serialized_sigs)
+            }
+            Attachment::ReceiptCouplets(couplets) => {
+                let packed_couplets = couplets.iter().fold("".into(), |acc, (bp, sp)| {
+                    [acc, bp.to_str(), sp.to_str()].join("")
+                });
+
+                (PayloadType::MC, couplets.len(), packed_couplets)
+            }
+        };
+        [
+            payload_type.adjust_with_num(att_len as u16),
+            serialized_attachment,
+        ]
+        .join("")
     }
 }
 
@@ -65,11 +72,8 @@ impl SourceSeal {
     pub fn new(sn: u64, digest: SelfAddressingPrefix) -> Self {
         Self { sn, digest }
     }
-    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        Ok([pack_sn(self.sn), self.digest.to_str()]
-            .join("")
-            .as_bytes()
-            .to_vec())
+    pub fn pack(&self) -> String {
+        [pack_sn(self.sn), self.digest.to_str()].join("")
     }
 }
 
@@ -78,38 +82,15 @@ fn pack_sn(sn: u64) -> String {
     let sn_raw: Vec<u8> = sn.to_be_bytes().into();
     // Calculate how many zeros are missing to achieve expected base64 string
     // length. Master code size is expected padding size.
-    let missing_zeros = payload_type.size() / 4 * 3 - payload_type.master_code_size(false) - sn_raw.len();
-    let sn_vec: Vec<u8> = std::iter::repeat(0).take(missing_zeros).chain(sn_raw).collect();
+    let missing_zeros =
+        payload_type.size() / 4 * 3 - payload_type.master_code_size(false) - sn_raw.len();
+    let sn_vec: Vec<u8> = std::iter::repeat(0)
+        .take(missing_zeros)
+        .chain(sn_raw)
+        .collect();
     [
         payload_type.to_string(),
         base64::encode_config(sn_vec, URL_SAFE_NO_PAD),
     ]
     .join("")
-}
-
-#[test]
-fn test_parse_attachement() -> Result<(), Error> {
-    let attached_str = "-GAC0AAAAAAAAAAAAAAAAAAAAAAQE3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII0AAAAAAAAAAAAAAAAAAAAAAQE3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII";
-    let attached_sn_dig: Attachment = attached_str.parse()?;
-    assert_eq!(
-        attached_str,
-        String::from_utf8(attached_sn_dig.serialize()?).unwrap()
-    );
-    match attached_sn_dig {
-        Attachment::SealSourceCouplets(sources) => {
-            let s1 = sources[0].clone();
-            let s2 = sources[1].clone();
-            assert_eq!(s1.sn, 1);
-            assert_eq!(
-                s1.digest.to_str(),
-                "E3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII"
-            );
-            assert_eq!(s2.sn, 1);
-            assert_eq!(
-                s2.digest.to_str(),
-                "E3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII"
-            );
-        }
-    };
-    Ok(())
 }

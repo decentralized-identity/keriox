@@ -1,17 +1,29 @@
-use super::{AttachedSignaturePrefix, EventMessage, SignedEventMessage, attachment::{SourceSeal, Attachment}, payload_size::PayloadType, signed_event_message::{SignedNontransferableReceipt, SignedTransferableReceipt}};
-use crate::{derivation::attached_signature_code::b64_to_num, event::{event_data::EventData, sections::seal::EventSeal}, prefix::{BasicPrefix, SelfSigningPrefix, parse::{attached_signature, attached_sn, basic_prefix, event_seal, self_addressing_prefix, self_signing_prefix}}, state::IdentifierState};
+#[cfg(feature = "async")]
+use super::serialization_info::SerializationInfo;
+use super::{
+    attachment::{Attachment, SourceSeal},
+    payload_size::PayloadType,
+    signed_event_message::{SignedNontransferableReceipt, SignedTransferableReceipt},
+    AttachedSignaturePrefix, EventMessage, SignedEventMessage,
+};
+use crate::{
+    derivation::attached_signature_code::b64_to_num,
+    event::{event_data::EventData, sections::seal::EventSeal},
+    prefix::{
+        parse::{
+            attached_signature, attached_sn, basic_prefix, prefix, self_addressing_prefix,
+            self_signing_prefix,
+        },
+        BasicPrefix, SelfSigningPrefix,
+    },
+    state::IdentifierState,
+};
 use nom::{
-    branch::*,
-    combinator::*,
-    error::ErrorKind,
-    multi::*,
-    sequence::*,
+    branch::*, bytes::complete::take, combinator::*, error::ErrorKind, multi::*, sequence::*,
 };
 use rmp_serde as serde_mgpk;
 use serde::Deserialize;
-use std::io::Cursor;
-#[cfg(feature = "async")]
-use super::serialization_info::SerializationInfo;
+use std::{convert::TryFrom, io::Cursor};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DeserializedEvent<'a> {
@@ -29,7 +41,12 @@ pub struct DeserializedSignedEvent<'a> {
 // FIXME: detect payload type
 impl From<DeserializedSignedEvent<'_>> for SignedEventMessage {
     fn from(de: DeserializedSignedEvent) -> SignedEventMessage {
-        SignedEventMessage::new(&de.deserialized_event.event_message, PayloadType::MA, de.signatures, de.attachment)
+        SignedEventMessage::new(
+            &de.deserialized_event.event_message,
+            PayloadType::MA,
+            de.signatures,
+            de.attachment,
+        )
     }
 }
 
@@ -94,7 +111,7 @@ pub fn message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], DeserializedEvent> {
 fn json_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
     match serde_json::from_slice(data) {
         Ok(vi) => Ok((data, vi)),
-        _ => Err(nom::Err::Error((data, ErrorKind::IsNot)))
+        _ => Err(nom::Err::Error((data, ErrorKind::IsNot))),
     }
 }
 
@@ -103,7 +120,7 @@ fn json_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
 fn cbor_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
     match serde_cbor::from_slice(data) {
         Ok(vi) => Ok((data, vi)),
-        _ => Err(nom::Err::Error((data, ErrorKind::IsNot)))
+        _ => Err(nom::Err::Error((data, ErrorKind::IsNot))),
     }
 }
 
@@ -112,7 +129,7 @@ fn cbor_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
 fn mgpk_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
     match serde_mgpk::from_slice(data) {
         Ok(vi) => Ok((data, vi)),
-        _ => Err(nom::Err::Error((data, ErrorKind::IsNot)))
+        _ => Err(nom::Err::Error((data, ErrorKind::IsNot))),
     }
 }
 
@@ -121,126 +138,186 @@ pub(crate) fn version<'a>(data: &'a [u8]) -> nom::IResult<&[u8], SerializationIn
     alt((json_version, cbor_version, mgpk_version))(data).map(|d| (d.0, d.1))
 }
 
-/// extracts the count from the sig count code
-// FIXME: is this working for all types of sigs?
-pub(crate) fn sig_count(s: &[u8]) -> nom::IResult<&[u8], u16> {
-    let (rest, t) = tuple((
-        map_parser(
-            nom::bytes::complete::take(2u8),
-            tuple((
-                nom::bytes::complete::tag("-"),
-                nom::bytes::complete::tag("A"),
-            )),
-        ),
-        b64_count,
-    ))(s)?;
-
-    Ok((rest, t.1))
-}
-
-pub(crate) fn counter(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
-    let (rest, sc) = tuple((
-        map_parser(
-            nom::bytes::complete::take(2u8),
-                tuple((
-                nom::bytes::complete::tag("-"),
-                nom::bytes::complete::tag("G"),
-            ))),
-            b64_count,
-        )
-        ,
-    )(s)?;
+/// returns attached source seals
+pub(crate) fn source_seal(s: &[u8]) -> nom::IResult<&[u8], Vec<SourceSeal>> {
+    let (rest, sc) = b64_count(s)?;
 
     let (rest, attachment) = count(
         nom::sequence::tuple((attached_sn, self_addressing_prefix)),
-        sc.1 as usize ,
+        sc as usize,
     )(rest)?;
-    let attachments = attachment.into_iter().map(|(sn, digest)|
-        SourceSeal::new(sn, digest)
-    ).collect();
+    Ok((
+        rest,
+        attachment
+            .into_iter()
+            .map(|(sn, digest)| SourceSeal::new(sn, digest))
+            .collect(),
+    ))
+}
 
-    Ok((rest, Attachment::SealSourceCouplets(attachments)))
+fn event_seal(s: &[u8]) -> nom::IResult<&[u8], EventSeal> {
+    let (rest, identifier) = prefix(s)?;
 
+    let (rest, sn) = attached_sn(rest)?;
+    let (rest, event_digest) = self_addressing_prefix(rest)?;
+    let seal = EventSeal {
+        prefix: identifier,
+        sn: u64::from(sn),
+        event_digest,
+    };
+
+    Ok((rest, seal))
+}
+
+/// returst attached event seals
+pub(crate) fn event_seals(s: &[u8]) -> nom::IResult<&[u8], Vec<EventSeal>> {
+    let (rest, sc) = b64_count(s)?;
+
+    count(event_seal, sc as usize)(rest)
 }
 
 pub(crate) fn b64_count(s: &[u8]) -> nom::IResult<&[u8], u16> {
     let (rest, t) = map(nom::bytes::complete::take(2u8), |b64_count| {
-            b64_to_num(b64_count).map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))
-        })
-    (s)?;
+        b64_to_num(b64_count).map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))
+    })(s)?;
 
     Ok((rest, t?))
 }
 
-/// called on an attached signature stream starting with a sig count
-fn signatures(s: &[u8]) -> nom::IResult<&[u8], Vec<AttachedSignaturePrefix>> {
-    let (rest, sc) = sig_count(s)?;
+pub fn signatures(s: &[u8]) -> nom::IResult<&[u8], Vec<AttachedSignaturePrefix>> {
+    let (rest, sc) = b64_count(s)?;
     count(attached_signature, sc as usize)(rest)
 }
 
 fn couplets(s: &[u8]) -> nom::IResult<&[u8], Vec<(BasicPrefix, SelfSigningPrefix)>> {
-    let (rest, sc) = sig_count(s)?;
+    let (rest, sc) = b64_count(s)?;
+
     count(
         nom::sequence::tuple((basic_prefix, self_signing_prefix)),
         sc as usize,
     )(rest)
 }
 
-fn transferable_receipt_attachment(
-    s: &[u8],
-) -> nom::IResult<&[u8], (EventSeal, Vec<AttachedSignaturePrefix>)> {
-    tuple((event_seal, signatures))(s)
+fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
+    let (rest, payload_type) = take(2u8)(s)?;
+    let payload_type: PayloadType = PayloadType::try_from(
+        std::str::from_utf8(payload_type)
+        .map_err(|_e| nom::Err::Failure((s, ErrorKind::IsNot)))?,
+    )
+    // Can't parse payload type
+    .map_err(|_e| nom::Err::Failure((s, ErrorKind::IsNot)))?;
+    match payload_type {
+        PayloadType::MG => {
+            let (rest, source_seals) = source_seal(rest)?;
+            Ok((rest, Attachment::SealSourceCouplets(source_seals)))
+        }
+        PayloadType::MF => {
+            let (rest, event_seals) = event_seals(rest)?;
+            Ok((rest, Attachment::AttachedEventSeal(event_seals)))
+        }
+        PayloadType::MA => {
+            let (rest, sigs) = signatures(rest)?;
+            Ok((rest, Attachment::AttachedSignatures(sigs)))
+        }
+        PayloadType::MC => {
+            let (rest, couplets) = couplets(rest)?;
+            Ok((rest, Attachment::ReceiptCouplets(couplets)))
+        }
+        _ => todo!(),
+    }
 }
 
 pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], Deserialized> {
     let (rest, e) = message(s)?;
     match e.event_message.event.event_data {
         EventData::Rct(_) => {
-            if let Ok((rest, couplets)) = couplets(rest) {
-                Ok((
+            let (rest, att) = attachment(rest)?;
+            match att {
+                // Should be nontransferable receipt
+                Attachment::ReceiptCouplets(couplets) => Ok((
                     rest,
                     Deserialized::NontransferableRct(SignedNontransferableReceipt {
                         body: e.event_message,
                         couplets,
                     }),
-                ))
-            } else {
-                transferable_receipt_attachment(&rest[1..]).map(|(rest, attachment)| {
-                    (
+                )),
+                Attachment::AttachedEventSeal(_) | Attachment::AttachedSignatures(_) => {
+                    // Should be transferable receipt
+                    let (rest, second_att) = attachment(rest)?;
+
+                    let (seals, sigs) = match (att, second_att) {
+                        (
+                            Attachment::AttachedEventSeal(seals),
+                            Attachment::AttachedSignatures(sigs),
+                        ) => Ok((seals, sigs)),
+                        (
+                            Attachment::AttachedSignatures(sigs),
+                            Attachment::AttachedEventSeal(seals),
+                        ) => Ok((seals, sigs)),
+                        _ => {
+                            // improper attachements
+                            Err(nom::Err::Failure((s, ErrorKind::IsNot)))
+                        }
+                    }?;
+
+                    Ok((
                         rest,
                         Deserialized::TransferableRct(SignedTransferableReceipt::new(
                             &e.event_message,
-                            attachment.0,
-                            attachment.1,
+                            // TODO what if more than one?
+                            seals
+                                .last()
+                                .ok_or(nom::Err::Failure((s, ErrorKind::IsNot)))?
+                                .to_owned(),
+                            sigs,
                         )),
-                    )
-                })
+                    ))
+                }
+                _ => {
+                    // Improper payload type
+                    Err(nom::Err::Failure((s, ErrorKind::IsNot)))
+                }
             }
-        },
+        }
         EventData::Dip(_) | EventData::Drt(_) => {
-            let (rest, signatures) = signatures(rest)?;
-            let (rest, source_seal) = counter(rest)?;
+            let (rest, (att1, att2)) = tuple((attachment, attachment))(rest)?;
 
+            let (seals, sigs) = match (att1, att2) {
+                (Attachment::SealSourceCouplets(seals), Attachment::AttachedSignatures(sigs)) => {
+                    Ok((seals, sigs))
+                }
+                (Attachment::AttachedSignatures(sigs), Attachment::SealSourceCouplets(seals)) => {
+                    Ok((seals, sigs))
+                }
+                _ => {
+                    // Improper attachment type
+                    Err(nom::Err::Failure((s, ErrorKind::IsNot)))
+                }
+            }?;
             Ok((
                 rest,
                 Deserialized::Event(DeserializedSignedEvent {
                     deserialized_event: e,
-                    signatures,
-                    attachment: Some(source_seal)
+                    signatures: sigs,
+                    attachment: Some(Attachment::SealSourceCouplets(seals)),
                 }),
             ))
-        },
+        }
         _ => {
-            let (extra, signatures) = signatures(rest)?;
-
-            Ok((
-                extra,
-                Deserialized::Event(DeserializedSignedEvent {
-                    deserialized_event: e,
-                    signatures,
-                    attachment: None,
-                }),
-            ))
+            let (rest, sigs) = attachment(rest)?;
+            if let Attachment::AttachedSignatures(sigs) = sigs {
+                Ok((
+                    rest,
+                    Deserialized::Event(DeserializedSignedEvent {
+                        deserialized_event: e,
+                        signatures: sigs,
+                        attachment: None,
+                    }),
+                ))
+            } else {
+                // Improper attachment type
+                Err(nom::Err::Failure((s, ErrorKind::IsNot)))
+            }
         }
     }
 }
@@ -277,37 +354,40 @@ pub fn signed_event_stream_validate(s: &[u8]) -> nom::IResult<&[u8], IdentifierS
 }
 
 #[test]
-fn test_sigs() {
-    use crate::{derivation::self_signing::SelfSigning, prefix::AttachedSignaturePrefix};
-    assert_eq!(sig_count("-AAA".as_bytes()), Ok(("".as_bytes(), 0u16)));
-    assert_eq!(sig_count("-ABA".as_bytes()), Ok(("".as_bytes(), 64u16)));
+fn test_b64_count() {
+    assert_eq!(b64_count("AA".as_bytes()), Ok(("".as_bytes(), 0u16)));
+    assert_eq!(b64_count("BA".as_bytes()), Ok(("".as_bytes(), 64u16)));
     assert_eq!(
-        sig_count("-AABextra data and stuff".as_bytes(),),
+        b64_count("ABextra data and stuff".as_bytes(),),
         Ok(("extra data and stuff".as_bytes(), 1u16))
     );
+}
+
+#[test]
+fn test_sigs() {
+    use crate::{derivation::self_signing::SelfSigning, prefix::AttachedSignaturePrefix};
 
     assert_eq!(
-        signatures("-AABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".as_bytes()),
-        Ok(("".as_bytes(), vec![AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, vec![0u8; 64], 0)]))
+        attachment("-AABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".as_bytes()),
+        Ok(("".as_bytes(), Attachment::AttachedSignatures(vec![AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, vec![0u8; 64], 0)])))
     );
 
-    assert!(signatures("-AABAA0Q7bqPvenjWXo_YIikMBKOg-pghLKwBi1Plm0PEqdv67L1_c6dq9bll7OFnoLp0a74Nw1cBGdjIPcu-yAllHAw".as_bytes()).is_ok());
-    // -AABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    assert!(attachment("-AABAA0Q7bqPvenjWXo_YIikMBKOg-pghLKwBi1Plm0PEqdv67L1_c6dq9bll7OFnoLp0a74Nw1cBGdjIPcu-yAllHAw".as_bytes()).is_ok());
 
     assert_eq!(
-        signatures("-AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAextra data".as_bytes()),
-        Ok(("extra data".as_bytes(), vec![
+        attachment("-AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAextra data".as_bytes()),
+        Ok(("extra data".as_bytes(), Attachment::AttachedSignatures(vec![
             AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, vec![0u8; 64], 0),
             AttachedSignaturePrefix::new(SelfSigning::Ed448, vec![0u8; 114], 2)
-        ]))
+        ])))
     );
 
     assert_eq!(
-        signatures("-AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".as_bytes()),
-        Ok(("".as_bytes(), vec![
+        attachment("-AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".as_bytes()),
+        Ok(("".as_bytes(), Attachment::AttachedSignatures(vec![
             AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, vec![0u8; 64], 0),
             AttachedSignaturePrefix::new(SelfSigning::Ed448, vec![0u8; 114], 2)
-        ]))
+        ])))
     )
 }
 
@@ -355,6 +435,53 @@ fn test_event() {
 }
 
 #[test]
+fn test_attachement() {
+    let attached_str = "-GAC0AAAAAAAAAAAAAAAAAAAAAAQE3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII0AAAAAAAAAAAAAAAAAAAAAAQE3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII";
+    let (_rest, attached_sn_dig) = attachment(attached_str.as_bytes()).unwrap();
+    assert_eq!(
+        attached_sn_dig,
+        Attachment::SealSourceCouplets(vec![
+            SourceSeal {
+                sn: 1,
+                digest: "E3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII"
+                    .parse()
+                    .unwrap()
+            },
+            SourceSeal {
+                sn: 1,
+                digest: "E3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII"
+                    .parse()
+                    .unwrap()
+            }
+        ])
+    );
+
+    let attached_str = "-FABED9EB3sA5u2vCPOEmX3d7bEyHiSh7Xi8fjew2KMl3FQM0AAAAAAAAAAAAAAAAAAAAAAAEeGqW24EnxUgO_wfuFo6GR_vii-RNv5iGo8ibUrhe6Z0";
+    let (_rest, seal) = attachment(attached_str.as_bytes()).unwrap();
+    assert_eq!(
+        seal,
+        Attachment::AttachedEventSeal(vec![EventSeal {
+            prefix: "ED9EB3sA5u2vCPOEmX3d7bEyHiSh7Xi8fjew2KMl3FQM"
+                .parse()
+                .unwrap(),
+            sn: 0,
+            event_digest: "EeGqW24EnxUgO_wfuFo6GR_vii-RNv5iGo8ibUrhe6Z0"
+                .parse()
+                .unwrap()
+        },])
+    );
+
+    let attached_str = "-CABBed2Tpxc8KeCEWoq3_RKKRjU_3P-chSser9J4eAtAK6I0B8npsG58rX1ex73gaGe-jvRnw58RQGsDLzoSXaGn-kHRRNu6Kb44zXDtMnx-_8CjnHqskvDbz6pbEbed3JTOnCQ";
+    let (_rest, seal) = attachment(attached_str.as_bytes()).unwrap();
+    assert_eq!(seal, Attachment::ReceiptCouplets(
+        vec![
+            ("Bed2Tpxc8KeCEWoq3_RKKRjU_3P-chSser9J4eAtAK6I".parse().unwrap(), "0B8npsG58rX1ex73gaGe-jvRnw58RQGsDLzoSXaGn-kHRRNu6Kb44zXDtMnx-_8CjnHqskvDbz6pbEbed3JTOnCQ".parse().unwrap())
+            ]
+        )
+    );
+}
+
+#[test]
 fn test_stream1() {
     // taken from KERIPY: tests/core/test_eventing.py::test_kevery#1998
     let stream = br#"{"v":"KERI10JSON0000ed_","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"0","t":"icp","kt":"1","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"n":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","bt":"0","b":[],"c":[],"a":[]}-AABAAmagesCSY8QhYYHCJXEWpsGD62qoLt2uyT0_Mq5lZPR88JyS5UrwFKFdcjPqyKc_SKaKDJhkGWCk07k_kVkjyCA"#;
@@ -365,7 +492,11 @@ fn test_stream1() {
         Deserialized::Event(signed_event) => {
             assert_eq!(
                 signed_event.deserialized_event.raw.len(),
-                signed_event.deserialized_event.event_message.serialization_info.size
+                signed_event
+                    .deserialized_event
+                    .event_message
+                    .serialization_info
+                    .size
             );
 
             assert!(signed_message(stream).is_ok());
@@ -386,14 +517,18 @@ fn test_stream2() {
     let stream = br#"{"v":"KERI10JSON00014b_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"0","t":"icp","kt":"2","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"E9izzBkXX76sqt0N-tfLzJeRqj0W56p4pDQ_ZqNCDpyw","bt":"0","b":[],"c":[],"a":[]}-AADAAhcaP-l0DkIKlJ87iIVcDx-m0iKPdSArEu63b-2cSEn9wXVGNpWw9nfwxodQ9G8J3q_Pm-AWfDwZGD9fobWuHBAAB6mz7zP0xFNBEBfSKG4mjpPbeOXktaIyX8mfsEa1A3Psf7eKxSrJ5Woj3iUB2AhhLg412-zkk795qxsK2xfdxBAACj5wdW-EyUJNgW0LHePQcSFNxW3ZyPregL4H2FoOrsPxLa3MZx6xYTh6i7YRMGY50ezEjV81hkI1Yce75M_bPCQ"#;
     assert!(signed_message(stream).is_ok());
     assert!(signed_event_stream_validate(stream).is_ok());
-    
+
     let parsed = signed_message(stream).unwrap().1;
 
     match parsed {
         Deserialized::Event(signed_event) => {
             assert_eq!(
                 signed_event.deserialized_event.raw.len(),
-                signed_event.deserialized_event.event_message.serialization_info.size
+                signed_event
+                    .deserialized_event
+                    .event_message
+                    .serialization_info
+                    .size
             );
 
             assert!(signed_message(stream).is_ok());
@@ -413,6 +548,17 @@ fn test_signed_trans_receipt() {
     let trans_receipt_event = r#"{"v":"KERI10JSON000091_","i":"E7WIS0e4Tx1PcQW5Um5s3Mb8uPSzsyPODhByXzgvmAdQ","s":"0","t":"rct","d":"ErDNDBG7x2xYAH2i4AOnhVe44RS3lC1mRRdkyolFFHJk"}-FABENlofRlu2VPul-tjDObk6bTia2deG6NMqeFmsXhAgFvA0AAAAAAAAAAAAAAAAAAAAAAAE_MT0wsz-_ju_DVK_SaMaZT9ZE7pP4auQYeo2PDaw9FI-AABAA0Q7bqPvenjWXo_YIikMBKOg-pghLKwBi1Plm0PEqdv67L1_c6dq9bll7OFnoLp0a74Nw1cBGdjIPcu-yAllHAw"#;
     let msg = signed_message(trans_receipt_event.as_bytes());
     assert!(msg.is_ok());
+
+    // Taken from keripy/core/test_witness.py
+    let nontrans_rcp = r#"{"v":"KERI10JSON000091_","i":"EpU9D_puIW_QhgOf3WKUy-gXQnXeTQcJCO_Igcxi1YBg","s":"0","t":"rct","d":"EIt0xQQf-o-9E1B9VTDHiicQzVWk1CptvnewcnuhSd0M"}-CABB389hKezugU2LFKiFVbitoHAxXqJh6HQ8Rn9tH7fxd680BCZrTPLvG7sNaxtV8ZGdIHABFHCZ9FlnG6b4J6a9GcyzJIJOjuGNphW2zyC_WWU6CGMG7V52UeJxPqLpaYdP7Cg"#;
+    let msg = signed_message(nontrans_rcp.as_bytes());
+    println!("{:?}", msg);
+    assert!(msg.is_ok());
+
+    // Nontrans receipt with alternative attachment with -B payload type. Not implemented yet.
+    // let witness_receipts = r#"{"v":"KERI10JSON000091_","i":"EpU9D_puIW_QhgOf3WKUy-gXQnXeTQcJCO_Igcxi1YBg","s":"0","t":"rct","d":"EIt0xQQf-o-9E1B9VTDHiicQzVWk1CptvnewcnuhSd0M"}-BADAACZrTPLvG7sNaxtV8ZGdIHABFHCZ9FlnG6b4J6a9GcyzJIJOjuGNphW2zyC_WWU6CGMG7V52UeJxPqLpaYdP7CgAB8npsG58rX1ex73gaGe-jvRnw58RQGsDLzoSXaGn-kHRRNu6Kb44zXDtMnx-_8CjnHqskvDbz6pbEbed3JTOnCQACM4bMcLjcDtD0fmLOGDx2oxBloc2FujbyllA7GuPLm-RQbyPPQr70_Y7DXzlWgs8gaYotUATeR-dj1ru9qFwADA"#;
+    // let msg = signed_message(witness_receipts.as_bytes());
+    // assert!(msg.is_ok());
 }
 
 #[test]

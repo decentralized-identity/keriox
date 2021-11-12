@@ -109,7 +109,7 @@ impl<K: KeyManager> Keri<K> {
         }
 
     pub fn incept(&mut self) -> Result<SignedEventMessage, Error> {
-        let icp = EventMsgBuilder::new(EventType::Inception)?
+        let icp = EventMsgBuilder::new(EventType::Inception)
             .with_prefix(&self.prefix)
             .with_keys(vec![Basic::Ed25519.derive(self.key_manager.borrow().public_key())])
             .with_next_keys(vec![
@@ -148,7 +148,7 @@ impl<K: KeyManager> Keri<K> {
                 .map(|(key_type, key)| key_type.derive(key)).collect();
             // Signing key must be first
             keys.insert(0, Basic::Ed25519.derive(self.key_manager.borrow().public_key()));
-            let icp = EventMsgBuilder::new(EventType::Inception)?
+            let icp = EventMsgBuilder::new(EventType::Inception)
                 .with_prefix(&self.prefix)
                 .with_keys(keys)
                 .with_next_keys(vec!(Basic::Ed25519.derive(self.key_manager.borrow().next_public_key())))
@@ -226,7 +226,7 @@ impl<K: KeyManager> Keri<K> {
             .processor
             .compute_state(&self.prefix)?
             .ok_or(Error::SemanticError("There is no state".into()))?;
-        EventMsgBuilder::new(EventType::Rotation)?
+        EventMsgBuilder::new(EventType::Rotation)
             .with_prefix(&self.prefix)
             .with_sn(state.sn + 1)
             .with_previous_event(&SelfAddressing::Blake3_256.derive(&state.last))
@@ -251,7 +251,7 @@ impl<K: KeyManager> Keri<K> {
             .compute_state(&self.prefix)?
             .ok_or(Error::SemanticError("There is no state".into()))?;
 
-        let ev = EventMsgBuilder::new(EventType::Interaction)?
+        let ev = EventMsgBuilder::new(EventType::Interaction)
             .with_prefix(&self.prefix)
             .with_sn(state.sn + 1)
             .with_previous_event(&SelfAddressing::Blake3_256.derive(&state.last))

@@ -5,7 +5,7 @@ use crate::{
     event::{
         event_data::{
             delegated::DelegatedInceptionEvent, interaction::InteractionEvent,
-            rotation::RotationEvent,
+            rotation::RotationEvent, Receipt,
         },
         sections::{threshold::SignatureThreshold, WitnessConfig},
         SerializationFormats,
@@ -60,14 +60,14 @@ impl EventType {
 }
 
 impl EventMsgBuilder {
-    pub fn new(event_type: EventType) -> Result<Self, Error> {
+    pub fn new(event_type: EventType) -> Self {
         let mut rng = OsRng {};
         let kp = Keypair::generate(&mut rng);
         let nkp = Keypair::generate(&mut rng);
         let pk = PublicKey::new(kp.public.to_bytes().to_vec());
         let npk = PublicKey::new(nkp.public.to_bytes().to_vec());
         let basic_pref = Basic::Ed25519.derive(pk);
-        Ok(EventMsgBuilder {
+        EventMsgBuilder {
             event_type,
             prefix: IdentifierPrefix::default(),
             keys: vec![basic_pref],
@@ -80,7 +80,7 @@ impl EventMsgBuilder {
             delegator: IdentifierPrefix::default(),
             format: SerializationFormats::JSON,
             derivation: SelfAddressing::Blake3_256,
-        })
+        }
     }
 
     pub fn with_prefix(self, prefix: &IdentifierPrefix) -> Self {
@@ -135,11 +135,8 @@ impl EventMsgBuilder {
     }
 
     pub fn build(self) -> Result<EventMessage, Error> {
-        let next_key_hash = nxt_commitment(
-            &self.next_key_threshold,
-            &self.next_keys,
-            &self.derivation,
-        );
+        let next_key_hash =
+            nxt_commitment(&self.next_key_threshold, &self.next_keys, &self.derivation);
         let key_config = KeyConfig::new(self.keys, Some(next_key_hash), Some(self.key_threshold));
         let prefix = if self.prefix == IdentifierPrefix::default() {
             if key_config.public_keys.len() == 1 {
@@ -227,6 +224,49 @@ impl EventMsgBuilder {
     }
 }
 
+pub struct ReceiptBuilder {
+    format: SerializationFormats,
+    derivation: SelfAddressing,
+    receipted_event: EventMessage,
+}
+
+impl ReceiptBuilder {
+    pub fn new() -> Self {
+        let default_event = EventMessage::default();
+        Self {
+            format: SerializationFormats::JSON,
+            derivation: SelfAddressing::Blake3_256,
+            receipted_event: default_event,
+        }
+    }
+
+    pub fn with_format(self, format: SerializationFormats) -> Self {
+        Self { format, ..self }
+    }
+
+    pub fn with_derivation(self, derivation: SelfAddressing) -> Self {
+        Self { derivation, ..self }
+    }
+
+    pub fn with_receipted_event(self, receipted_event: EventMessage) -> Self {
+        Self {
+            receipted_event,
+            ..self
+        }
+    }
+
+    pub fn build(&self) -> Result<EventMessage, Error> {
+        Event {
+            prefix: self.receipted_event.event.prefix.clone(),
+            sn: self.receipted_event.event.sn,
+            event_data: EventData::Rct(Receipt {
+                receipted_event_digest: self.derivation.derive(&self.receipted_event.serialize()?),
+            }),
+        }
+        .to_message(self.format)
+    }
+}
+
 #[test]
 fn test_multisig_prefix_derivation() {
     // Keys taken from keripy: keripy/tests/core/test_eventing.py::2405-2406
@@ -255,7 +295,6 @@ fn test_multisig_prefix_derivation() {
     ];
 
     let msg_builder = EventMsgBuilder::new(EventType::Inception)
-        .unwrap()
         .with_keys(keys)
         .with_next_keys(next_keys)
         .with_threshold(&SignatureThreshold::Simple(2))

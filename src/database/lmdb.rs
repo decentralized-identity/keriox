@@ -292,8 +292,7 @@ impl EventDatabase for LmdbEventDatabase {
                 }
             }
 
-            buf.extend(get_sig_count(sigs.len() as u16).as_bytes());
-            buf.extend(sigs.into_iter().flatten());
+            buf.extend(Attachment::AttachedSignatures(sigs).serialize()?);
 
             // TODO also attach witness receipts!!
         }
