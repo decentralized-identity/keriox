@@ -2,15 +2,8 @@
 use universal_wallet::prelude::UnlockedWallet;
 
 #[cfg(test)]
-use crate::{
-    database::sled::SledEventDatabase,
-    error::Error,
-    keri::Keri,
-};
-use std::{
-    sync::Arc,
-    cell::RefCell,
-};
+use crate::{database::sled::SledEventDatabase, error::Error, keri::Keri};
+use std::sync::Arc;
 
 #[test]
 fn test_direct_mode() -> Result<(), Error> {
@@ -21,8 +14,7 @@ fn test_direct_mode() -> Result<(), Error> {
     std::fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
-    let alice_key_manager =
-    {
+    let alice_key_manager = {
         #[cfg(feature = "wallet")]
         {
             let mut alice_key_manager = UnlockedWallet::new("alice");
@@ -37,14 +29,11 @@ fn test_direct_mode() -> Result<(), Error> {
     };
 
     // Init alice.
-    let mut alice = Keri::new(
-        Arc::clone(&db),
-        Arc::new(RefCell::new(alice_key_manager)))?;
+    let mut alice = Keri::new(Arc::clone(&db), Arc::new(Box::new(alice_key_manager)))?;
 
     assert_eq!(alice.get_state()?, None);
 
-    let bob_key_manager =
-    {
+    let bob_key_manager = {
         #[cfg(feature = "wallet")]
         {
             let mut bob_key_manager = UnlockedWallet::new("alice");
@@ -59,9 +48,7 @@ fn test_direct_mode() -> Result<(), Error> {
     };
 
     // Init bob.
-    let mut bob = Keri::new(
-        Arc::clone(&db),
-        Arc::new(RefCell::new(bob_key_manager)))?;
+    let mut bob = Keri::new(Arc::clone(&db), Arc::new(Box::new(bob_key_manager)))?;
 
     bob.incept().unwrap();
     let bob_state = bob.get_state()?;
