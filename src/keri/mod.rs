@@ -37,7 +37,7 @@ use universal_wallet::prelude::{Content, UnlockedWallet};
 mod test;
 pub struct Keri<K: KeyManager + 'static> {
     prefix: IdentifierPrefix,
-    key_manager: &'static mut Box<K>,
+    key_manager: &'static mut K,
     processor: EventProcessor,
 }
 
@@ -78,10 +78,7 @@ impl Keri<UnlockedWallet> {
 
 impl<K: KeyManager> Keri<K> {
     // incept a state and keys
-    pub fn new(
-        db: Arc<SledEventDatabase>,
-        key_manager: &'static mut Box<K>,
-    ) -> Result<Keri<K>, Error> {
+    pub fn new(db: Arc<SledEventDatabase>, key_manager: &'static mut K) -> Result<Keri<K>, Error> {
         Ok(Keri {
             prefix: IdentifierPrefix::default(),
             key_manager,
@@ -97,7 +94,7 @@ impl<K: KeyManager> Keri<K> {
 
     /// Getter of ref to owned `KeyManager` instance
     ///
-    pub fn key_manager(&'static self) -> &'static Box<K> {
+    pub fn key_manager(&'static self) -> &'static K {
         &self.key_manager
     }
 
