@@ -2,7 +2,9 @@
 use universal_wallet::prelude::UnlockedWallet;
 
 #[cfg(test)]
-use crate::{database::sled::SledEventDatabase, error::Error, keri::Keri};
+use crate::{database::sled::SledEventDatabase, error::Error, keri::Keri, signer::KeyManager};
+
+use lazy_static::lazy_static;
 use std::sync::Arc;
 
 #[test]
@@ -14,41 +16,45 @@ fn test_direct_mode() -> Result<(), Error> {
     std::fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
-    let alice_key_manager = {
-        #[cfg(feature = "wallet")]
-        {
-            let mut alice_key_manager = UnlockedWallet::new("alice");
-            crate::signer::wallet::incept_keys(&mut alice_key_manager)?;
-            alice_key_manager
-        }
-        #[cfg(not(feature = "wallet"))]
-        {
-            use crate::signer::CryptoBox;
-            CryptoBox::new()?
-        }
-    };
+    lazy_static! {
+        static ref ALICE_KEY_MANAGER: Arc<Box<dyn KeyManager>> = {
+            #[cfg(feature = "wallet")]
+            {
+                let mut alice_key_manager = UnlockedWallet::new("alice");
+                crate::signer::wallet::incept_keys(&mut alice_key_manager)?;
+                Box::new(alice_key_manager)
+            }
+            #[cfg(not(feature = "wallet"))]
+            {
+                use crate::signer::CryptoBox;
+                Box::new(CryptoBox::new()?)
+            }
+        };
+    }
 
     // Init alice.
-    let mut alice = Keri::new(Arc::clone(&db), Arc::new(Box::new(alice_key_manager)))?;
+    let mut alice = Keri::new(Arc::clone(&db), &mut ALICE_KEY_MANAGER)?;
 
     assert_eq!(alice.get_state()?, None);
 
-    let bob_key_manager = {
-        #[cfg(feature = "wallet")]
-        {
-            let mut bob_key_manager = UnlockedWallet::new("alice");
-            crate::signer::wallet::incept_keys(&mut bob_key_manager)?;
-            bob_key_manager
-        }
-        #[cfg(not(feature = "wallet"))]
-        {
-            use crate::signer::CryptoBox;
-            CryptoBox::new()?
-        }
-    };
+    lazy_static! {
+        static ref BOB_KEY_MANAGER: Box<dyn KeyManager> = {
+            #[cfg(feature = "wallet")]
+            {
+                let mut bob_key_manager = UnlockedWallet::new("alice");
+                crate::signer::wallet::incept_keys(&mut bob_key_manager)?;
+                Box::new(bob_key_manager)
+            }
+            #[cfg(not(feature = "wallet"))]
+            {
+                use crate::signer::CryptoBox;
+                Box::new(CryptoBox::new()?)
+            }
+        };
+    }
 
     // Init bob.
-    let mut bob = Keri::new(Arc::clone(&db), Arc::new(Box::new(bob_key_manager)))?;
+    let mut bob = Keri::new(Arc::clone(&db), &mut BOB_KEY_MANAGER)?;
 
     bob.incept().unwrap();
     let bob_state = bob.get_state()?;

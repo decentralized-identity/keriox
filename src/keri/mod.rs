@@ -35,9 +35,9 @@ use universal_wallet::prelude::{Content, UnlockedWallet};
 
 #[cfg(test)]
 mod test;
-pub struct Keri<K: KeyManager> {
+pub struct Keri<K: KeyManager + 'static> {
     prefix: IdentifierPrefix,
-    key_manager: Arc<Box<K>>,
+    key_manager: &'static mut Box<K>,
     processor: EventProcessor,
 }
 
@@ -78,7 +78,10 @@ impl Keri<UnlockedWallet> {
 
 impl<K: KeyManager> Keri<K> {
     // incept a state and keys
-    pub fn new(db: Arc<SledEventDatabase>, key_manager: Arc<Box<K>>) -> Result<Keri<K>, Error> {
+    pub fn new(
+        db: Arc<SledEventDatabase>,
+        key_manager: &'static mut Box<K>,
+    ) -> Result<Keri<K>, Error> {
         Ok(Keri {
             prefix: IdentifierPrefix::default(),
             key_manager,
@@ -94,7 +97,7 @@ impl<K: KeyManager> Keri<K> {
 
     /// Getter of ref to owned `KeyManager` instance
     ///
-    pub fn key_manager(&self) -> &Arc<Box<K>> {
+    pub fn key_manager(&'static self) -> &'static Box<K> {
         &self.key_manager
     }
 
@@ -228,11 +231,7 @@ impl<K: KeyManager> Keri<K> {
     }
 
     pub fn rotate(&mut self) -> Result<SignedEventMessage, Error> {
-        match Arc::get_mut(&mut self.key_manager) {
-            Some(kv) => kv.rotate()?,
-            None => return Err(Error::MutArcKeyVaultError),
-        };
-
+        self.key_manager.rotate()?;
         let rot = self.make_rotation()?;
         let rot = rot.sign(
             PayloadType::MA,
