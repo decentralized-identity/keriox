@@ -59,6 +59,18 @@ pub struct DelegatingEventSeal {
     pub commitment: SelfAddressingPrefix,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SourceSeal {
+    pub sn: u64,
+    pub digest: SelfAddressingPrefix,
+}
+
+impl SourceSeal {
+    pub fn new(sn: u64, digest: SelfAddressingPrefix) -> Self {
+        Self { sn, digest }
+    }
+}
+
 #[test]
 fn test_seal_deserialization() {
     // Event seal

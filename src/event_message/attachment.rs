@@ -1,12 +1,9 @@
 use base64::URL_SAFE_NO_PAD;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
-use crate::{
-    event::sections::seal::EventSeal,
-    prefix::{
-        AttachedSignaturePrefix, BasicPrefix, Prefix, SelfAddressingPrefix, SelfSigningPrefix,
-    },
-};
+use crate::{event::sections::seal::{EventSeal, SourceSeal}, prefix::{
+        AttachedSignaturePrefix, BasicPrefix, Prefix, SelfSigningPrefix,
+    }};
 
 use super::payload_size::PayloadType;
 
@@ -24,7 +21,7 @@ impl Attachment {
             Attachment::SealSourceCouplets(sources) => {
                 let serialzied_sources = sources
                     .into_iter()
-                    .fold("".into(), |acc, s| [acc, s.pack()].join(""));
+                    .fold("".into(), |acc, s| [acc, pack_sn(s.sn), s.digest.to_str()].join(""));
 
                 (PayloadType::MG, sources.len(), serialzied_sources)
             }
@@ -59,21 +56,6 @@ impl Attachment {
             serialized_attachment,
         ]
         .join("")
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SourceSeal {
-    pub sn: u64,
-    pub digest: SelfAddressingPrefix,
-}
-
-impl SourceSeal {
-    pub fn new(sn: u64, digest: SelfAddressingPrefix) -> Self {
-        Self { sn, digest }
-    }
-    pub fn pack(&self) -> String {
-        [pack_sn(self.sn), self.digest.to_str()].join("")
     }
 }
 

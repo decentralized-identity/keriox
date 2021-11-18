@@ -1,35 +1,17 @@
 use std::sync::{Arc, Mutex};
 
-use crate::{
-    database::sled::SledEventDatabase,
-    derivation::basic::Basic,
-    derivation::self_addressing::SelfAddressing,
-    derivation::self_signing::SelfSigning,
-    error::Error,
-    event::sections::seal::{DigestSeal, Seal},
-    event::{event_data::EventData, Event, EventMessage, SerializationFormats},
-    event::{
+use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivation::self_addressing::SelfAddressing, derivation::self_signing::SelfSigning, error::Error, event::sections::seal::{DigestSeal, Seal}, event::{event_data::EventData, Event, EventMessage, SerializationFormats}, event::{
         event_data::{InteractionEvent, Receipt},
         sections::seal::EventSeal,
-    },
-    event_message::{
+    }, event_message::{
         event_msg_builder::{EventMsgBuilder, EventType},
-        parse::{signed_event_stream, Deserialized},
-    },
-    event_message::{
-        parse::signed_message,
+        parse::Deserialized,
+    }, event_message::{
         payload_size::PayloadType,
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
-    },
-    keys::PublicKey,
-    prefix::AttachedSignaturePrefix,
-    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    processor::EventProcessor,
-    signer::KeyManager,
-    state::{EventSemantics, IdentifierState},
-};
+    }, keys::PublicKey, prefix::AttachedSignaturePrefix, prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix}, processor::EventProcessor, signer::KeyManager, state::{EventSemantics, IdentifierState}};
 #[cfg(feature = "wallet")]
 use universal_wallet::prelude::{Content, UnlockedWallet};
 
@@ -127,11 +109,11 @@ impl<K: KeyManager> Keri<K> {
                 km.sign(&icp.serialize()?)?,
                 0,
             )],
-            None,
+            vec![],
         );
 
         self.processor
-            .process(signed_message(&signed.serialize()?).unwrap().1)?;
+            .process(Deserialized::Event(signed.clone()))?;
 
         self.prefix = icp.event.prefix;
 
@@ -172,11 +154,10 @@ impl<K: KeyManager> Keri<K> {
                 km.sign(&icp.serialize()?)?,
                 0,
             )],
-            None,
+            vec![],
         );
-        let serialized = signed.serialize()?;
         self.processor
-            .process(signed_message(&serialized).unwrap().1)?;
+            .process(Deserialized::Event(signed.clone()))?;
         self.prefix = icp.event.prefix;
 
         Ok(signed)
@@ -222,7 +203,7 @@ impl<K: KeyManager> Keri<K> {
             signature,
             0, // TODO: what is this?
         );
-        let signed = SignedEventMessage::new(&event, PayloadType::OC, vec![asp], None);
+        let signed = SignedEventMessage::new(&event, PayloadType::OC, vec![asp], vec![]);
         self.processor
             .db
             .add_kel_finalized_event(signed.clone(), &self.prefix)?;
@@ -245,11 +226,11 @@ impl<K: KeyManager> Keri<K> {
                     .sign(&rot.serialize()?)?,
                 0,
             )],
-            None,
+            vec![],
         );
 
         self.processor
-            .process(signed_message(&rot.serialize()?).unwrap().1)?;
+            .process(Deserialized::Event(rot.clone()))?;
 
         Ok(rot)
     }
@@ -302,11 +283,11 @@ impl<K: KeyManager> Keri<K> {
                     .sign(&ev.serialize()?)?,
                 0,
             )],
-            None,
+            vec![],
         );
 
         self.processor
-            .process(signed_message(&ixn.serialize()?).unwrap().1)?;
+            .process(Deserialized::Event(ixn.clone()))?;
 
         Ok(ixn)
     }
@@ -314,65 +295,67 @@ impl<K: KeyManager> Keri<K> {
     /// Process and respond to single event
     ///
     pub fn respond_single(&self, msg: &[u8]) -> Result<(IdentifierPrefix, Vec<u8>), Error> {
-        match signed_message(msg) {
-            Err(e) => Err(Error::DeserializeError(e.to_string())),
-            Ok(event) => match self.processor.process(event.1)? {
-                None => Err(Error::InvalidIdentifierStat),
-                Some(state) => Ok((state.prefix.clone(), serde_json::to_vec(&state)?)),
-            },
-        }
+        // match signed_message(msg) {
+        //     Err(e) => Err(Error::DeserializeError(e.to_string())),
+        //     Ok(event) => match self.processor.process(event.1)? {
+        //         None => Err(Error::InvalidIdentifierStat),
+        //         Some(state) => Ok((state.prefix.clone(), serde_json::to_vec(&state)?)),
+        //     },
+        // }
+        todo!()
     }
 
     pub fn respond(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
-        let events = signed_event_stream(msg)
-            .map_err(|e| Error::DeserializeError(e.to_string()))?
-            .1;
-        let (processed_ok, _processed_failed): (Vec<_>, Vec<_>) = events
-            .into_iter()
-            .map(|event| {
-                self.processor
-                    .process(event.clone())
-                    .and_then(|_| Ok(event))
-            })
-            .partition(Result::is_ok);
-        let response: Vec<u8> = processed_ok
-            .into_iter()
-            .map(Result::unwrap)
-            .map(|des_event| -> Result<Vec<u8>, Error> {
-                match des_event {
-                    Deserialized::Event(ev) => {
-                        let mut buf = vec![];
-                        if let EventData::Icp(_) =
-                            ev.deserialized_event.event_message.event.event_data
-                        {
-                            if !self.processor.has_receipt(
-                                &self.prefix,
-                                0,
-                                &ev.deserialized_event.event_message.event.prefix,
-                            )? {
-                                buf.append(
-                                    &mut self
-                                        .processor
-                                        .get_kerl(&self.prefix)?
-                                        .ok_or(Error::SemanticError("KEL is empty".into()))?,
-                                )
-                            }
-                        }
-                        buf.append(
-                            &mut self
-                                .make_rct(ev.deserialized_event.event_message.clone())?
-                                .serialize()?,
-                        );
-                        Ok(buf)
-                    }
-                    // TODO: this should process properly
-                    _ => Ok(vec![]),
-                }
-            })
-            .filter_map(|x| x.ok())
-            .flatten()
-            .collect();
-        Ok(response)
+        // let events = signed_event_stream(msg)
+        //     .map_err(|e| Error::DeserializeError(e.to_string()))?
+        //     .1;
+        // let (processed_ok, _processed_failed): (Vec<_>, Vec<_>) = events
+        //     .into_iter()
+        //     .map(|event| {
+        //         self.processor
+        //             .process(event.clone())
+        //             .and_then(|_| Ok(event))
+        //     })
+        //     .partition(Result::is_ok);
+        // let response: Vec<u8> = processed_ok
+        //     .into_iter()
+        //     .map(Result::unwrap)
+        //     .map(|des_event| -> Result<Vec<u8>, Error> {
+        //         match des_event {
+        //             Deserialized::Event(ev) => {
+        //                 let mut buf = vec![];
+        //                 if let EventData::Icp(_) =
+        //                     ev.deserialized_event.event_message.event.event_data
+        //                 {
+        //                     if !self.processor.has_receipt(
+        //                         &self.prefix,
+        //                         0,
+        //                         &ev.event_message.event.prefix,
+        //                     )? {
+        //                         buf.append(
+        //                             &mut self
+        //                                 .processor
+        //                                 .get_kerl(&self.prefix)?
+        //                                 .ok_or(Error::SemanticError("KEL is empty".into()))?,
+        //                         )
+        //                     }
+        //                 }
+        //                 buf.append(
+        //                     &mut self
+        //                         .make_rct(ev.event_message.clone())?
+        //                         .serialize()?,
+        //                 );
+        //                 Ok(buf)
+        //             }
+        //             // TODO: this should process properly
+        //             _ => Ok(vec![]),
+        //         }
+        //     })
+        //     .filter_map(|x| x.ok())
+        //     .flatten()
+        //     .collect();
+        // Ok(response)
+        todo!()
     }
 
     pub fn make_rct(&self, event: EventMessage) -> Result<SignedTransferableReceipt, Error> {
@@ -403,7 +386,7 @@ impl<K: KeyManager> Keri<K> {
         let signed_rcp = SignedTransferableReceipt::new(&rcp, validator_event_seal, signatures);
 
         self.processor
-            .process(signed_message(&signed_rcp.serialize()?).unwrap().1)?;
+            .process(Deserialized::TransferableRct(signed_rcp.clone()))?;
 
         Ok(signed_rcp)
     }

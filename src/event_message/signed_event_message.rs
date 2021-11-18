@@ -21,7 +21,7 @@ pub struct SignedEventMessage {
     #[serde(skip_serializing)]
     pub signatures: Vec<AttachedSignaturePrefix>,
     #[serde(skip_serializing)]
-    pub attachment: Option<Attachment>,
+    pub attachments: Vec<Attachment>,
 }
 
 impl Serialize for SignedEventMessage {
@@ -135,13 +135,13 @@ impl SignedEventMessage {
         message: &EventMessage,
         payload_type: PayloadType,
         sigs: Vec<AttachedSignaturePrefix>,
-        attachment: Option<Attachment>,
+        attachments: Vec<Attachment>,
     ) -> Self {
         Self {
             event_message: message.clone(),
             payload_type,
             signatures: sigs,
-            attachment,
+            attachments,
         }
     }
 
