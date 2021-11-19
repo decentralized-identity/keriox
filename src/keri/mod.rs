@@ -102,15 +102,11 @@ impl<K: KeyManager> Keri<K> {
             .with_next_keys(vec![Basic::Ed25519.derive(km.next_public_key())])
             .build()?;
 
-        let signed = icp.sign(
-            PayloadType::MA,
-            vec![AttachedSignaturePrefix::new(
-                SelfSigning::Ed25519Sha512,
-                km.sign(&icp.serialize()?)?,
-                0,
-            )],
-            vec![],
-        );
+        let signed = icp.sign(PayloadType::MA, vec![AttachedSignaturePrefix::new(
+            SelfSigning::Ed25519Sha512,
+            km.sign(&icp.serialize()?)?,
+            0,
+        )], None);
 
         self.processor
             .process(Deserialized::Event(signed.clone()))?;
@@ -130,37 +126,31 @@ impl<K: KeyManager> Keri<K> {
     ///  where `SignedEventMessage` is ICP event including all provided keys + directly fetched
     ///  verification key, signed with it's private key via KeyManager and serialized.
     ///
-    pub fn incept_with_extra_keys(
-        &mut self,
-        extra_keys: impl IntoIterator<Item = (Basic, PublicKey)>,
-    ) -> Result<SignedEventMessage, Error> {
-        let mut keys: Vec<BasicPrefix> = extra_keys
-            .into_iter()
-            .map(|(key_type, key)| key_type.derive(key))
-            .collect();
-        // Signing key must be first
-        let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
-        keys.insert(0, Basic::Ed25519.derive(km.public_key()));
-        let icp = EventMsgBuilder::new(EventType::Inception)
-            .with_prefix(&self.prefix)
-            .with_keys(keys)
-            .with_next_keys(vec![Basic::Ed25519.derive(km.next_public_key())])
-            .build()?;
+    pub fn incept_with_extra_keys(&mut self, extra_keys: impl IntoIterator<Item = (Basic, PublicKey)>) 
+        -> Result<SignedEventMessage, Error> {
+            let mut keys: Vec<BasicPrefix> = extra_keys
+                .into_iter()
+                .map(|(key_type, key)| key_type.derive(key)).collect();
+            // Signing key must be first
+            let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
+            keys.insert(0, Basic::Ed25519.derive(km.public_key()));
+            let icp = EventMsgBuilder::new(EventType::Inception)
+                .with_prefix(&self.prefix)
+                .with_keys(keys)
+                .with_next_keys(vec!(Basic::Ed25519.derive(km.next_public_key())))
+                .build()?;
 
-        let signed = icp.sign(
-            PayloadType::MA,
-            vec![AttachedSignaturePrefix::new(
-                SelfSigning::Ed25519Sha512,
-                km.sign(&icp.serialize()?)?,
-                0,
-            )],
-            vec![],
-        );
-        self.processor
-            .process(Deserialized::Event(signed.clone()))?;
-        self.prefix = icp.event.prefix;
+            let signed = icp.sign(PayloadType::MA, vec!(
+                AttachedSignaturePrefix::new(
+                    SelfSigning::Ed25519Sha512,
+                    km.sign(&icp.serialize()?)?,
+                    0
+                )
+            ), None);
+            self.processor.process(Deserialized::Event(signed.clone()))?;
+            self.prefix = icp.event.prefix;
 
-        Ok(signed)
+            Ok(signed)
     }
 
     /// Interacts with peer identifier via generation of a `Seal`
@@ -203,10 +193,8 @@ impl<K: KeyManager> Keri<K> {
             signature,
             0, // TODO: what is this?
         );
-        let signed = SignedEventMessage::new(&event, PayloadType::OC, vec![asp], vec![]);
-        self.processor
-            .db
-            .add_kel_finalized_event(signed.clone(), &self.prefix)?;
+        let signed = SignedEventMessage::new(&event, PayloadType::OC, vec!(asp), None);
+        self.processor.db.add_kel_finalized_event(signed.clone(), &self.prefix)?;
         Ok(signed)
     }
 
@@ -216,18 +204,14 @@ impl<K: KeyManager> Keri<K> {
             .map_err(|_| Error::MutexPoisoned)?
             .rotate()?;
         let rot = self.make_rotation()?;
-        let rot = rot.sign(
-            PayloadType::MA,
-            vec![AttachedSignaturePrefix::new(
-                SelfSigning::Ed25519Sha512,
-                self.key_manager
+        let rot = rot.sign(PayloadType::MA, vec![AttachedSignaturePrefix::new(
+            SelfSigning::Ed25519Sha512,
+            self.key_manager
                     .lock()
                     .map_err(|_| Error::MutexPoisoned)?
                     .sign(&rot.serialize()?)?,
-                0,
-            )],
-            vec![],
-        );
+            0,
+        )], None);
 
         self.processor
             .process(Deserialized::Event(rot.clone()))?;
@@ -273,18 +257,14 @@ impl<K: KeyManager> Keri<K> {
             .with_seal(seal_list)
             .build()?;
 
-        let ixn = ev.sign(
-            PayloadType::MA,
-            vec![AttachedSignaturePrefix::new(
-                SelfSigning::Ed25519Sha512,
-                self.key_manager
+        let ixn = ev.sign(PayloadType::MA, vec![AttachedSignaturePrefix::new(
+            SelfSigning::Ed25519Sha512,
+            self.key_manager
                     .lock()
                     .map_err(|_| Error::MutexPoisoned)?
                     .sign(&ev.serialize()?)?,
-                0,
-            )],
-            vec![],
-        );
+            0,
+        )], None);
 
         self.processor
             .process(Deserialized::Event(ixn.clone()))?;

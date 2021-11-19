@@ -237,7 +237,7 @@ impl EventProcessor {
     }
 
     fn find_source_seal(event: &SignedEventMessage) -> Result<(u64, SelfAddressingPrefix), Error> {
-        match event.attachments.last().ok_or(Error::SemanticError(
+        match event.attachments.as_ref().unwrap().last().ok_or(Error::SemanticError(
                 "Missing source seal.".into(),
             ))? {
                 Attachment::SealSourceCouplets(

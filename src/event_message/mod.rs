@@ -140,7 +140,7 @@ impl EventMessage {
         &self,
         payload_type: PayloadType,
         sigs: Vec<AttachedSignaturePrefix>,
-        attachments: Vec<Attachment>,
+        attachments: Option<Vec<Attachment>>,
     ) -> SignedEventMessage {
         SignedEventMessage::new(self, payload_type, sigs, attachments)
     }
@@ -319,7 +319,7 @@ mod tests {
 
         assert!(pref0.verify(&ser, &attached_sig.signature)?);
 
-        let signed_event = icp_m.sign(PayloadType::MA, vec![attached_sig], vec![]);
+        let signed_event = icp_m.sign(PayloadType::MA, vec![attached_sig], None);
 
         let s_ = IdentifierState::default();
 
@@ -402,7 +402,7 @@ mod tests {
 
         assert!(sig_pref_0.verify(&serialized, &attached_sig.signature)?);
 
-        let signed_event = icp.sign(PayloadType::MA, vec![attached_sig], vec![]);
+        let signed_event = icp.sign(PayloadType::MA, vec![attached_sig], None);
 
         let s_ = IdentifierState::default();
 

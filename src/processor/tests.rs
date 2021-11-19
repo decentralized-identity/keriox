@@ -1,9 +1,6 @@
-use serde::Deserialize;
-
 use super::EventProcessor;
 use crate::derivation::self_addressing::SelfAddressing;
 use crate::event::sections::seal::EventSeal;
-use crate::event_message::parse::signed_message;
 use crate::event_parsing::signed_event_stream;
 use crate::{database::sled::SledEventDatabase, error::Error};
 use crate::{
@@ -46,98 +43,98 @@ fn test_process() -> Result<(), Error> {
     event_processor.process(deserialized_icp)?.unwrap();
 
     // Check if processed event is in kel.
-    let icp_from_db = event_processor.get_event_at_sn(&id, 0).unwrap().unwrap();
-    let re_serialized = icp_from_db.signed_event_message.serialize().unwrap();
-    // assert_eq!(icp_raw.to_vec(), re_serialized);
+    let icp_from_db = event_processor.get_event_at_sn(&id, 0).unwrap();
+    let re_serialized = icp_from_db.unwrap().signed_event_message.serialize().unwrap();
+    assert_eq!(icp_raw.to_vec(), re_serialized);
 
-    // let rot_raw = br#"{"v":"KERI10JSON000180_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"1","t":"rot","p":"ElIKmVhsgDtxLhFqsWPASdq9J2slLqG-Oiov0rEG4s-w","kt":"2","k":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ","D1kcBE7h0ImWW6_Sp7MQxGYSshZZz6XM7OiUE5DXm0dU","D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM"],"n":"EQpRYqbID2rW8X5lB6mOzDckJEIFae6NbJISXgJSN9qg","bt":"0","br":[],"ba":[],"a":[]}-AADAAOA7_2NfORAD7hnavnFDhIQ_1fX1zVjNzFLYLOqW4mLdmNlE4745-o75wtaPX1Reg27YP0lgrCFW_3Evz9ebNAQAB6CJhTEANFN8fAFEdxwbnllsUd3jBTZHeeR-KiYe0yjCdOhbEnTLKTpvwei9QsAP0z3xc6jKjUNJ6PoxNnmD7AQAC4YfEq1tZPteXlH2cLOMjOAxqygRgbDsFRvjEQCHQva1K4YsS3ErQjuKd5Z57Uac-aDaRjeH8KdSSDvtNshIyBw"#;
-	// let parsed = crate::event_parsing::signed_message(rot_raw).unwrap().1;
-    // let deserialized_rot = parse::signed_message(parsed).unwrap();
+    let rot_raw = br#"{"v":"KERI10JSON000180_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"1","t":"rot","p":"ElIKmVhsgDtxLhFqsWPASdq9J2slLqG-Oiov0rEG4s-w","kt":"2","k":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ","D1kcBE7h0ImWW6_Sp7MQxGYSshZZz6XM7OiUE5DXm0dU","D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM"],"n":"EQpRYqbID2rW8X5lB6mOzDckJEIFae6NbJISXgJSN9qg","bt":"0","br":[],"ba":[],"a":[]}-AADAAOA7_2NfORAD7hnavnFDhIQ_1fX1zVjNzFLYLOqW4mLdmNlE4745-o75wtaPX1Reg27YP0lgrCFW_3Evz9ebNAQAB6CJhTEANFN8fAFEdxwbnllsUd3jBTZHeeR-KiYe0yjCdOhbEnTLKTpvwei9QsAP0z3xc6jKjUNJ6PoxNnmD7AQAC4YfEq1tZPteXlH2cLOMjOAxqygRgbDsFRvjEQCHQva1K4YsS3ErQjuKd5Z57Uac-aDaRjeH8KdSSDvtNshIyBw"#;
+	let parsed = crate::event_parsing::signed_message(rot_raw).unwrap().1;
+    let deserialized_rot = parse::signed_message(parsed).unwrap();
 
-    // // let _raw_parsed = match &deserialized_rot {
-    // //     Deserialized::Event(e) => e.deserialized_event.raw.to_vec(),
-    // //     _ => Err(Error::SemanticError("bad deser".into()))?,
-    // // };
-
-    // // Process rotation event.
-    // event_processor.process(deserialized_rot.clone())?.unwrap();
-    // let rot_from_db = event_processor.get_event_at_sn(&id, 1).unwrap().unwrap();
-    // assert_eq!(
-    //     rot_from_db.signed_event_message.serialize().unwrap(),
-    //     rot_raw
-    // );
-
-    // // Process the same rotation event one more time.
-    // let id_state = event_processor.process(deserialized_rot);
-    // assert!(id_state.is_err());
-    // assert!(matches!(id_state, Err(Error::EventDuplicateError)));
-
-    // let ixn_raw = br#"{"v":"KERI10JSON000098_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"2","t":"ixn","p":"EFLtKYQZIoCFdSEjP7D5OgqElY2WwFB5vQD0Uvtp4RmI","a":[]}-AADAAip7QM2tvcyC4vbSX4A4avT03hHrJTTlkjQujOZRMroRL897wojcI4DIyxejOqsZcjrZHlU4S3RLYGmVbDEoPDgAB3NZj06_KCwxdTdIgCMETTHVJQa5AB8-dtqoD7ltaFIQxmC2K_ESp6DFLOrGQ2xTr97a-By1beM66YyBThjV8DQAC50owTQUxkyJ78vato0HuX9Edx-OxvBoepr61KknIfCjXKnlZrf-s_L0XFbz_0k8t3c9gmPkaI2vI-ZhzP31jBA"#;
-	// let parsed = crate::event_parsing::signed_message(ixn_raw).unwrap().1;
-    // let deserialized_ixn = parse::signed_message(parsed).unwrap();
-
-    // let _raw_parsed = match &deserialized_ixn {
-    //     Deserialized::Event(e) => e.event_message.serialize()?.to_vec(),
+    // let _raw_parsed = match &deserialized_rot {
+    //     Deserialized::Event(e) => e.deserialized_event.raw.to_vec(),
     //     _ => Err(Error::SemanticError("bad deser".into()))?,
     // };
 
-    // // Process interaction event.
-    // event_processor.process(deserialized_ixn.clone())?.unwrap();
+    // Process rotation event.
+    event_processor.process(deserialized_rot.clone())?.unwrap();
+    let rot_from_db = event_processor.get_event_at_sn(&id, 1).unwrap().unwrap();
+    assert_eq!(
+        rot_from_db.signed_event_message.serialize().unwrap(),
+        rot_raw
+    );
 
-    // // Check if processed event is in db.
-    // let ixn_from_db = event_processor.get_event_at_sn(&id, 2).unwrap().unwrap();
-    // match deserialized_ixn {
-    //     Deserialized::Event(evt) => assert_eq!(
-    //         ixn_from_db.signed_event_message.event_message.event,
-    //         evt.event_message.event
-    //     ),
-    //     _ => assert!(false),
-    // }
+    // Process the same rotation event one more time.
+    let id_state = event_processor.process(deserialized_rot);
+    assert!(id_state.is_err());
+    assert!(matches!(id_state, Err(Error::EventDuplicateError)));
 
-    // // Construct partially signed interaction event.
-    // let ixn_raw_2 = br#"{"v":"KERI10JSON000098_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"3","t":"ixn","p":"ElB_2LYB2i5wus2Dscnmc6e302HK-pgxLIe7iJhftzl0","a":[]}-AADAA18DLkJf2G--KOpRW2aD6ZAXR4koYdj0_OzEfDF5PFP3Y5vx8MSY3UwRBN97AT1pIkDVGqVbBg6nFi-0Bg5RTBQABZq5Kn6sML7NRTEyFKfyHez1YQJ4gzSqGsf1nyOxrXl5h0gwJllyNwTCzQhoyVT2fFAKtt9N_vaP9f90wB2ugCAACLsZcJWVrb1hL7EqL0wuzdtEJOSr-5-7EL0ae_nzvfCO6fw4q0PjgzCgFtoeDbAqUQbhzjfaybDwF9z9MVelWBg"#;
-	// let parsed = crate::event_parsing::signed_message(ixn_raw_2).unwrap().1;
-    // let deserialized_ixn = parse::signed_message(parsed).unwrap();
-    // // Make event partially signed.
-    // let partially_signed_deserialized_ixn = match deserialized_ixn {
-    //     Deserialized::Event(mut e) => {
-    //         let sigs = e.signatures[1].clone();
-    //         e.signatures = vec![sigs];
-    //         Deserialized::Event(e)
-    //     }
-    //     _ => Err(Error::SemanticError("bad deser".into()))?,
-    // };
+    let ixn_raw = br#"{"v":"KERI10JSON000098_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"2","t":"ixn","p":"EFLtKYQZIoCFdSEjP7D5OgqElY2WwFB5vQD0Uvtp4RmI","a":[]}-AADAAip7QM2tvcyC4vbSX4A4avT03hHrJTTlkjQujOZRMroRL897wojcI4DIyxejOqsZcjrZHlU4S3RLYGmVbDEoPDgAB3NZj06_KCwxdTdIgCMETTHVJQa5AB8-dtqoD7ltaFIQxmC2K_ESp6DFLOrGQ2xTr97a-By1beM66YyBThjV8DQAC50owTQUxkyJ78vato0HuX9Edx-OxvBoepr61KknIfCjXKnlZrf-s_L0XFbz_0k8t3c9gmPkaI2vI-ZhzP31jBA"#;
+	let parsed = crate::event_parsing::signed_message(ixn_raw).unwrap().1;
+    let deserialized_ixn = parse::signed_message(parsed).unwrap();
 
-    // // Process partially signed interaction event.
-    // let id_state = event_processor.process(partially_signed_deserialized_ixn);
-    // assert!(matches!(id_state, Err(Error::NotEnoughSigsError)));
+    let _raw_parsed = match &deserialized_ixn {
+        Deserialized::Event(e) => e.event_message.serialize()?.to_vec(),
+        _ => Err(Error::SemanticError("bad deser".into()))?,
+    };
 
-    // // Check if processed ixn event is in kel. It shouldn't because of not enough signatures.
-    // let ixn_from_db = event_processor.get_event_at_sn(&id, 3);
-    // assert!(matches!(ixn_from_db, Ok(None)));
+    // Process interaction event.
+    event_processor.process(deserialized_ixn.clone())?.unwrap();
 
-    // // // Out of order event.
-    // let out_of_order_rot_raw = br#"{"v":"KERI10JSON000154_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"4","t":"rot","p":"EacZ-dpgav8rilfpmIDsTvH4vWzc9Tm_3p7Vxjmb7iG0","kt":"2","k":["D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM","DVjWcaNX2gCkHOjk6rkmqPBCxkRCqwIJ-3OjdYmMwxf4","DT1nEDepd6CSAMCE7NY_jlLdG6_mKUlKS_mW-2HJY1hg"],"n":"","bt":"0","br":[],"ba":[],"a":[]}-AADAAt2KPgLzJvXorePSDjHLAStyJG9CakJuGau8QczgtdKPR3JHAOob5wPtTUJD2gHcZXH3wZ6ALM0mZSS6UdocsBwAB50HQHN2JHgj7dNfPQhqiDogbuT5WEx5Mi2Y5cefA6IHgrrQ3WSjZ3Bqai8t5vYfxg_xqcSRJTLkLRNSHZUzMCwACOMQNUmOXYHiHe9cxFie7Yr1y0lJ1tyQEbJnwa1Mr65LmnBIiVuGISDJXy74TZnv0PAnNCJF6TMtltX7nHf7LBw"#;
-	// 	let parsed = crate::event_parsing::signed_message(out_of_order_rot_raw).unwrap().1;
-    // let out_of_order_rot = parse::signed_message(parsed).unwrap();
+    // Check if processed event is in db.
+    let ixn_from_db = event_processor.get_event_at_sn(&id, 2).unwrap().unwrap();
+    match deserialized_ixn {
+        Deserialized::Event(evt) => assert_eq!(
+            ixn_from_db.signed_event_message.event_message.event,
+            evt.event_message.event
+        ),
+        _ => assert!(false),
+    }
 
-    // let id_state = event_processor.process(out_of_order_rot);
-    // assert!(id_state.is_err());
-    // assert!(matches!(id_state, Err(Error::EventOutOfOrderError)));
+    // Construct partially signed interaction event.
+    let ixn_raw_2 = br#"{"v":"KERI10JSON000098_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"3","t":"ixn","p":"ElB_2LYB2i5wus2Dscnmc6e302HK-pgxLIe7iJhftzl0","a":[]}-AADAA18DLkJf2G--KOpRW2aD6ZAXR4koYdj0_OzEfDF5PFP3Y5vx8MSY3UwRBN97AT1pIkDVGqVbBg6nFi-0Bg5RTBQABZq5Kn6sML7NRTEyFKfyHez1YQJ4gzSqGsf1nyOxrXl5h0gwJllyNwTCzQhoyVT2fFAKtt9N_vaP9f90wB2ugCAACLsZcJWVrb1hL7EqL0wuzdtEJOSr-5-7EL0ae_nzvfCO6fw4q0PjgzCgFtoeDbAqUQbhzjfaybDwF9z9MVelWBg"#;
+	let parsed = crate::event_parsing::signed_message(ixn_raw_2).unwrap().1;
+    let deserialized_ixn = parse::signed_message(parsed).unwrap();
+    // Make event partially signed.
+    let partially_signed_deserialized_ixn = match deserialized_ixn {
+        Deserialized::Event(mut e) => {
+            let sigs = e.signatures[1].clone();
+            e.signatures = vec![sigs];
+            Deserialized::Event(e)
+        }
+        _ => Err(Error::SemanticError("bad deser".into()))?,
+    };
 
-    // // Check if processed event is in kel. It shouldn't.
-    // let raw_from_db = event_processor.get_event_at_sn(&id, 4);
-    // assert!(matches!(raw_from_db, Ok(None)));
+    // Process partially signed interaction event.
+    let id_state = event_processor.process(partially_signed_deserialized_ixn);
+    assert!(matches!(id_state, Err(Error::NotEnoughSigsError)));
 
-    // let id: IdentifierPrefix = "EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8".parse()?;
-    // let mut kel = Vec::new();
-    // kel.extend(icp_raw);
-    // kel.extend(rot_raw);
-    // kel.extend(ixn_raw);
+    // Check if processed ixn event is in kel. It shouldn't because of not enough signatures.
+    let ixn_from_db = event_processor.get_event_at_sn(&id, 3);
+    assert!(matches!(ixn_from_db, Ok(None)));
 
-    // let db_kel = event_processor.get_kerl(&id)?;
+    // // Out of order event.
+    let out_of_order_rot_raw = br#"{"v":"KERI10JSON000154_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"4","t":"rot","p":"EacZ-dpgav8rilfpmIDsTvH4vWzc9Tm_3p7Vxjmb7iG0","kt":"2","k":["D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM","DVjWcaNX2gCkHOjk6rkmqPBCxkRCqwIJ-3OjdYmMwxf4","DT1nEDepd6CSAMCE7NY_jlLdG6_mKUlKS_mW-2HJY1hg"],"n":"","bt":"0","br":[],"ba":[],"a":[]}-AADAAt2KPgLzJvXorePSDjHLAStyJG9CakJuGau8QczgtdKPR3JHAOob5wPtTUJD2gHcZXH3wZ6ALM0mZSS6UdocsBwAB50HQHN2JHgj7dNfPQhqiDogbuT5WEx5Mi2Y5cefA6IHgrrQ3WSjZ3Bqai8t5vYfxg_xqcSRJTLkLRNSHZUzMCwACOMQNUmOXYHiHe9cxFie7Yr1y0lJ1tyQEbJnwa1Mr65LmnBIiVuGISDJXy74TZnv0PAnNCJF6TMtltX7nHf7LBw"#;
+		let parsed = crate::event_parsing::signed_message(out_of_order_rot_raw).unwrap().1;
+    let out_of_order_rot = parse::signed_message(parsed).unwrap();
 
-    // assert_eq!(db_kel, Some(kel));
+    let id_state = event_processor.process(out_of_order_rot);
+    assert!(id_state.is_err());
+    assert!(matches!(id_state, Err(Error::EventOutOfOrderError)));
+
+    // Check if processed event is in kel. It shouldn't.
+    let raw_from_db = event_processor.get_event_at_sn(&id, 4);
+    assert!(matches!(raw_from_db, Ok(None)));
+
+    let id: IdentifierPrefix = "EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8".parse()?;
+    let mut kel = Vec::new();
+    kel.extend(icp_raw);
+    kel.extend(rot_raw);
+    kel.extend(ixn_raw);
+
+    let db_kel = event_processor.get_kerl(&id)?;
+
+    assert_eq!(db_kel, Some(kel));
 
     Ok(())
 }
@@ -194,16 +191,9 @@ fn test_process_delegated() -> Result<(), Error> {
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
     let event_processor = EventProcessor::new(Arc::clone(&db));
 
-    let raw_parsed = |des| -> Result<Vec<u8>, Error> {
-        match &des {
-            Deserialized::Event(e) => Ok(e.event_message.serialize()?.to_vec()),
-            _ => Err(Error::SemanticError("bad deser".into()))?,
-        }
-    };
-
     // Events and sigs are from keripy `test_delegation` test.
     // (keripy/tests/core/test_delegating.py)
-    let bobs_pref: IdentifierPrefix = "Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI".parse()?;
+    let _bobs_pref: IdentifierPrefix = "Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI".parse()?;
 
     let bobs_icp = br#"{"v":"KERI10JSON0000ed_","i":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI","s":"0","t":"icp","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","bt":"0","b":[],"c":[],"a":[]}-AABAAp8S6RgfLwdCEiz0jL9cXaDwTJF6MLuKyXp7EfJtrp2myOikOJVUB-w9UGZc1Y8dnURxhXPSca-ZEUAV73XOaAw"#;
 	let parsed = crate::event_parsing::signed_message(bobs_icp).unwrap().1;
@@ -219,64 +209,64 @@ fn test_process_delegated() -> Result<(), Error> {
     let state = event_processor.process(deserialized_dip.clone());
     assert!(matches!(state, Err(Error::EventOutOfOrderError)));
 
-    let child_prefix: IdentifierPrefix = "E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U".parse()?;
+    // let child_prefix: IdentifierPrefix = "E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U".parse()?;
 
-    // Check if processed dip is in kel.
-    let dip_from_db = event_processor.get_event_at_sn(&child_prefix, 0);
-    assert!(matches!(dip_from_db, Ok(None)));
+    // // Check if processed dip is in kel.
+    // let dip_from_db = event_processor.get_event_at_sn(&child_prefix, 0);
+    // assert!(matches!(dip_from_db, Ok(None)));
 
-    // Bob's ixn event with delegating event seal.
-    let bobs_ixn = br#"{"v":"KERI10JSON000107_","i":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI","s":"1","t":"ixn","p":"E1-QL0TCdsBTRaKoakLjFhjSlELK60Vv8WdRaG6zMnTM","a":[{"i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"0","d":"E1x1JOub6oEQkxAxTNFu1Pma6y-lrbprNsaILHJHoPmY"}]}-AABAAROVSK0qK2gqlr_OUsnHNW_ksCyLVmRaysRne2dI5dweECGIy3_ZuFHyOofiDRt5tRE09PlS0uZdot6byFNr-AA"#;
-	let parsed = crate::event_parsing::signed_message(bobs_ixn).unwrap().1;
-    let deserialized_ixn = parse::signed_message(parsed).unwrap();
-    event_processor.process(deserialized_ixn.clone())?;
+    // // Bob's ixn event with delegating event seal.
+    // let bobs_ixn = br#"{"v":"KERI10JSON000107_","i":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI","s":"1","t":"ixn","p":"E1-QL0TCdsBTRaKoakLjFhjSlELK60Vv8WdRaG6zMnTM","a":[{"i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"0","d":"E1x1JOub6oEQkxAxTNFu1Pma6y-lrbprNsaILHJHoPmY"}]}-AABAAROVSK0qK2gqlr_OUsnHNW_ksCyLVmRaysRne2dI5dweECGIy3_ZuFHyOofiDRt5tRE09PlS0uZdot6byFNr-AA"#;
+	// let parsed = crate::event_parsing::signed_message(bobs_ixn).unwrap().1;
+    // let deserialized_ixn = parse::signed_message(parsed).unwrap();
+    // event_processor.process(deserialized_ixn.clone())?;
 
-    // Check if processed event is in db.
-    let ixn_from_db = event_processor.get_event_at_sn(&bobs_pref, 1).unwrap().unwrap();
-    assert_eq!(ixn_from_db.signed_event_message.event_message.serialize()?, raw_parsed(deserialized_ixn)?);
+    // // Check if processed event is in db.
+    // let ixn_from_db = event_processor.get_event_at_sn(&bobs_pref, 1).unwrap().unwrap();
+    // assert_eq!(ixn_from_db.signed_event_message.event_message.serialize()?, raw_parsed(deserialized_ixn)?);
 
-    // Process delegated inception event once again.
-    event_processor.process(deserialized_dip.clone())?;
+    // // Process delegated inception event once again.
+    // event_processor.process(deserialized_dip.clone())?;
 
-    // Check if processed dip event is in db.
-    let dip_from_db = event_processor
-        .get_event_at_sn(&child_prefix, 0)?
-        .unwrap();
+    // // Check if processed dip event is in db.
+    // let dip_from_db = event_processor
+    //     .get_event_at_sn(&child_prefix, 0)?
+    //     .unwrap();
         
-    assert_eq!(dip_from_db.signed_event_message.event_message.serialize()?, raw_parsed(deserialized_dip.clone())?);
+    // assert_eq!(dip_from_db.signed_event_message.event_message.serialize()?, raw_parsed(deserialized_dip.clone())?);
 
-    // Bobs interaction event with delegated event seal.
-    let bob_ixn = br#"{"v":"KERI10JSON000107_","i":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI","s":"2","t":"ixn","p":"E3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII","a":[{"i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"1","d":"EPjLBcb4pp-3PGvSi_fTvLvsqUqFoJ0CVCHvIFfu93Xc"}]}-AABAAclMVE-bkIn-wPiAqfgR384nWmslQHQvmo2o3xQvd_4Bt6bflc4BAmfBa03KgrDVqmB7qG2VXQbOHevkzOgRdDA"#;
-	let parsed = crate::event_parsing::signed_message(bob_ixn).unwrap().1;
-    let deserialized_ixn_drt = parse::signed_message(parsed).unwrap();
+    // // Bobs interaction event with delegated event seal.
+    // let bob_ixn = br#"{"v":"KERI10JSON000107_","i":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI","s":"2","t":"ixn","p":"E3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII","a":[{"i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"1","d":"EPjLBcb4pp-3PGvSi_fTvLvsqUqFoJ0CVCHvIFfu93Xc"}]}-AABAAclMVE-bkIn-wPiAqfgR384nWmslQHQvmo2o3xQvd_4Bt6bflc4BAmfBa03KgrDVqmB7qG2VXQbOHevkzOgRdDA"#;
+	// let parsed = crate::event_parsing::signed_message(bob_ixn).unwrap().1;
+    // let deserialized_ixn_drt = parse::signed_message(parsed).unwrap();
 
-    // Delegated rotation event.
-    let drt_raw = br#"{"v":"KERI10JSON000122_","i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"1","t":"drt","p":"E1x1JOub6oEQkxAxTNFu1Pma6y-lrbprNsaILHJHoPmY","kt":"1","k":["DTf6QZWoet154o9wvzeMuNhLQRr8JaAUeiC6wjB_4_08"],"n":"E8kyiXDfkE7idwWnAZQjHbUZMz-kd_yIMH0miptIFFPo","bt":"0","br":[],"ba":[],"a":[]}-AABAAAVUMNfOl9Fcqx-C3fAYnaxvsiJJO3zG6rP0FQ2WVp__hMEaprrQbJL6-Esnny3U5zvMOqbso17rvecTwmVIwDw-GAB0AAAAAAAAAAAAAAAAAAAAAAgEbOI0OIIFv2VV5bmeSq1pwCn-6b2k6TdWcCbJHE6Ly7o"#;
-	let parsed = crate::event_parsing::signed_message(drt_raw).unwrap().1;
-    let deserialized_drt = parse::signed_message(parsed).unwrap();
+    // // Delegated rotation event.
+    // let drt_raw = br#"{"v":"KERI10JSON000122_","i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"1","t":"drt","p":"E1x1JOub6oEQkxAxTNFu1Pma6y-lrbprNsaILHJHoPmY","kt":"1","k":["DTf6QZWoet154o9wvzeMuNhLQRr8JaAUeiC6wjB_4_08"],"n":"E8kyiXDfkE7idwWnAZQjHbUZMz-kd_yIMH0miptIFFPo","bt":"0","br":[],"ba":[],"a":[]}-AABAAAVUMNfOl9Fcqx-C3fAYnaxvsiJJO3zG6rP0FQ2WVp__hMEaprrQbJL6-Esnny3U5zvMOqbso17rvecTwmVIwDw-GAB0AAAAAAAAAAAAAAAAAAAAAAgEbOI0OIIFv2VV5bmeSq1pwCn-6b2k6TdWcCbJHE6Ly7o"#;
+	// let parsed = crate::event_parsing::signed_message(drt_raw).unwrap().1;
+    // let deserialized_drt = parse::signed_message(parsed).unwrap();
 
-    // Process drt event before delegating ixn event.
-    let child_state = event_processor.process(deserialized_drt.clone());
-    assert!(matches!(child_state, Err(Error::EventOutOfOrderError)));
+    // // Process drt event before delegating ixn event.
+    // let child_state = event_processor.process(deserialized_drt.clone());
+    // assert!(matches!(child_state, Err(Error::EventOutOfOrderError)));
 
-    // Check if processed drt is in kel.
-    let drt_from_db = event_processor.get_event_at_sn(&child_prefix, 1);
-    assert!(matches!(drt_from_db, Ok(None)));
+    // // Check if processed drt is in kel.
+    // let drt_from_db = event_processor.get_event_at_sn(&child_prefix, 1);
+    // assert!(matches!(drt_from_db, Ok(None)));
 
-    event_processor.process(deserialized_ixn_drt.clone())?;
+    // event_processor.process(deserialized_ixn_drt.clone())?;
 
-    // Check if processed event is in db.
-    let ixn_from_db = event_processor.get_event_at_sn(&bobs_pref, 2)?.unwrap();
-    assert_eq!(ixn_from_db.signed_event_message.event_message.serialize()?, raw_parsed(deserialized_ixn_drt)?);
+    // // Check if processed event is in db.
+    // let ixn_from_db = event_processor.get_event_at_sn(&bobs_pref, 2)?.unwrap();
+    // assert_eq!(ixn_from_db.signed_event_message.event_message.serialize()?, raw_parsed(deserialized_ixn_drt)?);
 
-    // Process delegated rotation event once again.
-    event_processor.process(deserialized_drt.clone())?.unwrap();
+    // // Process delegated rotation event once again.
+    // event_processor.process(deserialized_drt.clone())?.unwrap();
 
-    // Check if processed drt event is in db.
-    let drt_from_db = event_processor
-        .get_event_at_sn(&child_prefix, 1)?
-        .unwrap();
-    assert_eq!(drt_from_db.signed_event_message.event_message.serialize()?, raw_parsed(deserialized_drt)?);
+    // // Check if processed drt event is in db.
+    // let drt_from_db = event_processor
+    //     .get_event_at_sn(&child_prefix, 1)?
+    //     .unwrap();
+    // assert_eq!(drt_from_db.signed_event_message.event_message.serialize()?, raw_parsed(deserialized_drt)?);
 
     Ok(())
 }

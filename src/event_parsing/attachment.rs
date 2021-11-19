@@ -71,7 +71,7 @@ pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
         .map_err(|_e| nom::Err::Failure((s, ErrorKind::IsNot)))?,
     )
     // Can't parse payload type
-    .map_err(|_e| nom::Err::Failure((s, ErrorKind::IsNot)))?;
+    .map_err(|_e| nom::Err::Error((s, ErrorKind::IsNot)))?;
     match payload_type {
         PayloadType::MG => {
             let (rest, source_seals) = source_seal(rest)?;

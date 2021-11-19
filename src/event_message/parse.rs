@@ -123,7 +123,7 @@ pub fn signed_message<'a>(mut des: DeserializedSignedEvent) -> Result<Deserializ
             }?;
             Ok(
                 Deserialized::Event(
-                    SignedEventMessage::new(&des.deserialized_event, PayloadType::MA, sigs, vec![])
+                    SignedEventMessage::new(&des.deserialized_event, PayloadType::MA, sigs, Some(vec![Attachment::SealSourceCouplets(seals)]))
                 ),
             )
         }
@@ -132,7 +132,7 @@ pub fn signed_message<'a>(mut des: DeserializedSignedEvent) -> Result<Deserializ
             if let Attachment::AttachedSignatures(sigs) = sigs {
                 Ok(
                     Deserialized::Event(
-                    SignedEventMessage::new(&des.deserialized_event, PayloadType::MA, sigs.to_vec(), vec![])
+                    SignedEventMessage::new(&des.deserialized_event, PayloadType::MA, sigs.to_vec(), None)
                 ))
             } else {
                 // Improper attachment type
