@@ -1,12 +1,11 @@
 use base64::URL_SAFE_NO_PAD;
 use serde::Deserialize;
 
-use crate::{event::sections::seal::{EventSeal, SourceSeal}, prefix::{
+use crate::{event::sections::seal::{EventSeal, SourceSeal}, event_parsing::payload_size::PayloadType, prefix::{
         AttachedSignaturePrefix, BasicPrefix, Prefix, SelfSigningPrefix,
     }};
 
-use super::payload_size::PayloadType;
-
+    
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub enum Attachment {
     SealSourceCouplets(Vec<SourceSeal>),

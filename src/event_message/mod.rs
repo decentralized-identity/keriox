@@ -1,7 +1,6 @@
 pub mod attachment;
 pub mod event_msg_builder;
 pub mod parse;
-pub mod payload_size;
 pub mod serialization_info;
 pub mod serializer;
 pub mod signed_event_message;
@@ -24,7 +23,6 @@ use serialization_info::*;
 use self::{
     attachment::Attachment,
     event_msg_builder::{EventMsgBuilder, EventType},
-    payload_size::PayloadType,
     signed_event_message::SignedEventMessage,
 };
 
@@ -138,11 +136,10 @@ impl EventMessage {
 
     pub fn sign(
         &self,
-        payload_type: PayloadType,
         sigs: Vec<AttachedSignaturePrefix>,
         attachments: Option<Vec<Attachment>>,
     ) -> SignedEventMessage {
-        SignedEventMessage::new(self, payload_type, sigs, attachments)
+        SignedEventMessage::new(self, sigs, attachments)
     }
 }
 
@@ -319,7 +316,7 @@ mod tests {
 
         assert!(pref0.verify(&ser, &attached_sig.signature)?);
 
-        let signed_event = icp_m.sign(PayloadType::MA, vec![attached_sig], None);
+        let signed_event = icp_m.sign( vec![attached_sig], None);
 
         let s_ = IdentifierState::default();
 
@@ -402,7 +399,7 @@ mod tests {
 
         assert!(sig_pref_0.verify(&serialized, &attached_sig.signature)?);
 
-        let signed_event = icp.sign(PayloadType::MA, vec![attached_sig], None);
+        let signed_event = icp.sign(vec![attached_sig], None);
 
         let s_ = IdentifierState::default();
 

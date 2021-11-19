@@ -10,6 +10,7 @@ use crate::{event::EventMessage, event_message::{attachment::Attachment, parse::
 use rmp_serde as serde_mgpk;
 pub mod attachment;
 pub mod prefix;
+pub mod payload_size;
 
 fn json_message(s: &[u8]) -> nom::IResult<&[u8], EventMessage> {
     let mut stream = serde_json::Deserializer::from_slice(s).into_iter::<EventMessage>();

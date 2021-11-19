@@ -2,7 +2,7 @@ use std::convert::TryFrom;
 
 use nom::{bytes::complete::take, combinator::map, error::ErrorKind, multi::count};
 
-use crate::{derivation::attached_signature_code::b64_to_num, event::sections::seal::{EventSeal, SourceSeal}, event_message::{attachment::Attachment, payload_size::PayloadType}, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}};
+use crate::{derivation::attached_signature_code::b64_to_num, event::sections::seal::{EventSeal, SourceSeal}, event_message::attachment::Attachment, event_parsing::payload_size::PayloadType, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}};
 
 use super::prefix::{attached_signature, attached_sn, basic_prefix, self_addressing_prefix, self_signing_prefix, prefix};
 

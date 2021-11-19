@@ -7,7 +7,7 @@ use async_std::{channel::Sender, io::{
         BufRead,
         BufReader,
     }, task::{Context, Poll, block_on}};
-use crate::{event_message::{payload_size::PayloadType}, event_parsing::{attachment::b64_count, message, version}, keri::Keri, prefix::IdentifierPrefix, signer::KeyManager};
+use crate::{event_parsing::{attachment::b64_count, message, payload_size::PayloadType, version}, keri::Keri, prefix::IdentifierPrefix, signer::KeyManager};
 use bitpat::bitpat;
 
 pub type Result<T> = std::result::Result<T, String>;

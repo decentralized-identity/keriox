@@ -2,7 +2,7 @@ use std::convert::TryFrom;
 
 use crate::{error::Error, event::event_data::EventData};
 
-use super::{payload_size::PayloadType, signed_event_message::SignedEventMessage};
+use super::signed_event_message::SignedEventMessage;
 use super::{
     attachment::{Attachment},
     signed_event_message::{SignedNontransferableReceipt, SignedTransferableReceipt},
@@ -123,7 +123,7 @@ pub fn signed_message<'a>(mut des: DeserializedSignedEvent) -> Result<Deserializ
             }?;
             Ok(
                 Deserialized::Event(
-                    SignedEventMessage::new(&des.deserialized_event, PayloadType::MA, sigs, Some(vec![Attachment::SealSourceCouplets(seals)]))
+                    SignedEventMessage::new(&des.deserialized_event, sigs, Some(vec![Attachment::SealSourceCouplets(seals)]))
                 ),
             )
         }
@@ -132,7 +132,7 @@ pub fn signed_message<'a>(mut des: DeserializedSignedEvent) -> Result<Deserializ
             if let Attachment::AttachedSignatures(sigs) = sigs {
                 Ok(
                     Deserialized::Event(
-                    SignedEventMessage::new(&des.deserialized_event, PayloadType::MA, sigs.to_vec(), None)
+                    SignedEventMessage::new(&des.deserialized_event, sigs.to_vec(), None)
                 ))
             } else {
                 // Improper attachment type

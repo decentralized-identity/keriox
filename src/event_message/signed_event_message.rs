@@ -10,14 +10,12 @@ use crate::{
 };
 
 use super::serializer::to_string;
-use super::{attachment::Attachment, payload_size::PayloadType, EventMessage};
+use super::{attachment::Attachment, EventMessage};
 
 // KERI serializer should be used to serialize this
 #[derive(Debug, Clone, Deserialize)]
 pub struct SignedEventMessage {
     pub event_message: EventMessage,
-    #[serde(skip_serializing)]
-    pub payload_type: PayloadType,
     #[serde(skip_serializing)]
     pub signatures: Vec<AttachedSignaturePrefix>,
     #[serde(skip_serializing)]
@@ -38,9 +36,8 @@ impl Serialize for SignedEventMessage {
             em.end()
         // . else - we pack as it is for DB / CBOR purpose
         } else {
-            let mut em = serializer.serialize_struct("SignedEventMessage", 3)?;
+            let mut em = serializer.serialize_struct("SignedEventMessage", 2)?;
             em.serialize_field("event_message", &self.event_message)?;
-            em.serialize_field("payload_type", &self.payload_type)?;
             em.serialize_field("signatures", &self.signatures)?;
             em.end()
         }
@@ -133,13 +130,11 @@ impl Eq for TimestampedSignedEventMessage {}
 impl SignedEventMessage {
     pub fn new(
         message: &EventMessage,
-        payload_type: PayloadType,
         sigs: Vec<AttachedSignaturePrefix>,
         attachments: Option<Vec<Attachment>>,
     ) -> Self {
         Self {
             event_message: message.clone(),
-            payload_type,
             signatures: sigs,
             attachments,
         }
