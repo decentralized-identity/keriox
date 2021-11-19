@@ -1,11 +1,17 @@
 #![allow(non_upper_case_globals)]
-use crate::{derivation::{
+use crate::{
+    derivation::{
         attached_signature_code::b64_to_num, basic::Basic, self_addressing::SelfAddressing,
         self_signing::SelfSigning, DerivationCode,
-    }, keys::PublicKey, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix, SelfSigningPrefix}};
+    },
+    keys::PublicKey,
+    prefix::{
+        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
+        SelfSigningPrefix,
+    },
+};
 use base64::URL_SAFE;
 use nom::{bytes::complete::take, error::ErrorKind};
-
 
 // TODO this could be a lot nicer, but is currently written to be careful and "easy" to follow
 pub fn attached_signature(s: &[u8]) -> nom::IResult<&[u8], AttachedSignaturePrefix> {

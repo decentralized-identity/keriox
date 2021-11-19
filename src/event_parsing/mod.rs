@@ -1,24 +1,29 @@
-use std::{io::Cursor};
+use std::io::Cursor;
 
-use nom::{branch::alt, error::ErrorKind, multi::{fold_many0, many0}};
+use nom::{
+    branch::alt,
+    error::ErrorKind,
+    multi::{fold_many0, many0},
+};
 use serde::Deserialize;
 
 #[cfg(feature = "async")]
 use crate::event_message::serialization_info::SerializationInfo;
 
-use crate::{event::EventMessage, event_message::{attachment::Attachment, parse::DeserializedSignedEvent}};
+use crate::{
+    event::EventMessage,
+    event_message::{parse::Attachment, parse::DeserializedSignedEvent},
+};
 use rmp_serde as serde_mgpk;
 pub mod attachment;
-pub mod prefix;
+pub mod pack;
 pub mod payload_size;
+pub mod prefix;
 
 fn json_message(s: &[u8]) -> nom::IResult<&[u8], EventMessage> {
     let mut stream = serde_json::Deserializer::from_slice(s).into_iter::<EventMessage>();
     match stream.next() {
-        Some(Ok(event)) => Ok((
-            &s[stream.byte_offset()..],
-           event,
-        )),
+        Some(Ok(event)) => Ok((&s[stream.byte_offset()..], event)),
         _ => Err(nom::Err::Error((s, ErrorKind::IsNot))),
     }
 }
@@ -26,10 +31,7 @@ fn json_message(s: &[u8]) -> nom::IResult<&[u8], EventMessage> {
 fn cbor_message(s: &[u8]) -> nom::IResult<&[u8], EventMessage> {
     let mut stream = serde_cbor::Deserializer::from_slice(s).into_iter::<EventMessage>();
     match stream.next() {
-        Some(Ok(event)) => Ok((
-            &s[stream.byte_offset()..],
-            event,
-        )),
+        Some(Ok(event)) => Ok((&s[stream.byte_offset()..], event)),
         _ => Err(nom::Err::Error((s, ErrorKind::IsNot))),
     }
 }
@@ -37,10 +39,7 @@ fn cbor_message(s: &[u8]) -> nom::IResult<&[u8], EventMessage> {
 fn mgpk_message(s: &[u8]) -> nom::IResult<&[u8], EventMessage> {
     let mut deser = serde_mgpk::Deserializer::new(Cursor::new(s));
     match Deserialize::deserialize(&mut deser) {
-        Ok(event) => Ok((
-            &s[deser.get_ref().position() as usize..],
-            event,
-        )),
+        Ok(event) => Ok((&s[deser.get_ref().position() as usize..], event)),
         _ => Err(nom::Err::Error((s, ErrorKind::IsNot))),
     }
 }
@@ -51,17 +50,19 @@ pub fn message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage> {
 
 pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], DeserializedSignedEvent> {
     let (rest, msg) = message(s)?;
-    let (rest, attachments): (&[u8], Vec<Attachment>) = 
-    fold_many0(
-        attachment::attachment,
-        vec![],
-        |mut acc: Vec<_>, item| {
+    let (rest, attachments): (&[u8], Vec<Attachment>) =
+        fold_many0(attachment::attachment, vec![], |mut acc: Vec<_>, item| {
             acc.push(item);
             acc
-        }
-    )(rest)?;
+        })(rest)?;
 
-    Ok((rest, DeserializedSignedEvent {deserialized_event:msg, attachments}))
+    Ok((
+        rest,
+        DeserializedSignedEvent {
+            deserialized_event: msg,
+            attachments,
+        },
+    ))
 }
 
 pub fn signed_event_stream(s: &[u8]) -> nom::IResult<&[u8], Vec<DeserializedSignedEvent>> {
@@ -89,7 +90,6 @@ fn cbor_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
 // TODO: Requires testing
 #[cfg(feature = "async")]
 fn mgpk_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
-
     match serde_mgpk::from_slice(data) {
         Ok(vi) => Ok((data, vi)),
         _ => Err(nom::Err::Error((data, ErrorKind::IsNot))),
@@ -98,7 +98,6 @@ fn mgpk_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
 
 #[cfg(feature = "async")]
 pub(crate) fn version<'a>(data: &'a [u8]) -> nom::IResult<&[u8], SerializationInfo> {
-
     alt((json_version, cbor_version, mgpk_version))(data).map(|d| (d.0, d.1))
 }
 
@@ -118,7 +117,6 @@ fn test_signed_event() {
     let parsed = signed_message(stream);
     assert!(parsed.is_ok());
 }
-
 
 #[test]
 fn test_event() {
@@ -166,7 +164,7 @@ fn test_event() {
 #[test]
 fn test_signed_events_stream() {
     let kerl_str = br#"{"v":"KERI10JSON0000ed_","i":"DoQy7bwiYr80qXoISsMdGvfXmCCpZ9PUqetbR8e-fyTk","s":"0","t":"icp","kt":"1","k":["DoQy7bwiYr80qXoISsMdGvfXmCCpZ9PUqetbR8e-fyTk"],"n":"EGofBtQtAeDMOO3AA4QM0OHxKyGQQ1l2HzBOtrKDnD-o","bt":"0","b":[],"c":[],"a":[]}-AABAAxemWo-mppcRkiGSOXpVwh8CYeTSEJ-a0HDrCkE-TKJ-_76GX-iD7s4sbZ7j5fdfvOuTNyuFw3a797gwpnJ-NAg{"v":"KERI10JSON000122_","i":"DoQy7bwiYr80qXoISsMdGvfXmCCpZ9PUqetbR8e-fyTk","s":"1","t":"rot","p":"EvZY9w3fS1h98tJeysdNQqT70XLLec4oso8kIYjfu2Ks","kt":"1","k":["DLqde_jCw-C3y0fTvXMXX5W7QB0188bMvXVkRcedgTwY"],"n":"EW5MfLjWGOUCIV1tQLKNBu_WFifVK7ksthNDoHP89oOc","bt":"0","br":[],"ba":[],"a":[]}-AABAAuQcoYU04XYzJxOPp4cxmvXbqVpGADfQWqPOzo1S6MajUl1sEWEL1Ry30jNXaV3-izvHRNROYtPm2LIuIimIFDg"#; //{"v":"KERI10JSON000122_","i":"DoQy7bwiYr80qXoISsMdGvfXmCCpZ9PUqetbR8e-fyTk","s":"2","t":"rot","p":"EOi_KYKjP4hinuTfgtoYj5QBw_Q1ZrRtWFQDp0qsNuks","kt":"1","k":["De5pKs8wiP9bplyjspW9L62PEANoad-5Kum1uAllRxPY"],"n":"ERKagV0hID1gqZceLsOV3s7MjcoRmCaps2bPBHvVQPEQ","bt":"0","br":[],"ba":[],"a":[]}-AABAAPKIYNAm6nmz4cv37nvn5XMKRVzfKkVpJwMDt2DG-DqTJRCP8ehCeyDFJTdtvdJHjKqrnxE4Lfpll3iUzuQM4Aw{"v":"KERI10JSON000122_","i":"DoQy7bwiYr80qXoISsMdGvfXmCCpZ9PUqetbR8e-fyTk","s":"3","t":"rot","p":"EVK1FbLl7yWTxOzPwk7vo_pQG5AumFoeSE51KapaEymc","kt":"1","k":["D2M5V_e23Pa0IAqqhNDKzZX0kRIMkJyW8_M-gT_Kw9sc"],"n":"EYJkIfnCYcMFVIEi-hMMIjBQfXcTqH_lGIIqMw4LaeOE","bt":"0","br":[],"ba":[],"a":[]}-AABAAsrKFTSuA6tEzqV0C7fEbeiERLdZpStZMCTvgDvzNMfa_Tn26ejFRZ_rDmovoo8xh0dH7SdMQ5B_FvwCx9E98Aw{"v":"KERI10JSON000098_","i":"DoQy7bwiYr80qXoISsMdGvfXmCCpZ9PUqetbR8e-fyTk","s":"4","t":"ixn","p":"EY7VDg-9Gixr9rgH2VyWGvnnoebgTyT9oieHZIaiv2UA","a":[]}-AABAAqHtncya5PNnwSbMRegftJc1y8E4tMZwajVVj2-FmGmp82b2A7pY1vr7cv36m7wPRV5Dusf4BRa5moMlHUpSqDA"#;
-    // Process kerl
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  // Process kerl
     let (rest, messages) = signed_event_stream(kerl_str).unwrap();
 
     assert!(rest.is_empty());

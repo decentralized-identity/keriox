@@ -1,10 +1,12 @@
 use std::convert::TryFrom;
+use serde::Deserialize;
 
+use crate::event::sections::seal::{EventSeal, SourceSeal};
+use crate::prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix};
 use crate::{error::Error, event::event_data::EventData};
 
 use super::signed_event_message::SignedEventMessage;
 use super::{
-    attachment::{Attachment},
     signed_event_message::{SignedNontransferableReceipt, SignedTransferableReceipt},
     EventMessage
 };
@@ -15,6 +17,14 @@ use super::{
 //     pub event_message: EventMessage,
 //     pub raw: &'a [u8],
 // }
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub enum Attachment {
+    SealSourceCouplets(Vec<SourceSeal>),
+    AttachedEventSeal(Vec<EventSeal>),
+    AttachedSignatures(Vec<AttachedSignaturePrefix>),
+    ReceiptCouplets(Vec<(BasicPrefix, SelfSigningPrefix)>),
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DeserializedSignedEvent {
@@ -226,6 +236,7 @@ fn test_stream2() {
         }
         _ => assert!(false),
     }
+
 }
 
 #[test]

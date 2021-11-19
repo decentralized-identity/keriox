@@ -7,7 +7,7 @@ use crate::{database::sled::SledEventDatabase, derivation::self_addressing::Self
             KeyConfig,
         },
         EventMessage,
-    }, event_message::{attachment::Attachment, parse::Deserialized, signed_event_message::{
+    }, event_message::{parse::{Deserialized, Attachment}, signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
             TimestampedSignedEventMessage,
         }}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};

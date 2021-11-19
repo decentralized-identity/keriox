@@ -1,22 +1,58 @@
 use base64::URL_SAFE_NO_PAD;
-use serde::Deserialize;
 
-use crate::{event::sections::seal::{EventSeal, SourceSeal}, event_parsing::payload_size::PayloadType, prefix::{
-        AttachedSignaturePrefix, BasicPrefix, Prefix, SelfSigningPrefix,
-    }};
+use crate::{error::Error, event_message::{parse::{Attachment, Deserialized}, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt}}, prefix::Prefix};
 
-    
-#[derive(Debug, Clone, Deserialize, PartialEq)]
-pub enum Attachment {
-    SealSourceCouplets(Vec<SourceSeal>),
-    AttachedEventSeal(Vec<EventSeal>),
-    AttachedSignatures(Vec<AttachedSignaturePrefix>),
-    ReceiptCouplets(Vec<(BasicPrefix, SelfSigningPrefix)>),
+use super::payload_size::PayloadType;
+
+pub trait Pack {
+	fn pack(&self) -> Result<Vec<u8>, Error>;
 }
 
-impl Attachment {
-    pub fn to_str(&self) -> String {
-        let (payload_type, att_len, serialized_attachment) = match self {
+impl Pack for Deserialized {
+    fn pack(&self) -> Result<Vec<u8>, Error> {
+       match self {
+            Deserialized::Event(ev) => ev.pack(),
+            Deserialized::NontransferableRct(ntr) => ntr.pack(),
+            Deserialized::TransferableRct(tr) => tr.pack(),
+        } 
+    }
+}
+
+impl Pack for SignedEventMessage {
+    fn pack(&self) -> Result<Vec<u8>, Error> {
+        Ok([
+            self.event_message.serialize()?,
+            Attachment::AttachedSignatures(self.signatures.clone()).pack()?,
+        ]
+        .concat())
+    }
+}
+
+impl Pack for SignedNontransferableReceipt {
+    fn pack(&self) -> Result<Vec<u8>, Error> {
+        Ok([
+            self.body.serialize()?,
+            Attachment::ReceiptCouplets(self.couplets.clone()).pack()?,
+        ]
+        .concat())
+    }
+}
+
+impl Pack for SignedTransferableReceipt {
+    fn pack(&self) -> Result<Vec<u8>, Error> {
+        Ok([
+                self.body.serialize()?,
+                Attachment::AttachedEventSeal(vec![self.validator_seal.clone()]).pack()?,
+                Attachment::AttachedSignatures(self.signatures.clone()).pack()?,
+            ]
+            .concat())
+        }
+    }
+
+
+impl Pack for Attachment {
+    fn pack(&self) -> Result<Vec<u8>, Error> {
+         let (payload_type, att_len, serialized_attachment) = match self {
             Attachment::SealSourceCouplets(sources) => {
                 let serialzied_sources = sources
                     .into_iter()
@@ -50,11 +86,12 @@ impl Attachment {
                 (PayloadType::MC, couplets.len(), packed_couplets)
             }
         };
-        [
+        Ok([
             payload_type.adjust_with_num(att_len as u16),
             serialized_attachment,
         ]
-        .join("")
+        .join("").as_bytes().to_vec())
+    
     }
 }
 

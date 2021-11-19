@@ -7,7 +7,7 @@ use async_std::{channel::Sender, io::{
         BufRead,
         BufReader,
     }, task::{Context, Poll, block_on}};
-use crate::{event_parsing::{attachment::b64_count, message, payload_size::PayloadType, version}, keri::Keri, prefix::IdentifierPrefix, signer::KeyManager};
+use crate::{event_parsing::{attachment::b64_count, message, pack::Pack, payload_size::PayloadType, version}, keri::Keri, prefix::IdentifierPrefix, signer::KeyManager};
 use bitpat::bitpat;
 
 pub type Result<T> = std::result::Result<T, String>;
@@ -112,7 +112,7 @@ where
                         if let Ok(receipt) = this.keri.make_ntr(message(sliced_message).unwrap().1) {
                             futures_core::ready!(this.writer.as_mut().poll_write(
                                 cx,
-                                receipt.serialize().as_ref()
+                                receipt.pack().as_ref()
                                     .map_err(|e| e.to_string())?))
                                 .map_err(|e| e.to_string())?;
                         } else {

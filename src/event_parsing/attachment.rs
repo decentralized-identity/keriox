@@ -2,12 +2,15 @@ use std::convert::TryFrom;
 
 use nom::{bytes::complete::take, combinator::map, error::ErrorKind, multi::count};
 
-use crate::{derivation::attached_signature_code::b64_to_num, event::sections::seal::{EventSeal, SourceSeal}, event_message::attachment::Attachment, event_parsing::payload_size::PayloadType, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}};
+use crate::{derivation::attached_signature_code::b64_to_num, event::sections::seal::{EventSeal, SourceSeal}, event_message::parse::Attachment, event_parsing::payload_size::PayloadType, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}};
 
-use super::prefix::{attached_signature, attached_sn, basic_prefix, self_addressing_prefix, self_signing_prefix, prefix};
+use super::prefix::{
+    attached_signature, attached_sn, basic_prefix, prefix, self_addressing_prefix,
+    self_signing_prefix,
+};
 
 /// returns attached source seals
-pub(crate) fn source_seal(s: &[u8]) -> nom::IResult<&[u8], Vec<SourceSeal>> {
+fn source_seal(s: &[u8]) -> nom::IResult<&[u8], Vec<SourceSeal>> {
     let (rest, sc) = b64_count(s)?;
 
     let (rest, attachment) = count(
@@ -38,7 +41,7 @@ fn event_seal(s: &[u8]) -> nom::IResult<&[u8], EventSeal> {
 }
 
 /// returns attached event seals
-pub(crate) fn event_seals(s: &[u8]) -> nom::IResult<&[u8], Vec<EventSeal>> {
+fn event_seals(s: &[u8]) -> nom::IResult<&[u8], Vec<EventSeal>> {
     let (rest, sc) = b64_count(s)?;
 
     count(event_seal, sc as usize)(rest)
@@ -52,7 +55,7 @@ pub(crate) fn b64_count(s: &[u8]) -> nom::IResult<&[u8], u16> {
     Ok((rest, t?))
 }
 
-pub fn signatures(s: &[u8]) -> nom::IResult<&[u8], Vec<AttachedSignaturePrefix>> {
+fn signatures(s: &[u8]) -> nom::IResult<&[u8], Vec<AttachedSignaturePrefix>> {
     let (rest, sc) = b64_count(s)?;
     count(attached_signature, sc as usize)(rest)
 }
@@ -69,8 +72,7 @@ fn couplets(s: &[u8]) -> nom::IResult<&[u8], Vec<(BasicPrefix, SelfSigningPrefix
 pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
     let (rest, payload_type) = take(2u8)(s)?;
     let payload_type: PayloadType = PayloadType::try_from(
-        std::str::from_utf8(payload_type)
-        .map_err(|_e| nom::Err::Failure((s, ErrorKind::IsNot)))?,
+        std::str::from_utf8(payload_type).map_err(|_e| nom::Err::Failure((s, ErrorKind::IsNot)))?,
     )
     // Can't parse payload type
     .map_err(|_e| nom::Err::Error((s, ErrorKind::IsNot)))?;

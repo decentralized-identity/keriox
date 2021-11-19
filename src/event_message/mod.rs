@@ -1,4 +1,3 @@
-pub mod attachment;
 pub mod event_msg_builder;
 pub mod parse;
 pub mod serialization_info;
@@ -20,11 +19,7 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use serialization_info::*;
 
-use self::{
-    attachment::Attachment,
-    event_msg_builder::{EventMsgBuilder, EventType},
-    signed_event_message::SignedEventMessage,
-};
+use self::{event_msg_builder::{EventMsgBuilder, EventType}, parse::Attachment, signed_event_message::SignedEventMessage};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct EventMessage {

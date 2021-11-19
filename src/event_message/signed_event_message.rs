@@ -2,15 +2,10 @@ use chrono::{DateTime, Local};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use std::cmp::Ordering;
 
-use crate::{
-    error::Error,
-    event::sections::seal::EventSeal,
-    prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix},
-    state::{EventSemantics, IdentifierState},
-};
+use crate::{error::Error, event::sections::seal::EventSeal, event_parsing::pack::Pack, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}, state::{EventSemantics, IdentifierState}};
 
-use super::serializer::to_string;
-use super::{attachment::Attachment, EventMessage};
+use super::{parse::Attachment, serializer::to_string};
+use super::EventMessage;
 
 // KERI serializer should be used to serialize this
 #[derive(Debug, Clone, Deserialize)]
@@ -32,7 +27,7 @@ impl Serialize for SignedEventMessage {
             let mut em = serializer.serialize_struct("EventMessage", 2)?;
             em.serialize_field("", &self.event_message)?;
             let att_sigs = Attachment::AttachedSignatures(self.signatures.clone());
-            em.serialize_field("-", &att_sigs.to_str())?;
+            em.serialize_field("-", std::str::from_utf8(&att_sigs.pack().unwrap()).unwrap())?;
             em.end()
         // . else - we pack as it is for DB / CBOR purpose
         } else {
@@ -176,19 +171,6 @@ impl SignedTransferableReceipt {
             signatures: sigs,
         }
     }
-
-    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        Ok([
-            &self.body.serialize()?,
-            Attachment::AttachedEventSeal(vec![self.validator_seal.clone()])
-                .to_str()
-                .as_bytes(),
-            Attachment::AttachedSignatures(self.signatures.clone())
-                .to_str()
-                .as_bytes(),
-        ]
-        .concat())
-    }
 }
 
 /// Signed Non-Transferrable Receipt
@@ -209,15 +191,5 @@ impl SignedNontransferableReceipt {
             body: message.clone(),
             couplets,
         }
-    }
-
-    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        Ok([
-            &self.body.serialize()?,
-            Attachment::ReceiptCouplets(self.couplets.clone())
-                .to_str()
-                .as_bytes(),
-        ]
-        .concat())
     }
 }

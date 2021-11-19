@@ -204,7 +204,6 @@ impl PayloadType {
     }
 }
 
-
 impl TryFrom<&str> for PayloadType {
     type Error = Error;
     fn try_from(data: &str) -> Result<Self, Error> {
