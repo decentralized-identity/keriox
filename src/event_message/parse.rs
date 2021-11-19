@@ -11,13 +11,6 @@ use super::{
     EventMessage
 };
 
-// Do we need raw?
-// #[derive(Clone, Debug, PartialEq)]
-// pub struct DeserializedEvent<'a> {
-//     pub event_message: EventMessage,
-//     pub raw: &'a [u8],
-// }
-
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub enum Attachment {
     SealSourceCouplets(Vec<SourceSeal>),
@@ -33,7 +26,7 @@ pub struct DeserializedSignedEvent {
 }
 
 #[derive(Clone, Debug)]
-pub enum Deserialized {
+pub enum Message {
     // Event verification requires raw bytes, so use DesrializedSignedEvent
     Event(SignedEventMessage),
     // Rct's have an alternative appended signature structure,
@@ -42,23 +35,7 @@ pub enum Deserialized {
     TransferableRct(SignedTransferableReceipt),
 }
 
-// There is no bijection between DeserializedSignedEvent and SignedEventMessage.
-// There exists DeserializedSignedEvent which can't be converted into
-// SignedEventMessage, for example any receipt. It depends on attachments.
-
-// // FIXME: detect payload type
-// impl From<DeserializedSignedEvent> for SignedEventMessage {
-//     fn from(de: DeserializedSignedEvent) -> SignedEventMessage {
-//         SignedEventMessage::new(
-//             &de.deserialized_event,
-//             PayloadType::MA,
-//             de.signatures,
-//             de.attachments,
-//         )
-//     }
-// }
-
-impl TryFrom<DeserializedSignedEvent> for Deserialized {
+impl TryFrom<DeserializedSignedEvent> for Message {
     type Error = Error;
 
     fn try_from(value: DeserializedSignedEvent) -> Result<Self, Self::Error> {
@@ -66,7 +43,7 @@ impl TryFrom<DeserializedSignedEvent> for Deserialized {
     }
 }
 
-pub fn signed_message<'a>(mut des: DeserializedSignedEvent) -> Result<Deserialized, Error> {
+pub fn signed_message<'a>(mut des: DeserializedSignedEvent) -> Result<Message, Error> {
     match des.deserialized_event.event.event_data {
         EventData::Rct(_) => {
             let att = des.attachments.pop().unwrap();
@@ -74,7 +51,7 @@ pub fn signed_message<'a>(mut des: DeserializedSignedEvent) -> Result<Deserializ
                 // Should be nontransferable receipt
                 Attachment::ReceiptCouplets(couplets) => 
                 Ok(
-                    Deserialized::NontransferableRct(SignedNontransferableReceipt {
+                    Message::NontransferableRct(SignedNontransferableReceipt {
                         body: des.deserialized_event,
                         couplets,
                     })
@@ -99,7 +76,7 @@ pub fn signed_message<'a>(mut des: DeserializedSignedEvent) -> Result<Deserializ
                     }?;
 
                     Ok(
-                        Deserialized::TransferableRct(SignedTransferableReceipt::new(
+                        Message::TransferableRct(SignedTransferableReceipt::new(
                             &des.deserialized_event,
                             // TODO what if more than one?
                             seals
@@ -132,7 +109,7 @@ pub fn signed_message<'a>(mut des: DeserializedSignedEvent) -> Result<Deserializ
                 }
             }?;
             Ok(
-                Deserialized::Event(
+                Message::Event(
                     SignedEventMessage::new(&des.deserialized_event, sigs, Some(vec![Attachment::SealSourceCouplets(seals)]))
                 ),
             )
@@ -141,7 +118,7 @@ pub fn signed_message<'a>(mut des: DeserializedSignedEvent) -> Result<Deserializ
             let sigs = des.attachments.first().unwrap();
             if let Attachment::AttachedSignatures(sigs) = sigs {
                 Ok(
-                    Deserialized::Event(
+                    Message::Event(
                     SignedEventMessage::new(&des.deserialized_event, sigs.to_vec(), None)
                 ))
             } else {
@@ -187,10 +164,10 @@ fn test_stream1() {
 
     let parsed = event_parsing::signed_message(stream).unwrap().1;
     let msg= signed_message(parsed).unwrap();
-    assert!(matches!(msg, Deserialized::Event(_)));
+    assert!(matches!(msg, Message::Event(_)));
 
     match msg {
-        Deserialized::Event(signed_event) => {
+        Message::Event(signed_event) => {
             assert_eq!(
                 signed_event.event_message.serialize().unwrap().len(),
                 signed_event
@@ -217,10 +194,10 @@ fn test_stream2() {
     let parsed = event_parsing::signed_message(stream).unwrap().1;
     let msg = signed_message(parsed);
     assert!(msg.is_ok());
-    assert!(matches!(msg, Ok(Deserialized::Event(_))));
+    assert!(matches!(msg, Ok(Message::Event(_))));
 
     match msg.unwrap() {
-        Deserialized::Event(signed_event) => {
+        Message::Event(signed_event) => {
             assert_eq!(
                 signed_event.event_message.serialize().unwrap().len(),
                 signed_event
@@ -245,7 +222,7 @@ fn test_deserialize() {
     let trans_receipt_event = br#"{"v":"KERI10JSON000091_","i":"E7WIS0e4Tx1PcQW5Um5s3Mb8uPSzsyPODhByXzgvmAdQ","s":"0","t":"rct","d":"ErDNDBG7x2xYAH2i4AOnhVe44RS3lC1mRRdkyolFFHJk"}-FABENlofRlu2VPul-tjDObk6bTia2deG6NMqeFmsXhAgFvA0AAAAAAAAAAAAAAAAAAAAAAAE_MT0wsz-_ju_DVK_SaMaZT9ZE7pP4auQYeo2PDaw9FI-AABAA0Q7bqPvenjWXo_YIikMBKOg-pghLKwBi1Plm0PEqdv67L1_c6dq9bll7OFnoLp0a74Nw1cBGdjIPcu-yAllHAw"#;
     let parsed_trans_receipt = event_parsing::signed_message(trans_receipt_event).unwrap().1;
     let msg = signed_message(parsed_trans_receipt);
-    assert!(matches!(msg, Ok(Deserialized::TransferableRct(_))));
+    assert!(matches!(msg, Ok(Message::TransferableRct(_))));
     assert!(msg.is_ok());
 
     // Taken from keripy/core/test_witness.py
@@ -253,7 +230,7 @@ fn test_deserialize() {
     let parsed_nontrans_receipt = event_parsing::signed_message(nontrans_rcp).unwrap().1;
     let msg = signed_message(parsed_nontrans_receipt);
     assert!(msg.is_ok());
-    assert!(matches!(msg, Ok(Deserialized::NontransferableRct(_))));
+    assert!(matches!(msg, Ok(Message::NontransferableRct(_))));
 
     // Nontrans receipt with alternative attachment with -B payload type. Not implemented yet.
     // let witness_receipts = r#"{"v":"KERI10JSON000091_","i":"EpU9D_puIW_QhgOf3WKUy-gXQnXeTQcJCO_Igcxi1YBg","s":"0","t":"rct","d":"EIt0xQQf-o-9E1B9VTDHiicQzVWk1CptvnewcnuhSd0M"}-BADAACZrTPLvG7sNaxtV8ZGdIHABFHCZ9FlnG6b4J6a9GcyzJIJOjuGNphW2zyC_WWU6CGMG7V52UeJxPqLpaYdP7CgAB8npsG58rX1ex73gaGe-jvRnw58RQGsDLzoSXaGn-kHRRNu6Kb44zXDtMnx-_8CjnHqskvDbz6pbEbed3JTOnCQACM4bMcLjcDtD0fmLOGDx2oxBloc2FujbyllA7GuPLm-RQbyPPQr70_Y7DXzlWgs8gaYotUATeR-dj1ru9qFwADA"#;

@@ -265,7 +265,7 @@ fn test_threshold() -> Result<(), Error> {
 fn test_verify() -> Result<(), Error> {
     use crate::event::event_data::EventData;
     use crate::event_message::parse;
-    use crate::event_message::parse::Deserialized;
+    use crate::event_message::parse::Message;
     use crate::event_parsing::signed_message; 
 
     // test data taken from keripy
@@ -274,7 +274,7 @@ fn test_verify() -> Result<(), Error> {
     let parsed = signed_message(ev).unwrap().1;
     let signed_msg = parse::signed_message(parsed).unwrap();
     match signed_msg {
-        Deserialized::Event(ref e) => {
+        Message::Event(ref e) => {
             if let EventData::Icp(icp) = e.to_owned().event_message.event.event_data {
                 let kc = icp.key_config;
                 let msg = e.event_message.serialize()?;
@@ -288,7 +288,7 @@ fn test_verify() -> Result<(), Error> {
     let parsed = signed_message(ev).unwrap().1;
     let signed_msg = parse::signed_message(parsed).unwrap();
     match signed_msg {
-        Deserialized::Event(ref e) => {
+        Message::Event(ref e) => {
             if let EventData::Icp(icp) = e.to_owned().event_message.event.event_data {
                 let kc = icp.key_config;
                 let msg = e.event_message.serialize()?;

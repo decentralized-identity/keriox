@@ -7,7 +7,7 @@ use crate::{database::sled::SledEventDatabase, derivation::self_addressing::Self
             KeyConfig,
         },
         EventMessage,
-    }, event_message::{parse::{Deserialized, Attachment}, signed_event_message::{
+    }, event_message::{parse::{Message, Attachment}, signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
             TimestampedSignedEventMessage,
         }}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
@@ -216,11 +216,11 @@ impl EventProcessor {
     /// Process
     ///
     /// Process a deserialized KERI message
-    pub fn process(&self, data: Deserialized) -> Result<Option<IdentifierState>, Error> {
+    pub fn process(&self, data: Message) -> Result<Option<IdentifierState>, Error> {
         match data {
-            Deserialized::Event(e) => self.process_event(&e),
-            Deserialized::NontransferableRct(rct) => self.process_witness_receipt(rct),
-            Deserialized::TransferableRct(rct) => self.process_validator_receipt(rct),
+            Message::Event(e) => self.process_event(&e),
+            Message::NontransferableRct(rct) => self.process_witness_receipt(rct),
+            Message::TransferableRct(rct) => self.process_validator_receipt(rct),
         }
     }
 

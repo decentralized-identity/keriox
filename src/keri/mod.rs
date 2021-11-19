@@ -16,7 +16,7 @@ use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivat
         sections::seal::EventSeal
     }, event_message::{parse::signed_message, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt}}, event_message::{
         event_msg_builder::{EventMsgBuilder, EventType},
-        parse::Deserialized,
+        parse::Message,
     }, event_parsing::{self, pack::Pack, signed_event_stream}, keys::PublicKey, prefix::AttachedSignaturePrefix, prefix::{
         BasicPrefix,
         IdentifierPrefix,
@@ -122,7 +122,7 @@ impl<K: KeyManager> Keri<K> {
         )], None);
 
         self.processor
-            .process(Deserialized::Event(signed.clone()))?;
+            .process(Message::Event(signed.clone()))?;
 
         self.prefix = icp.event.prefix;
 
@@ -160,7 +160,7 @@ impl<K: KeyManager> Keri<K> {
                     0
                 )
             ), None);
-            self.processor.process(Deserialized::Event(signed.clone()))?;
+            self.processor.process(Message::Event(signed.clone()))?;
             self.prefix = icp.event.prefix;
 
             Ok(signed)
@@ -227,7 +227,7 @@ impl<K: KeyManager> Keri<K> {
         )], None);
 
         self.processor
-            .process(Deserialized::Event(rot.clone()))?;
+            .process(Message::Event(rot.clone()))?;
 
         Ok(rot)
     }
@@ -280,7 +280,7 @@ impl<K: KeyManager> Keri<K> {
         )], None);
 
         self.processor
-            .process(Deserialized::Event(ixn.clone()))?;
+            .process(Message::Event(ixn.clone()))?;
 
         Ok(ixn)
     }
@@ -292,7 +292,7 @@ impl<K: KeyManager> Keri<K> {
         match signed_message(parsed.1) {
             Err(e) => Err(Error::DeserializeError(e.to_string())),
             Ok(event) => {
-                match self.processor.process(Deserialized::try_from(event).unwrap())? {
+                match self.processor.process(Message::try_from(event).unwrap())? {
                     None => Err(Error::InvalidIdentifierStat),
                     Some(state) => Ok((state.prefix.clone(), serde_json::to_vec(&state)?)),
                 }
@@ -308,8 +308,8 @@ impl<K: KeyManager> Keri<K> {
             .into_iter()
             .map(|event| {
                 self.processor
-                    .process(Deserialized::try_from(event.clone()).unwrap())
-                    .and_then(|_| Deserialized::try_from(event))
+                    .process(Message::try_from(event.clone()).unwrap())
+                    .and_then(|_| Message::try_from(event))
             })
             .partition(Result::is_ok);
         let response: Vec<u8> = processed_ok
@@ -317,7 +317,7 @@ impl<K: KeyManager> Keri<K> {
             .map(Result::unwrap)
             .map(|des_event| -> Result<Vec<u8>, Error> {
                 match des_event {
-                    Deserialized::Event(ev) => {
+                    Message::Event(ev) => {
                         let mut buf = vec![];
                         if let EventData::Icp(_) = ev.event_message.event.event_data {
                             if !self.processor.has_receipt(
@@ -374,7 +374,7 @@ impl<K: KeyManager> Keri<K> {
         let signed_rcp = SignedTransferableReceipt::new(&rcp, validator_event_seal, signatures);
 
         self.processor
-            .process(Deserialized::TransferableRct(signed_rcp.clone()))?;
+            .process(Message::TransferableRct(signed_rcp.clone()))?;
 
         Ok(signed_rcp)
     }

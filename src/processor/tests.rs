@@ -6,7 +6,7 @@ use crate::{database::sled::SledEventDatabase, error::Error};
 use crate::{
     event_message::{
         parse,
-        parse::{Deserialized},
+        parse::{Message},
     },
     prefix::IdentifierPrefix,
 };
@@ -32,7 +32,7 @@ fn test_process() -> Result<(), Error> {
     let deserialized_icp = parse::signed_message(parsed).unwrap();
 
     let (id, _raw_parsed) = match &deserialized_icp {
-        Deserialized::Event(e) => (
+        Message::Event(e) => (
             e.event_message.event.prefix.clone(),
             e.event_message.serialize()?.to_vec(),
         ),
@@ -74,7 +74,7 @@ fn test_process() -> Result<(), Error> {
     let deserialized_ixn = parse::signed_message(parsed).unwrap();
 
     let _raw_parsed = match &deserialized_ixn {
-        Deserialized::Event(e) => e.event_message.serialize()?.to_vec(),
+        Message::Event(e) => e.event_message.serialize()?.to_vec(),
         _ => Err(Error::SemanticError("bad deser".into()))?,
     };
 
@@ -84,7 +84,7 @@ fn test_process() -> Result<(), Error> {
     // Check if processed event is in db.
     let ixn_from_db = event_processor.get_event_at_sn(&id, 2).unwrap().unwrap();
     match deserialized_ixn {
-        Deserialized::Event(evt) => assert_eq!(
+        Message::Event(evt) => assert_eq!(
             ixn_from_db.signed_event_message.event_message.event,
             evt.event_message.event
         ),
@@ -97,10 +97,10 @@ fn test_process() -> Result<(), Error> {
     let deserialized_ixn = parse::signed_message(parsed).unwrap();
     // Make event partially signed.
     let partially_signed_deserialized_ixn = match deserialized_ixn {
-        Deserialized::Event(mut e) => {
+        Message::Event(mut e) => {
             let sigs = e.signatures[1].clone();
             e.signatures = vec![sigs];
-            Deserialized::Event(e)
+            Message::Event(e)
         }
         _ => Err(Error::SemanticError("bad deser".into()))?,
     };
@@ -324,7 +324,7 @@ fn test_validate_seal() -> Result<(), Error> {
 fn test_compute_state_at_sn() -> Result<(), Error> {
     use crate::event::sections::seal::EventSeal;
     use tempfile::Builder;
-	use crate::event_message::parse::Deserialized;
+	use crate::event_message::parse::Message;
 
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
@@ -339,7 +339,7 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
         .1
         .into_iter()
         .for_each(|event| {
-            event_processor.process(Deserialized::try_from(event.clone()).unwrap()).unwrap();
+            event_processor.process(Message::try_from(event.clone()).unwrap()).unwrap();
         });
 
     let event_seal = EventSeal {

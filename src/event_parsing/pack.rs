@@ -1,6 +1,6 @@
 use base64::URL_SAFE_NO_PAD;
 
-use crate::{error::Error, event_message::{parse::{Attachment, Deserialized}, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt}}, prefix::Prefix};
+use crate::{error::Error, event_message::{parse::{Attachment, Message}, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt}}, prefix::Prefix};
 
 use super::payload_size::PayloadType;
 
@@ -8,12 +8,12 @@ pub trait Pack {
 	fn pack(&self) -> Result<Vec<u8>, Error>;
 }
 
-impl Pack for Deserialized {
+impl Pack for Message {
     fn pack(&self) -> Result<Vec<u8>, Error> {
        match self {
-            Deserialized::Event(ev) => ev.pack(),
-            Deserialized::NontransferableRct(ntr) => ntr.pack(),
-            Deserialized::TransferableRct(tr) => tr.pack(),
+            Message::Event(ev) => ev.pack(),
+            Message::NontransferableRct(ntr) => ntr.pack(),
+            Message::TransferableRct(tr) => tr.pack(),
         } 
     }
 }
