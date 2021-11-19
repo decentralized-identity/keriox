@@ -35,7 +35,7 @@ fn event_seal(s: &[u8]) -> nom::IResult<&[u8], EventSeal> {
     Ok((rest, seal))
 }
 
-/// returst attached event seals
+/// returns attached event seals
 pub(crate) fn event_seals(s: &[u8]) -> nom::IResult<&[u8], Vec<EventSeal>> {
     let (rest, sc) = b64_count(s)?;
 

@@ -142,91 +142,110 @@ pub fn signed_message<'a>(mut des: DeserializedSignedEvent) -> Result<Deserializ
     }
 }
 
+// pub fn signed_event_stream_validate(s: &[u8]) -> nom::IResult<&[u8], IdentifierState> {
+//     let (rest, id) = fold_many1(
+//         signed_message,
+//         Ok(IdentifierState::default()),
+//         |acc, next| match next {
+//             Deserialized::Event(e) => {
+//                 let new_state = acc?
+//                     .apply(&e.deserialized_event)
+//                     .map_err(|_| nom::Err::Error((s, ErrorKind::Verify)))?;
+//                 if new_state
+//                     .current
+//                     .verify(&e.deserialized_event.serialize().unwrap(), &e.signatures)
+//                     .map_err(|_| nom::Err::Error((s, ErrorKind::Verify)))?
+//                 {
+//                     Ok(new_state)
+//                 } else {
+//                     Err(nom::Err::Error((s, ErrorKind::Verify)))
+//                 }
+//             }
+//             // TODO this probably should not just skip non-events
+//             _ => acc,
+//         },
+//     )(s)?;
 
-// #[test]
-// fn test_stream1() {
-//     // taken from KERIPY: tests/core/test_eventing.py::test_kevery#1998
-//     let stream = br#"{"v":"KERI10JSON0000ed_","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"0","t":"icp","kt":"1","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"n":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","bt":"0","b":[],"c":[],"a":[]}-AABAAmagesCSY8QhYYHCJXEWpsGD62qoLt2uyT0_Mq5lZPR88JyS5UrwFKFdcjPqyKc_SKaKDJhkGWCk07k_kVkjyCA"#;
-
-//     let parsed = signed_message(stream).unwrap().1;
-
-//     match parsed {
-//         Deserialized::Event(signed_event) => {
-//             assert_eq!(
-//                 signed_event.deserialized_event.serialize().unwrap().len(),
-//                 signed_event
-//                     .deserialized_event
-//                     .serialization_info
-//                     .size
-//             );
-
-//             assert!(signed_message(stream).is_ok());
-//             assert!(signed_event_stream_validate(stream).is_ok());
-//             let signed_event: SignedEventMessage = signed_event.into();
-//             let serialized_again = signed_event.serialize();
-//             assert!(serialized_again.is_ok());
-//             let stringified = String::from_utf8(serialized_again.unwrap()).unwrap();
-//             assert_eq!(stream, stringified.as_bytes())
-//         }
-//         _ => assert!(false),
-//     }
+//     Ok((rest, id?))
 // }
 
-// #[test]
-// fn test_stream2() {
-//     // taken from KERIPY: tests/core/test_eventing.py::test_multisig_digprefix#2244
-//     let stream = br#"{"v":"KERI10JSON00014b_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"0","t":"icp","kt":"2","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"E9izzBkXX76sqt0N-tfLzJeRqj0W56p4pDQ_ZqNCDpyw","bt":"0","b":[],"c":[],"a":[]}-AADAAhcaP-l0DkIKlJ87iIVcDx-m0iKPdSArEu63b-2cSEn9wXVGNpWw9nfwxodQ9G8J3q_Pm-AWfDwZGD9fobWuHBAAB6mz7zP0xFNBEBfSKG4mjpPbeOXktaIyX8mfsEa1A3Psf7eKxSrJ5Woj3iUB2AhhLg412-zkk795qxsK2xfdxBAACj5wdW-EyUJNgW0LHePQcSFNxW3ZyPregL4H2FoOrsPxLa3MZx6xYTh6i7YRMGY50ezEjV81hkI1Yce75M_bPCQ"#;
-//     assert!(signed_message(stream).is_ok());
-//     assert!(signed_event_stream_validate(stream).is_ok());
+#[test]
+fn test_stream1() {
+    use crate::event_parsing;
+    // taken from KERIPY: tests/core/test_eventing.py::test_kevery#1998
+    let stream = br#"{"v":"KERI10JSON0000ed_","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"0","t":"icp","kt":"1","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"n":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","bt":"0","b":[],"c":[],"a":[]}-AABAAmagesCSY8QhYYHCJXEWpsGD62qoLt2uyT0_Mq5lZPR88JyS5UrwFKFdcjPqyKc_SKaKDJhkGWCk07k_kVkjyCA"#;
 
-//     let parsed = signed_message(stream).unwrap().1;
+    let parsed = event_parsing::signed_message(stream).unwrap().1;
+    let msg= signed_message(parsed).unwrap();
+    assert!(matches!(msg, Deserialized::Event(_)));
 
-//     match parsed {
-//         Deserialized::Event(signed_event) => {
-//             assert_eq!(
-//                 signed_event.deserialized_event.serialize().unwrap().len(),
-//                 signed_event
-//                     .deserialized_event
-//                     .serialization_info
-//                     .size
-//             );
+    match msg {
+        Deserialized::Event(signed_event) => {
+            assert_eq!(
+                signed_event.event_message.serialize().unwrap().len(),
+                signed_event
+                    .event_message
+                    .serialization_info
+                    .size
+            );
 
-//             assert!(signed_message(stream).is_ok());
-//             assert!(signed_event_stream_validate(stream).is_ok());
-//             let signed_event: SignedEventMessage = signed_event.into();
-//             let serialized_again = signed_event.serialize();
-//             assert!(serialized_again.is_ok());
-//             let stringified = String::from_utf8(serialized_again.unwrap()).unwrap();
-//             assert_eq!(stream, stringified.as_bytes())
-//         }
-//         _ => assert!(false),
-//     }
-// }
+            let serialized_again = signed_event.serialize();
+            assert!(serialized_again.is_ok());
+            let stringified = String::from_utf8(serialized_again.unwrap()).unwrap();
+            assert_eq!(stream, stringified.as_bytes())
+        }
+        _ => assert!(false),
+    }
+}
 
-// #[test]
-// fn test_signed_trans_receipt() {
-//     let trans_receipt_event = r#"{"v":"KERI10JSON000091_","i":"E7WIS0e4Tx1PcQW5Um5s3Mb8uPSzsyPODhByXzgvmAdQ","s":"0","t":"rct","d":"ErDNDBG7x2xYAH2i4AOnhVe44RS3lC1mRRdkyolFFHJk"}-FABENlofRlu2VPul-tjDObk6bTia2deG6NMqeFmsXhAgFvA0AAAAAAAAAAAAAAAAAAAAAAAE_MT0wsz-_ju_DVK_SaMaZT9ZE7pP4auQYeo2PDaw9FI-AABAA0Q7bqPvenjWXo_YIikMBKOg-pghLKwBi1Plm0PEqdv67L1_c6dq9bll7OFnoLp0a74Nw1cBGdjIPcu-yAllHAw"#;
-//     let msg = signed_message(trans_receipt_event.as_bytes());
-//     assert!(msg.is_ok());
+#[test]
+fn test_stream2() {
+    use crate::event_parsing;
+    // taken from KERIPY: tests/core/test_eventing.py::test_multisig_digprefix#2244
+    let stream = br#"{"v":"KERI10JSON00014b_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"0","t":"icp","kt":"2","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"E9izzBkXX76sqt0N-tfLzJeRqj0W56p4pDQ_ZqNCDpyw","bt":"0","b":[],"c":[],"a":[]}-AADAAhcaP-l0DkIKlJ87iIVcDx-m0iKPdSArEu63b-2cSEn9wXVGNpWw9nfwxodQ9G8J3q_Pm-AWfDwZGD9fobWuHBAAB6mz7zP0xFNBEBfSKG4mjpPbeOXktaIyX8mfsEa1A3Psf7eKxSrJ5Woj3iUB2AhhLg412-zkk795qxsK2xfdxBAACj5wdW-EyUJNgW0LHePQcSFNxW3ZyPregL4H2FoOrsPxLa3MZx6xYTh6i7YRMGY50ezEjV81hkI1Yce75M_bPCQ"#;
 
-//     // Taken from keripy/core/test_witness.py
-//     let nontrans_rcp = r#"{"v":"KERI10JSON000091_","i":"EpU9D_puIW_QhgOf3WKUy-gXQnXeTQcJCO_Igcxi1YBg","s":"0","t":"rct","d":"EIt0xQQf-o-9E1B9VTDHiicQzVWk1CptvnewcnuhSd0M"}-CABB389hKezugU2LFKiFVbitoHAxXqJh6HQ8Rn9tH7fxd680BCZrTPLvG7sNaxtV8ZGdIHABFHCZ9FlnG6b4J6a9GcyzJIJOjuGNphW2zyC_WWU6CGMG7V52UeJxPqLpaYdP7Cg"#;
-//     let msg = signed_message(nontrans_rcp.as_bytes());
-//     println!("{:?}", msg);
-//     assert!(msg.is_ok());
+    let parsed = event_parsing::signed_message(stream).unwrap().1;
+    let msg = signed_message(parsed);
+    assert!(msg.is_ok());
+    assert!(matches!(msg, Ok(Deserialized::Event(_))));
 
-//     // Nontrans receipt with alternative attachment with -B payload type. Not implemented yet.
-//     // let witness_receipts = r#"{"v":"KERI10JSON000091_","i":"EpU9D_puIW_QhgOf3WKUy-gXQnXeTQcJCO_Igcxi1YBg","s":"0","t":"rct","d":"EIt0xQQf-o-9E1B9VTDHiicQzVWk1CptvnewcnuhSd0M"}-BADAACZrTPLvG7sNaxtV8ZGdIHABFHCZ9FlnG6b4J6a9GcyzJIJOjuGNphW2zyC_WWU6CGMG7V52UeJxPqLpaYdP7CgAB8npsG58rX1ex73gaGe-jvRnw58RQGsDLzoSXaGn-kHRRNu6Kb44zXDtMnx-_8CjnHqskvDbz6pbEbed3JTOnCQACM4bMcLjcDtD0fmLOGDx2oxBloc2FujbyllA7GuPLm-RQbyPPQr70_Y7DXzlWgs8gaYotUATeR-dj1ru9qFwADA"#;
-//     // let msg = signed_message(witness_receipts.as_bytes());
-//     // assert!(msg.is_ok());
-// }
+    match msg.unwrap() {
+        Deserialized::Event(signed_event) => {
+            assert_eq!(
+                signed_event.event_message.serialize().unwrap().len(),
+                signed_event
+                    .event_message
+                    .serialization_info
+                    .size
+            );
 
-// #[test]
-// fn test_stream3() {
-//     // should fail to verify with incorrect signature
-//     let stream = br#"{"v":"KERI10JSON00012a_","i":"E4_CHZxqydVAvJEI7beqk3TZwUR92nQydi1nI8UqUTxk","s":"0","t":"icp","kt":"1","k":["DLfozZ0uGvLED22X3K8lX6ciwhl02jdjt1DQ_EHnJro0","C6KROFI5gWRXhAiIMiHLCDa-Oj09kmVMr2btCE96k_3g"],"n":"E99mhvP0pLkGtxymQkspRqcdoIFOqdigCf_F3rpg7rfk","bt":"0","b":[],"c":[],"a":[]}-AABAAlxZyoxbADu-x9Ho6EC7valjC4bNn7muWvqC_uAEBd1P9xIeOSxmcYdhyvBg1-o-25ebv66Q3Td5bZ730wqLjBA"#;
+            let serialized_again = signed_event.serialize();
+            assert!(serialized_again.is_ok());
+            let stringified = String::from_utf8(serialized_again.unwrap()).unwrap();
+            assert_eq!(stream, stringified.as_bytes())
+        }
+        _ => assert!(false),
+    }
+}
 
-//     assert!(signed_message(stream).is_ok());
-//     let result = signed_event_stream_validate(stream);
-//     assert!(!result.is_ok());
-// }
+#[test]
+fn test_deserialize() {
+    use crate::event_parsing;
+    let trans_receipt_event = br#"{"v":"KERI10JSON000091_","i":"E7WIS0e4Tx1PcQW5Um5s3Mb8uPSzsyPODhByXzgvmAdQ","s":"0","t":"rct","d":"ErDNDBG7x2xYAH2i4AOnhVe44RS3lC1mRRdkyolFFHJk"}-FABENlofRlu2VPul-tjDObk6bTia2deG6NMqeFmsXhAgFvA0AAAAAAAAAAAAAAAAAAAAAAAE_MT0wsz-_ju_DVK_SaMaZT9ZE7pP4auQYeo2PDaw9FI-AABAA0Q7bqPvenjWXo_YIikMBKOg-pghLKwBi1Plm0PEqdv67L1_c6dq9bll7OFnoLp0a74Nw1cBGdjIPcu-yAllHAw"#;
+    let parsed_trans_receipt = event_parsing::signed_message(trans_receipt_event).unwrap().1;
+    let msg = signed_message(parsed_trans_receipt);
+    assert!(matches!(msg, Ok(Deserialized::TransferableRct(_))));
+    assert!(msg.is_ok());
+
+    // Taken from keripy/core/test_witness.py
+    let nontrans_rcp = br#"{"v":"KERI10JSON000091_","i":"EpU9D_puIW_QhgOf3WKUy-gXQnXeTQcJCO_Igcxi1YBg","s":"0","t":"rct","d":"EIt0xQQf-o-9E1B9VTDHiicQzVWk1CptvnewcnuhSd0M"}-CABB389hKezugU2LFKiFVbitoHAxXqJh6HQ8Rn9tH7fxd680BCZrTPLvG7sNaxtV8ZGdIHABFHCZ9FlnG6b4J6a9GcyzJIJOjuGNphW2zyC_WWU6CGMG7V52UeJxPqLpaYdP7Cg"#;
+    let parsed_nontrans_receipt = event_parsing::signed_message(nontrans_rcp).unwrap().1;
+    let msg = signed_message(parsed_nontrans_receipt);
+    assert!(msg.is_ok());
+    assert!(matches!(msg, Ok(Deserialized::NontransferableRct(_))));
+
+    // Nontrans receipt with alternative attachment with -B payload type. Not implemented yet.
+    // let witness_receipts = r#"{"v":"KERI10JSON000091_","i":"EpU9D_puIW_QhgOf3WKUy-gXQnXeTQcJCO_Igcxi1YBg","s":"0","t":"rct","d":"EIt0xQQf-o-9E1B9VTDHiicQzVWk1CptvnewcnuhSd0M"}-BADAACZrTPLvG7sNaxtV8ZGdIHABFHCZ9FlnG6b4J6a9GcyzJIJOjuGNphW2zyC_WWU6CGMG7V52UeJxPqLpaYdP7CgAB8npsG58rX1ex73gaGe-jvRnw58RQGsDLzoSXaGn-kHRRNu6Kb44zXDtMnx-_8CjnHqskvDbz6pbEbed3JTOnCQACM4bMcLjcDtD0fmLOGDx2oxBloc2FujbyllA7GuPLm-RQbyPPQr70_Y7DXzlWgs8gaYotUATeR-dj1ru9qFwADA"#;
+    // let msg = signed_message(witness_receipts.as_bytes());
+    // assert!(msg.is_ok());
+}

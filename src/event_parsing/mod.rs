@@ -2,6 +2,8 @@ use std::{io::Cursor};
 
 use nom::{branch::alt, error::ErrorKind, multi::{fold_many0, many0}};
 use serde::Deserialize;
+
+#[cfg(feature = "async")]
 use crate::event_message::serialization_info::SerializationInfo;
 
 use crate::{event::EventMessage, event_message::{attachment::Attachment, parse::DeserializedSignedEvent}};
@@ -63,34 +65,6 @@ pub fn signed_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], DeserializedSigned
 pub fn signed_event_stream(s: &[u8]) -> nom::IResult<&[u8], Vec<DeserializedSignedEvent>> {
     many0(signed_message)(s)
 }
-
-// pub fn signed_event_stream_validate(s: &[u8]) -> nom::IResult<&[u8], IdentifierState> {
-//     let (rest, id) = fold_many1(
-//         signed_message,
-//         Ok(IdentifierState::default()),
-//         |acc, next| match next {
-//             Deserialized::Event(e) => {
-//                 let new_state = acc?
-//                     .apply(&e.deserialized_event)
-//                     .map_err(|_| nom::Err::Error((s, ErrorKind::Verify)))?;
-//                 if new_state
-//                     .current
-//                     .verify(&e.deserialized_event.serialize().unwrap(), &e.signatures)
-//                     .map_err(|_| nom::Err::Error((s, ErrorKind::Verify)))?
-//                 {
-//                     Ok(new_state)
-//                 } else {
-//                     Err(nom::Err::Error((s, ErrorKind::Verify)))
-//                 }
-//             }
-//             // TODO this probably should not just skip non-events
-//             _ => acc,
-//         },
-//     )(s)?;
-
-//     Ok((rest, id?))
-// }
-
 
 // TESTED: OK
 #[cfg(feature = "async")]
