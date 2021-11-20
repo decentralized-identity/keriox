@@ -98,4 +98,7 @@ pub enum Error {
     #[cfg(feature = "wallet")]
     #[error(transparent)]
     WalletError(#[from] universal_wallet::Error),
+
+    #[error("mutex is poisoned")]
+    MutexPoisoned,
 }

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::{
     database::sled::SledEventDatabase,
@@ -37,7 +37,7 @@ use universal_wallet::prelude::{Content, UnlockedWallet};
 mod test;
 pub struct Keri<K: KeyManager + 'static> {
     prefix: IdentifierPrefix,
-    key_manager: &'static mut K,
+    key_manager: Arc<Mutex<K>>,
     processor: EventProcessor,
 }
 
@@ -70,7 +70,7 @@ impl Keri<UnlockedWallet> {
         wallet.id = prefix.to_str();
         Ok(Keri {
             prefix,
-            key_manager: Arc::new(Box::new(wallet)),
+            key_manager: Arc::new(Mutex::new(wallet)),
             processor: EventProcessor::new(db),
         })
     }
@@ -78,7 +78,7 @@ impl Keri<UnlockedWallet> {
 
 impl<K: KeyManager> Keri<K> {
     // incept a state and keys
-    pub fn new(db: Arc<SledEventDatabase>, key_manager: &'static mut K) -> Result<Keri<K>, Error> {
+    pub fn new(db: Arc<SledEventDatabase>, key_manager: Arc<Mutex<K>>) -> Result<Keri<K>, Error> {
         Ok(Keri {
             prefix: IdentifierPrefix::default(),
             key_manager,
@@ -94,9 +94,9 @@ impl<K: KeyManager> Keri<K> {
 
     /// Getter of ref to owned `KeyManager` instance
     ///
-    pub fn key_manager(&'static self) -> &'static K {
-        &self.key_manager
-    }
+    //pub fn key_manager(&'static self) -> &'static K {
+    //    &self.key_manager
+    //}
 
     /// Getter of the DB instance behind own processor
     ///
@@ -113,19 +113,18 @@ impl<K: KeyManager> Keri<K> {
     }
 
     pub fn incept(&mut self) -> Result<SignedEventMessage, Error> {
+        let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
         let icp = EventMsgBuilder::new(EventType::Inception)
             .with_prefix(&self.prefix)
-            .with_keys(vec![Basic::Ed25519.derive(self.key_manager.public_key())])
-            .with_next_keys(vec![
-                Basic::Ed25519.derive(self.key_manager.next_public_key())
-            ])
+            .with_keys(vec![Basic::Ed25519.derive(km.public_key())])
+            .with_next_keys(vec![Basic::Ed25519.derive(km.next_public_key())])
             .build()?;
 
         let signed = icp.sign(
             PayloadType::MA,
             vec![AttachedSignaturePrefix::new(
                 SelfSigning::Ed25519Sha512,
-                self.key_manager.sign(&icp.serialize()?)?,
+                km.sign(&icp.serialize()?)?,
                 0,
             )],
             None,
@@ -158,20 +157,19 @@ impl<K: KeyManager> Keri<K> {
             .map(|(key_type, key)| key_type.derive(key))
             .collect();
         // Signing key must be first
-        keys.insert(0, Basic::Ed25519.derive(self.key_manager.public_key()));
+        let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
+        keys.insert(0, Basic::Ed25519.derive(km.public_key()));
         let icp = EventMsgBuilder::new(EventType::Inception)
             .with_prefix(&self.prefix)
             .with_keys(keys)
-            .with_next_keys(vec![
-                Basic::Ed25519.derive(self.key_manager.next_public_key())
-            ])
+            .with_next_keys(vec![Basic::Ed25519.derive(km.next_public_key())])
             .build()?;
 
         let signed = icp.sign(
             PayloadType::MA,
             vec![AttachedSignaturePrefix::new(
                 SelfSigning::Ed25519Sha512,
-                self.key_manager.sign(&icp.serialize()?)?,
+                km.sign(&icp.serialize()?)?,
                 0,
             )],
             None,
@@ -214,7 +212,11 @@ impl<K: KeyManager> Keri<K> {
             SerializationFormats::JSON,
         )?;
         let serialized = event.serialize()?;
-        let signature = self.key_manager.sign(&serialized)?;
+        let signature = self
+            .key_manager
+            .lock()
+            .map_err(|_| Error::MutexPoisoned)?
+            .sign(&serialized)?;
         let asp = AttachedSignaturePrefix::new(
             SelfSigning::ECDSAsecp256k1Sha256,
             signature,
@@ -228,13 +230,19 @@ impl<K: KeyManager> Keri<K> {
     }
 
     pub fn rotate(&mut self) -> Result<SignedEventMessage, Error> {
-        self.key_manager.rotate()?;
+        self.key_manager
+            .lock()
+            .map_err(|_| Error::MutexPoisoned)?
+            .rotate()?;
         let rot = self.make_rotation()?;
         let rot = rot.sign(
             PayloadType::MA,
             vec![AttachedSignaturePrefix::new(
                 SelfSigning::Ed25519Sha512,
-                self.key_manager.sign(&rot.serialize()?)?,
+                self.key_manager
+                    .lock()
+                    .map_err(|_| Error::MutexPoisoned)?
+                    .sign(&rot.serialize()?)?,
                 0,
             )],
             None,
@@ -251,15 +259,16 @@ impl<K: KeyManager> Keri<K> {
             .processor
             .compute_state(&self.prefix)?
             .ok_or(Error::SemanticError("There is no state".into()))?;
-        EventMsgBuilder::new(EventType::Rotation)
-            .with_prefix(&self.prefix)
-            .with_sn(state.sn + 1)
-            .with_previous_event(&SelfAddressing::Blake3_256.derive(&state.last))
-            .with_keys(vec![Basic::Ed25519.derive(self.key_manager.public_key())])
-            .with_next_keys(vec![
-                Basic::Ed25519.derive(self.key_manager.next_public_key())
-            ])
-            .build()
+        match self.key_manager.lock() {
+            Ok(kv) => EventMsgBuilder::new(EventType::Rotation)
+                .with_prefix(&self.prefix)
+                .with_sn(state.sn + 1)
+                .with_previous_event(&SelfAddressing::Blake3_256.derive(&state.last))
+                .with_keys(vec![Basic::Ed25519.derive(kv.public_key())])
+                .with_next_keys(vec![Basic::Ed25519.derive(kv.next_public_key())])
+                .build(),
+            Err(_) => Err(Error::MutexPoisoned),
+        }
     }
 
     pub fn make_ixn(&mut self, payload: Option<&str>) -> Result<SignedEventMessage, Error> {
@@ -287,7 +296,10 @@ impl<K: KeyManager> Keri<K> {
             PayloadType::MA,
             vec![AttachedSignaturePrefix::new(
                 SelfSigning::Ed25519Sha512,
-                self.key_manager.sign(&ev.serialize()?)?,
+                self.key_manager
+                    .lock()
+                    .map_err(|_| Error::MutexPoisoned)?
+                    .sign(&ev.serialize()?)?,
                 0,
             )],
             None,
@@ -365,7 +377,11 @@ impl<K: KeyManager> Keri<K> {
 
     pub fn make_rct(&self, event: EventMessage) -> Result<SignedTransferableReceipt, Error> {
         let ser = event.serialize()?;
-        let signature = self.key_manager.sign(&ser)?;
+        let signature = self
+            .key_manager
+            .lock()
+            .map_err(|_| Error::MutexPoisoned)?
+            .sign(&ser)?;
         let validator_event_seal = self
             .processor
             .get_last_establishment_event_seal(&self.prefix)?
@@ -466,8 +482,15 @@ impl<K: KeyManager> Keri<K> {
     }
 
     fn generate_ntr(&self, message: EventMessage) -> Result<SignedNontransferableReceipt, Error> {
-        let signature = self.key_manager.sign(&message.serialize()?)?;
-        let bp = BasicPrefix::new(Basic::Ed25519, self.key_manager.public_key());
+        let signature;
+        let bp;
+        match self.key_manager.lock() {
+            Ok(km) => {
+                signature = km.sign(&message.serialize()?)?;
+                bp = BasicPrefix::new(Basic::Ed25519, km.public_key());
+            }
+            Err(_) => return Err(Error::MutexPoisoned),
+        }
         let ssp = SelfSigningPrefix::new(SelfSigning::Ed25519Sha512, signature);
         let rcp = Event {
             prefix: message.event.prefix.clone(),
