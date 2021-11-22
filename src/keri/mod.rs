@@ -94,11 +94,11 @@ impl<K: KeyManager> Keri<K> {
 
     /// Getter of ref to owned `KeyManager` instance
     ///
-    //pub fn key_manager(&'static self) -> &'static K {
-    //    &self.key_manager
-    //}
+    pub fn key_manager(&self) -> Arc<Mutex<K>> {
+        self.key_manager.clone()
+    }
 
-    /// Getter of the DB instance behind own processor
+    // Getter of the DB instance behind own processor
     ///
     pub fn db(&self) -> Arc<SledEventDatabase> {
         Arc::clone(&self.processor.db)
