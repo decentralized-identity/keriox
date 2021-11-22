@@ -7,7 +7,7 @@ use async_std::{channel::Sender, io::{
         BufRead,
         BufReader,
     }, task::{Context, Poll, block_on}};
-use crate::{event_message::parse::DeserializedSignedEvent, event_parsing::{attachment::b64_count, message, payload_size::PayloadType, version}, keri::Keri, prefix::IdentifierPrefix, signer::KeyManager};
+use crate::{event_parsing::{SignedEventData, attachment::b64_count, message::message, message::version, payload_size::PayloadType}, keri::Keri, prefix::IdentifierPrefix, signer::KeyManager};
 use bitpat::bitpat;
 
 pub type Result<T> = std::result::Result<T, String>;
@@ -110,7 +110,7 @@ where
                         // if we can make receipt for event - do it
                         // stream it back
                         if let Ok(receipt) = this.keri.make_ntr(message(sliced_message).unwrap().1) {
-                            let rcp: DeserializedSignedEvent = receipt.into();
+                            let rcp: SignedEventData = receipt.into();
                             futures_core::ready!(this.writer.as_mut().poll_write(
                                 cx,
                                 rcp.to_cesr().as_ref()

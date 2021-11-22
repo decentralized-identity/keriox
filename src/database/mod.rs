@@ -1,4 +1,4 @@
-use crate::{event_parsing::message, prefix::{
+use crate::{event_parsing::message::message, prefix::{
         AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
         SelfSigningPrefix,
     }, state::IdentifierState};

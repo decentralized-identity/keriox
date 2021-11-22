@@ -96,7 +96,8 @@ pub fn basic_prefix(s: &[u8]) -> nom::IResult<&[u8], BasicPrefix> {
         .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
 
     let (extra, b) = take(code.derivative_b64_len())(rest)?;
-    let pk = PublicKey::new(base64::decode_config(b.to_vec(), URL_SAFE).unwrap());
+    let pk = PublicKey::new(base64::decode_config(b.to_vec(), URL_SAFE)
+        .map_err(|_| nom::Err::Error((s, ErrorKind::IsNot)))?);
     Ok((extra, code.derive(pk)))
 }
 
@@ -140,7 +141,8 @@ pub fn self_signing_prefix(s: &[u8]) -> nom::IResult<&[u8], SelfSigningPrefix> {
 
     let (extra, b) = take(code.derivative_b64_len())(rest)?;
 
-    let sig = base64::decode_config(b, URL_SAFE).unwrap();
+    let sig = base64::decode_config(b, URL_SAFE)
+    .map_err(|_| nom::Err::Error((s, ErrorKind::IsNot)))?;
     Ok((extra, code.derive(sig)))
 }
 

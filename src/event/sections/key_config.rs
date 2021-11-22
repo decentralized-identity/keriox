@@ -265,8 +265,8 @@ fn test_threshold() -> Result<(), Error> {
 #[test]
 fn test_verify() -> Result<(), Error> {
     use crate::event::event_data::EventData;
-    use crate::event_message::parse::Message;
-    use crate::event_parsing::signed_message; 
+    use crate::event_message::signed_event_message::Message;
+    use crate::event_parsing::message::signed_message; 
     use std::convert::TryFrom;
 
     // test data taken from keripy

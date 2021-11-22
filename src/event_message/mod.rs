@@ -1,5 +1,4 @@
 pub mod event_msg_builder;
-pub mod parse;
 pub mod serialization_info;
 pub mod serializer;
 pub mod signed_event_message;

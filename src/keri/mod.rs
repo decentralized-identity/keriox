@@ -14,10 +14,9 @@ use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivat
             InteractionEvent,
         },
         sections::seal::EventSeal
-    }, event_message::{parse::DeserializedSignedEvent, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt}}, event_message::{
+    }, event_message::{signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, Message}}, event_message::{
         event_msg_builder::{EventMsgBuilder, EventType},
-        parse::Message,
-    }, event_parsing::{self, signed_event_stream}, keys::PublicKey, prefix::AttachedSignaturePrefix, prefix::{
+    }, event_parsing::{SignedEventData, message::{signed_event_stream, signed_message}}, keys::PublicKey, prefix::AttachedSignaturePrefix, prefix::{
         BasicPrefix,
         IdentifierPrefix,
         SelfSigningPrefix
@@ -288,7 +287,7 @@ impl<K: KeyManager> Keri<K> {
     /// Process and respond to single event
     ///
     pub fn respond_single(&self, msg: &[u8]) -> Result<(IdentifierPrefix, Vec<u8>), Error> {
-        let parsed = event_parsing::signed_message(msg).map_err(|e| Error::DeserializeError(e.to_string()))?;
+        let parsed = signed_message(msg).map_err(|e| Error::DeserializeError(e.to_string()))?;
         match Message::try_from(parsed.1) {
             Err(e) => Err(Error::DeserializeError(e.to_string())),
             Ok(event) => {
@@ -333,7 +332,7 @@ impl<K: KeyManager> Keri<K> {
                                 )
                             }
                         }
-                        let rcp: DeserializedSignedEvent = self.make_rct(ev.event_message.clone())?.into();
+                        let rcp: SignedEventData = self.make_rct(ev.event_message.clone())?.into();
                         buf.append(&mut rcp.to_cesr().unwrap());
                         Ok(buf)
                     }

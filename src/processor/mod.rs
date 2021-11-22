@@ -7,10 +7,10 @@ use crate::{database::sled::SledEventDatabase, derivation::self_addressing::Self
             KeyConfig,
         },
         EventMessage,
-    }, event_message::{parse::Message, signed_event_message::{
+    }, event_message::{signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
-            TimestampedSignedEventMessage,
-        }}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
+            TimestampedSignedEventMessage, Message
+        }},prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
 
 #[cfg(feature = "async")]
 pub mod async_processing;
