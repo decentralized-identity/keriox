@@ -7,8 +7,6 @@ use super::serializer::to_string;
 
 use super::EventMessage;
 
-
-
 #[derive(Clone, Debug)]
 pub enum Message {
     Event(SignedEventMessage),
@@ -27,8 +25,6 @@ pub struct SignedEventMessage {
     #[serde(skip_serializing)]
     pub delegator_seal: Option<SourceSeal>,
 }
-
-
 
 impl Serialize for SignedEventMessage {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
