@@ -14,10 +14,10 @@ use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivat
             InteractionEvent,
         },
         sections::seal::EventSeal
-    }, event_message::{parse::signed_message, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt}}, event_message::{
+    }, event_message::{parse::DeserializedSignedEvent, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt}}, event_message::{
         event_msg_builder::{EventMsgBuilder, EventType},
         parse::Message,
-    }, event_parsing::{self, pack::Pack, signed_event_stream}, keys::PublicKey, prefix::AttachedSignaturePrefix, prefix::{
+    }, event_parsing::{self, signed_event_stream}, keys::PublicKey, prefix::AttachedSignaturePrefix, prefix::{
         BasicPrefix,
         IdentifierPrefix,
         SelfSigningPrefix
@@ -289,10 +289,10 @@ impl<K: KeyManager> Keri<K> {
     ///
     pub fn respond_single(&self, msg: &[u8]) -> Result<(IdentifierPrefix, Vec<u8>), Error> {
         let parsed = event_parsing::signed_message(msg).map_err(|e| Error::DeserializeError(e.to_string()))?;
-        match signed_message(parsed.1) {
+        match Message::try_from(parsed.1) {
             Err(e) => Err(Error::DeserializeError(e.to_string())),
             Ok(event) => {
-                match self.processor.process(Message::try_from(event).unwrap())? {
+                match self.processor.process(event)? {
                     None => Err(Error::InvalidIdentifierStat),
                     Some(state) => Ok((state.prefix.clone(), serde_json::to_vec(&state)?)),
                 }
@@ -333,7 +333,8 @@ impl<K: KeyManager> Keri<K> {
                                 )
                             }
                         }
-                        buf.append(&mut self.make_rct(ev.event_message.clone())?.pack()?);
+                        let rcp: DeserializedSignedEvent = self.make_rct(ev.event_message.clone())?.into();
+                        buf.append(&mut rcp.to_cesr().unwrap());
                         Ok(buf)
                     }
                     // TODO: this should process properly

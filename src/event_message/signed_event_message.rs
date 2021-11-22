@@ -2,9 +2,9 @@ use chrono::{DateTime, Local};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use std::cmp::Ordering;
 
-use crate::{error::Error, event::sections::seal::EventSeal, event_parsing::pack::Pack, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}, state::{EventSemantics, IdentifierState}};
+use crate::{error::Error, event::sections::seal::{EventSeal, SourceSeal}, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}, state::{EventSemantics, IdentifierState}};
 
-use super::{parse::Attachment, serializer::to_string};
+use super::{parse::{Attachment, DeserializedSignedEvent}, serializer::to_string};
 use super::EventMessage;
 
 // KERI serializer should be used to serialize this
@@ -14,7 +14,22 @@ pub struct SignedEventMessage {
     #[serde(skip_serializing)]
     pub signatures: Vec<AttachedSignaturePrefix>,
     #[serde(skip_serializing)]
-    pub attachments: Option<Vec<Attachment>>,
+    pub delegator_seal: Option<SourceSeal>,
+}
+
+impl Into<DeserializedSignedEvent> for &SignedEventMessage {
+    fn into(self) -> DeserializedSignedEvent {
+        let attachments = match self.delegator_seal.clone() {
+            Some(delegator_seal) => 
+                [
+                    Attachment::SealSourceCouplets(vec![delegator_seal]),
+                    Attachment::AttachedSignatures(self.signatures.clone()) 
+                ].into(),
+            None => [Attachment::AttachedSignatures(self.signatures.clone())].into(),
+        }; 
+        
+        DeserializedSignedEvent { deserialized_event: self.event_message.clone(), attachments }
+    }
 }
 
 impl Serialize for SignedEventMessage {
@@ -27,7 +42,7 @@ impl Serialize for SignedEventMessage {
             let mut em = serializer.serialize_struct("EventMessage", 2)?;
             em.serialize_field("", &self.event_message)?;
             let att_sigs = Attachment::AttachedSignatures(self.signatures.clone());
-            em.serialize_field("-", std::str::from_utf8(&att_sigs.pack().unwrap()).unwrap())?;
+            em.serialize_field("-", std::str::from_utf8(&att_sigs.to_cesr().unwrap()).unwrap())?;
             em.end()
         // . else - we pack as it is for DB / CBOR purpose
         } else {
@@ -126,12 +141,12 @@ impl SignedEventMessage {
     pub fn new(
         message: &EventMessage,
         sigs: Vec<AttachedSignaturePrefix>,
-        attachments: Option<Vec<Attachment>>,
+        delegator_seal: Option<SourceSeal>,
     ) -> Self {
         Self {
             event_message: message.clone(),
             signatures: sigs,
-            attachments,
+            delegator_seal
         }
     }
 
@@ -159,6 +174,16 @@ pub struct SignedTransferableReceipt {
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
 
+impl Into<DeserializedSignedEvent> for SignedTransferableReceipt {
+    fn into(self) -> DeserializedSignedEvent {
+        let attachments = [
+                Attachment::AttachedEventSeal(vec![self.validator_seal]), 
+                Attachment::AttachedSignatures(self.signatures)
+            ].into();
+        DeserializedSignedEvent { deserialized_event: self.body, attachments }
+    }
+}
+
 impl SignedTransferableReceipt {
     pub fn new(
         message: &EventMessage,
@@ -183,6 +208,13 @@ impl SignedTransferableReceipt {
 pub struct SignedNontransferableReceipt {
     pub body: EventMessage,
     pub couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
+}
+
+impl Into<DeserializedSignedEvent> for SignedNontransferableReceipt {
+    fn into(self) -> DeserializedSignedEvent {
+        let attachments = [Attachment::ReceiptCouplets(self.couplets)].into();
+        DeserializedSignedEvent { deserialized_event: self.body, attachments }
+    }
 }
 
 impl SignedNontransferableReceipt {

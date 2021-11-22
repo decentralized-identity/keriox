@@ -11,6 +11,7 @@ use crate::{
     event::{
         event_data::{DummyEvent, EventData},
         Event,
+        sections::seal::SourceSeal,
     },
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
     state::{EventSemantics, IdentifierState},
@@ -19,7 +20,7 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use serialization_info::*;
 
-use self::{event_msg_builder::{EventMsgBuilder, EventType}, parse::Attachment, signed_event_message::SignedEventMessage};
+use self::{event_msg_builder::{EventMsgBuilder, EventType}, signed_event_message::SignedEventMessage};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct EventMessage {
@@ -132,9 +133,9 @@ impl EventMessage {
     pub fn sign(
         &self,
         sigs: Vec<AttachedSignaturePrefix>,
-        attachments: Option<Vec<Attachment>>,
+        delegator_seal: Option<SourceSeal>,
     ) -> SignedEventMessage {
-        SignedEventMessage::new(self, sigs, attachments)
+        SignedEventMessage::new(self, sigs, delegator_seal)
     }
 }
 
