@@ -17,6 +17,7 @@ sled-db = ["sled", "fixed"]
 async = ["async-std", "pin-project", "futures-core", "bitpat"]
 wallet = ["universal_wallet"]
 default = ["sled-db"]
+query = []
 
 [dependencies]
 ed25519-dalek = "1.0.1"
