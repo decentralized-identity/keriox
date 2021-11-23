@@ -45,13 +45,15 @@ pub fn message(s: &[u8]) -> nom::IResult<&[u8], EventMessage<Event>> {
 }
 
 #[cfg(feature = "query")]
-pub fn message2(s: &[u8]) -> nom::IResult<&[u8], EventMessage<Envelope<IdData>>> {
+pub fn envelope(s: &[u8]) -> nom::IResult<&[u8], EventMessage<Envelope<IdData>>> {
     alt((json_message::<Envelope<IdData>>, cbor_message::<Envelope<IdData>>, mgpk_message::<Envelope<IdData>>))(s).map(|d| (d.0, d.1))
 }
 
 pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
-    let (rest, msg) = message(s)?;
-    let (rest, attachments): (&[u8], Vec<Attachment>) =
+
+    fn get_key_event(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
+        let (rest, event) = message(s)?;
+        let (rest, attachments): (&[u8], Vec<Attachment>) =
         fold_many0(attachment, vec![], |mut acc: Vec<_>, item| {
             acc.push(item);
             acc
@@ -60,12 +62,43 @@ pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
     Ok((
         rest,
         SignedEventData {
-            deserialized_event: Some(msg),
+            deserialized_event: Some(event),
             #[cfg(feature = "query")]
             envelope: None,
             attachments,
+        }))
+    };
+
+    #[cfg(feature = "query")]
+    fn get_envelope(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
+        let (rest, envelope) = envelope(s)?;
+        let (rest, attachments): (&[u8], Vec<Attachment>) =
+        fold_many0(attachment, vec![], |mut acc: Vec<_>, item| {
+            acc.push(item);
+            acc
+        })(rest)?;
+
+    Ok((
+        rest,
+        SignedEventData {
+            deserialized_event: None,
+            #[cfg(feature = "query")]
+            envelope: Some(envelope),
+            attachments,
+        }))
+    }
+
+    match get_key_event(s) {
+        Ok((rest, ev)) => Ok((rest, ev)),
+        #[cfg(feature = "query")]
+        Err(_e) => {
+            get_envelope(s)
         },
-    ))
+        #[cfg(not(feature = "query"))]
+        Err(e) => {
+            Err(e)
+        },
+    } 
 }
 
 pub fn signed_event_stream(s: &[u8]) -> nom::IResult<&[u8], Vec<SignedEventData>> {
@@ -162,6 +195,25 @@ fn test_event() {
     let event = message(stream);
     assert!(event.is_ok());
     assert_eq!(event.unwrap().1.serialize().unwrap(), stream);
+}
+
+#[test]
+fn test_qry() {
+    let qry_event = r#"{"v":"KERI10JSON00011c_","t":"qry","dt":"2020-08-22T17:50:12.988921+00:00","r":"logs","rr":"log/processor","q":{"i":"EaU6JR2nmwyZ-i0d8JZAoTNZH3ULvYAfSVPzhzS6b5CM"}}"#;
+    let rest = "something more";
+    let stream = [qry_event, rest].join("");
+
+    let (extra, event) = envelope(stream.as_bytes()).unwrap();
+
+    assert_eq!(serde_json::to_string(&event).unwrap(), qry_event);
+    assert_eq!(rest.as_bytes(), extra);
+}
+
+#[test]
+fn test_signed_qry() {
+    let stream = br#"{"v":"KERI10JSON000097_","t":"qry","dt":"2021-01-01T00:00:00.000000+00:00","r":"logs","rr":"","q":{"i":"EUrtK94nJesKGJaY_ymhz0mtkAjRsBonwEGydYBFCiXY"}}-VAj-HABEQJ9AtK25vIlgjOH0tDPCU7_S7Xw81sdH7K4cVCXCvSc-AABAAc5J03WH5U1803tOyjqMYdc_DJ9UfptVAounOpX170bUBdjf5fdU0iJxNjwgo1kCG_ufcXHfd4u5m3QxM85UjCQ"#;
+    let se = signed_message(stream).unwrap();
+
 }
 
 #[test]

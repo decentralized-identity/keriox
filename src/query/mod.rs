@@ -4,9 +4,6 @@ use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
 #[derive(Deserialize, Debug, Clone, PartialEq)]
 pub struct Envelope<D> {
-    #[serde(rename = "v")]
-    pub serialization_info: SerializationInfo,
-
     #[serde(rename = "dt")]
     pub timestamp: DateTime<FixedOffset>,
 
@@ -23,7 +20,6 @@ impl<D: Serialize> Serialize for Envelope<D> {
         S: serde::Serializer,
     {
         let mut em = serializer.serialize_struct("Envelope", 5)?;
-        em.serialize_field("v", &self.serialization_info)?;
         match self.message {
             MessageType::Qry(ref qry_data) => {
                 em.serialize_field("t", "qry")?;
