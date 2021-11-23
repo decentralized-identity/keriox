@@ -22,7 +22,7 @@ use serialization_info::*;
 use self::{event_msg_builder::{EventMsgBuilder, EventType}, signed_event_message::SignedEventMessage};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct EventMessage {
+pub struct EventMessage<D> {
     /// Serialization Information
     ///
     /// Encodes the version, size and serialization format of the event
@@ -30,7 +30,7 @@ pub struct EventMessage {
     pub serialization_info: SerializationInfo,
 
     #[serde(flatten)]
-    pub event: Event,
+    pub event: D,
     // Additional Data for forwards compat
     //
     // TODO: Currently seems to be bugged, it captures and duplicates every element in the event
@@ -38,7 +38,7 @@ pub struct EventMessage {
     // pub extra: HashMap<String, Value>,
 }
 
-impl Default for EventMessage {
+impl Default for EventMessage<Event> {
     fn default() -> Self {
         EventMsgBuilder::new(EventType::Inception).build().unwrap()
     }
@@ -47,11 +47,11 @@ impl Default for EventMessage {
 #[derive(Serialize, Deserialize, PartialEq)]
 pub struct TimestampedEventMessage {
     pub timestamp: DateTime<Local>,
-    pub event_message: EventMessage,
+    pub event_message: EventMessage<Event>,
 }
 
 impl TimestampedEventMessage {
-    pub fn new(event: EventMessage) -> Self {
+    pub fn new(event: EventMessage<Event>) -> Self {
         Self {
             timestamp: Local::now(),
             event_message: event,
@@ -87,20 +87,20 @@ impl Ord for TimestampedEventMessage {
 
 impl Eq for TimestampedEventMessage {}
 
-impl From<TimestampedEventMessage> for EventMessage {
-    fn from(event: TimestampedEventMessage) -> EventMessage {
+impl From<TimestampedEventMessage> for EventMessage<Event> {
+    fn from(event: TimestampedEventMessage) -> EventMessage<Event> {
         event.event_message
     }
 }
 
 /// WARNING: timestamp will change on conversion to current time
-impl From<EventMessage> for TimestampedEventMessage {
-    fn from(event: EventMessage) -> TimestampedEventMessage {
+impl From<EventMessage<Event>> for TimestampedEventMessage {
+    fn from(event: EventMessage<Event>) -> TimestampedEventMessage {
         TimestampedEventMessage::new(event)
     }
 }
 
-impl EventMessage {
+impl EventMessage<Event> {
     pub fn new(event: Event, format: SerializationFormats) -> Result<Self, Error> {
         Ok(Self {
             serialization_info: SerializationInfo::new(format, Self::get_size(&event, format)?),
@@ -138,7 +138,7 @@ impl EventMessage {
     }
 }
 
-impl EventSemantics for EventMessage {
+impl EventSemantics for EventMessage<Event> {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         // Update state.last with serialized current event message.
         match self.event.event_data {
@@ -214,7 +214,7 @@ impl EventSemantics for EventMessage {
     }
 }
 
-pub fn verify_identifier_binding(icp_event: &EventMessage) -> Result<bool, Error> {
+pub fn verify_identifier_binding(icp_event: &EventMessage<Event>) -> Result<bool, Error> {
     let event_data = &icp_event.event.event_data;
     match event_data {
         EventData::Icp(icp) => match &icp_event.event.prefix {

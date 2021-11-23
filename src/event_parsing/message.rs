@@ -10,27 +10,29 @@ use serde::Deserialize;
 #[cfg(feature = "async")]
 use crate::event_message::serialization_info::SerializationInfo;
 
-use crate::{event::EventMessage, event_parsing::{Attachment, SignedEventData, attachment::attachment}};
+use crate::{event::{Event, EventMessage}, event_parsing::{Attachment, SignedEventData, attachment::attachment}}; 
+#[cfg(feature = "query")]
+use crate::query::{Envelope, IdData};
 use rmp_serde as serde_mgpk;
 
 
-fn json_message(s: &[u8]) -> nom::IResult<&[u8], EventMessage> {
-    let mut stream = serde_json::Deserializer::from_slice(s).into_iter::<EventMessage>();
+fn json_message<'a, D: Deserialize<'a>>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<D>> {
+    let mut stream = serde_json::Deserializer::from_slice(s).into_iter::<EventMessage<D>>();
     match stream.next() {
         Some(Ok(event)) => Ok((&s[stream.byte_offset()..], event)),
         _ => Err(nom::Err::Error((s, ErrorKind::IsNot))),
     }
 }
 
-fn cbor_message(s: &[u8]) -> nom::IResult<&[u8], EventMessage> {
-    let mut stream = serde_cbor::Deserializer::from_slice(s).into_iter::<EventMessage>();
+fn cbor_message<'a, D: Deserialize<'a>>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<D>> {
+    let mut stream = serde_cbor::Deserializer::from_slice(s).into_iter::<EventMessage<D>>();
     match stream.next() {
         Some(Ok(event)) => Ok((&s[stream.byte_offset()..], event)),
         _ => Err(nom::Err::Error((s, ErrorKind::IsNot))),
     }
 }
 
-fn mgpk_message(s: &[u8]) -> nom::IResult<&[u8], EventMessage> {
+fn mgpk_message<'a, D: Deserialize<'a>>(s: &[u8]) -> nom::IResult<&[u8], EventMessage<D>> {
     let mut deser = serde_mgpk::Deserializer::new(Cursor::new(s));
     match Deserialize::deserialize(&mut deser) {
         Ok(event) => Ok((&s[deser.get_ref().position() as usize..], event)),
@@ -38,8 +40,13 @@ fn mgpk_message(s: &[u8]) -> nom::IResult<&[u8], EventMessage> {
     }
 }
 
-pub fn message(s: &[u8]) -> nom::IResult<&[u8], EventMessage> {
-    alt((json_message, cbor_message, mgpk_message))(s).map(|d| (d.0, d.1))
+pub fn message(s: &[u8]) -> nom::IResult<&[u8], EventMessage<Event>> {
+    alt((json_message::<Event>, cbor_message::<Event>, mgpk_message::<Event>))(s).map(|d| (d.0, d.1))
+}
+
+#[cfg(feature = "query")]
+pub fn message2(s: &[u8]) -> nom::IResult<&[u8], EventMessage<Envelope<IdData>>> {
+    alt((json_message::<Envelope<IdData>>, cbor_message::<Envelope<IdData>>, mgpk_message::<Envelope<IdData>>))(s).map(|d| (d.0, d.1))
 }
 
 pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
@@ -53,7 +60,9 @@ pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
     Ok((
         rest,
         SignedEventData {
-            deserialized_event: msg,
+            deserialized_event: Some(msg),
+            #[cfg(feature = "query")]
+            envelope: None,
             attachments,
         },
     ))

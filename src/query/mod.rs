@@ -1,10 +1,8 @@
-pub mod parse;
-
 use crate::{event_message::serialization_info::SerializationInfo, prefix::{AttachedSignaturePrefix, IdentifierPrefix}};
 use chrono::{DateTime, FixedOffset};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, PartialEq)]
 pub struct Envelope<D> {
     #[serde(rename = "v")]
     pub serialization_info: SerializationInfo,
@@ -39,14 +37,14 @@ impl<D: Serialize> Serialize for Envelope<D> {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(tag = "t", rename_all = "lowercase")]
 pub enum MessageType<D> {
     Qry(QueryData<D>),
     // todo Rpy(ReplyData)
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct QueryData<D> {
     #[serde(rename = "rr")]
     pub reply_route: String,
@@ -55,7 +53,7 @@ pub struct QueryData<D> {
     pub data: D,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct IdData {
     pub i: IdentifierPrefix,
 }

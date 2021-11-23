@@ -2,11 +2,15 @@ use std::convert::TryFrom;
 use base64::URL_SAFE_NO_PAD;
 use serde::Deserialize;
 
-use crate::event::EventMessage;
+use crate::event::{Event, EventMessage};
 use crate::event::sections::seal::{EventSeal, SourceSeal};
 use crate::event_message::signed_event_message::{Message, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt};
 use crate::event_parsing::payload_size::PayloadType;
 use crate::prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfSigningPrefix};
+
+#[cfg(feature = "query")]
+use crate::query::{Envelope, IdData};
+
 use crate::{error::Error, event::event_data::EventData};
 
 pub mod attachment;
@@ -86,7 +90,9 @@ impl Attachment {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SignedEventData {
-    pub deserialized_event: EventMessage,
+    pub deserialized_event: Option<EventMessage<Event>>,
+    #[cfg(feature = "query")]
+    pub envelope: Option<EventMessage<Envelope<IdData>>>,
     pub attachments: Vec<Attachment>,
 }
 
@@ -97,7 +103,7 @@ impl SignedEventData {
             .fold(String::default(), |acc, att| [acc, att.to_cesr()].concat())
             .as_bytes().to_vec();
         Ok([
-            self.deserialized_event.serialize()?,
+            self.deserialized_event.as_ref().unwrap().serialize()?,
             attachments,
         ]
         .concat())
@@ -115,7 +121,12 @@ impl From<&SignedEventMessage> for SignedEventData {
             None => [Attachment::AttachedSignatures(ev.signatures.clone())].into(),
         }; 
         
-        SignedEventData { deserialized_event: ev.event_message.clone(), attachments }
+        SignedEventData { 
+            deserialized_event: Some(ev.event_message.clone()), 
+            #[cfg(feature = "query")]
+            envelope: None, 
+            attachments
+        }
     }
     
 }
@@ -123,7 +134,12 @@ impl From<&SignedEventMessage> for SignedEventData {
 impl From<SignedNontransferableReceipt> for SignedEventData {
     fn from(rcp: SignedNontransferableReceipt) -> SignedEventData {
         let attachments = [Attachment::ReceiptCouplets(rcp.couplets)].into();
-        SignedEventData { deserialized_event: rcp.body, attachments }
+        SignedEventData { 
+            deserialized_event: Some(rcp.body), 
+            #[cfg(feature = "query")]
+            envelope: None, 
+            attachments 
+        }
     }
 }
 
@@ -133,7 +149,12 @@ impl From<SignedTransferableReceipt> for SignedEventData {
                 Attachment::AttachedEventSeal(vec![rcp.validator_seal]), 
                 Attachment::AttachedSignatures(rcp.signatures)
             ].into();
-        SignedEventData { deserialized_event: rcp.body, attachments }
+        SignedEventData { 
+            deserialized_event: Some(rcp.body), 
+            #[cfg(feature = "query")]
+            envelope: None, 
+            attachments 
+        }
     }
 }
 
@@ -146,7 +167,7 @@ impl TryFrom<SignedEventData> for Message {
 }
 
 fn signed_message(mut des: SignedEventData) -> Result<Message, Error> {
-    match des.deserialized_event.event.event_data {
+    match des.deserialized_event.clone().unwrap().event.event_data {
         EventData::Rct(_) => {
             let att = des.attachments.pop().ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
             match att {
@@ -154,7 +175,7 @@ fn signed_message(mut des: SignedEventData) -> Result<Message, Error> {
                 Attachment::ReceiptCouplets(couplets) => 
                 Ok(
                     Message::NontransferableRct(SignedNontransferableReceipt {
-                        body: des.deserialized_event,
+                        body: des.deserialized_event.unwrap(),
                         couplets,
                     })
                 ),
@@ -179,7 +200,7 @@ fn signed_message(mut des: SignedEventData) -> Result<Message, Error> {
 
                     Ok(
                         Message::TransferableRct(SignedTransferableReceipt::new(
-                            &des.deserialized_event,
+                            &des.deserialized_event.unwrap(),
                             // TODO what if more than one?
                             seals
                                 .last()
@@ -221,7 +242,7 @@ fn signed_message(mut des: SignedEventData) -> Result<Message, Error> {
             
             Ok(
                 Message::Event(
-                    SignedEventMessage::new(&des.deserialized_event, sigs, delegator_seal?)
+                    SignedEventMessage::new(&des.deserialized_event.unwrap(), sigs, delegator_seal?)
                 ),
             )
         }
@@ -230,7 +251,7 @@ fn signed_message(mut des: SignedEventData) -> Result<Message, Error> {
             if let Attachment::AttachedSignatures(sigs) = sigs {
                 Ok(
                     Message::Event(
-                    SignedEventMessage::new(&des.deserialized_event, sigs.to_vec(), None)
+                    SignedEventMessage::new(&des.deserialized_event.unwrap(), sigs.to_vec(), None)
                 ))
             } else {
                 // Improper attachment type

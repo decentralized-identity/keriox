@@ -31,7 +31,7 @@ impl Event {
             }
         }
 
-    pub fn to_message(self, format: SerializationFormats) -> Result<EventMessage, Error> {
+    pub fn to_message(self, format: SerializationFormats) -> Result<EventMessage<Event>, Error> {
         EventMessage::new(self, format)
     }
 }

@@ -134,7 +134,7 @@ impl EventMsgBuilder {
         }
     }
 
-    pub fn build(self) -> Result<EventMessage, Error> {
+    pub fn build(self) -> Result<EventMessage<Event>, Error> {
         let next_key_hash =
             nxt_commitment(&self.next_key_threshold, &self.next_keys, &self.derivation);
         let key_config = KeyConfig::new(self.keys, Some(next_key_hash), Some(self.key_threshold));
@@ -227,7 +227,7 @@ impl EventMsgBuilder {
 pub struct ReceiptBuilder {
     format: SerializationFormats,
     derivation: SelfAddressing,
-    receipted_event: EventMessage,
+    receipted_event: EventMessage<Event>,
 }
 
 impl ReceiptBuilder {
@@ -248,14 +248,14 @@ impl ReceiptBuilder {
         Self { derivation, ..self }
     }
 
-    pub fn with_receipted_event(self, receipted_event: EventMessage) -> Self {
+    pub fn with_receipted_event(self, receipted_event: EventMessage<Event>) -> Self {
         Self {
             receipted_event,
             ..self
         }
     }
 
-    pub fn build(&self) -> Result<EventMessage, Error> {
+    pub fn build(&self) -> Result<EventMessage<Event>, Error> {
         Event {
             prefix: self.receipted_event.event.prefix.clone(),
             sn: self.receipted_event.event.sn,

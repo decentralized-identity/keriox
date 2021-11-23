@@ -53,7 +53,7 @@ impl InceptionEvent {
         self,
         derivation: SelfAddressing,
         format: SerializationFormats,
-    ) -> Result<EventMessage, Error> {
+    ) -> Result<EventMessage<Event>, Error> {
         EventMessage::new(
             Event {
                 prefix: IdentifierPrefix::SelfAddressing(derivation.derive(

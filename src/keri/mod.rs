@@ -231,7 +231,7 @@ impl<K: KeyManager> Keri<K> {
         Ok(rot)
     }
 
-    fn make_rotation(&self) -> Result<EventMessage, Error> {
+    fn make_rotation(&self) -> Result<EventMessage<Event>, Error> {
         let state = self
             .processor
             .compute_state(&self.prefix)?
@@ -346,7 +346,7 @@ impl<K: KeyManager> Keri<K> {
         Ok(response)
     }
 
-    pub fn make_rct(&self, event: EventMessage) -> Result<SignedTransferableReceipt, Error> {
+    pub fn make_rct(&self, event: EventMessage<Event>) -> Result<SignedTransferableReceipt, Error> {
         let ser = event.serialize()?;
         let signature = self
             .key_manager
@@ -387,7 +387,7 @@ impl<K: KeyManager> Keri<K> {
     /// # Parameters
     /// * `message` - `EventMessage` we are to process
     ///
-    pub fn make_ntr(&self, message: EventMessage) -> Result<SignedNontransferableReceipt, Error> {
+    pub fn make_ntr(&self, message: EventMessage<Event>) -> Result<SignedNontransferableReceipt, Error> {
         let our_bp = match &self.prefix {
             IdentifierPrefix::Basic(prefix) => prefix,
             _ => {

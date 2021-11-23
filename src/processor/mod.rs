@@ -1,16 +1,12 @@
 use std::sync::Arc;
 
-use crate::{database::sled::SledEventDatabase, derivation::self_addressing::SelfAddressing, error::Error, event::{
-        event_data::EventData,
-        sections::{
+use crate::{database::sled::SledEventDatabase, derivation::self_addressing::SelfAddressing, error::Error, event::{Event, EventMessage, event_data::EventData, sections::{
             seal::{EventSeal, Seal},
             KeyConfig,
-        },
-        EventMessage,
-    }, event_message::{signed_event_message::{
+        }}, event_message::{signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
             TimestampedSignedEventMessage, Message
-        }},prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
+        }}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
 
 #[cfg(feature = "async")]
 pub mod async_processing;
@@ -417,7 +413,7 @@ impl EventProcessor {
         }
     }
 
-    fn apply_to_state(&self, event: EventMessage) -> Result<IdentifierState, Error> {
+    fn apply_to_state(&self, event: EventMessage<Event>) -> Result<IdentifierState, Error> {
         // get state for id (TODO cache?)
         self.compute_state(&event.event.prefix)
             // get empty state if there is no state yet

@@ -2,7 +2,7 @@ use chrono::{DateTime, Local};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use std::cmp::Ordering;
 
-use crate::{error::Error, event::sections::seal::{EventSeal, SourceSeal}, event_parsing::Attachment, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}, state::{EventSemantics, IdentifierState}};
+use crate::{error::Error, event::{Event, sections::seal::{EventSeal, SourceSeal}}, event_parsing::Attachment, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}, state::{EventSemantics, IdentifierState}};
 use super::serializer::to_string;
 
 use super::EventMessage;
@@ -19,7 +19,7 @@ pub enum Message {
 // KERI serializer should be used to serialize this
 #[derive(Debug, Clone, Deserialize)]
 pub struct SignedEventMessage {
-    pub event_message: EventMessage,
+    pub event_message: EventMessage<Event>,
     #[serde(skip_serializing)]
     pub signatures: Vec<AttachedSignaturePrefix>,
     #[serde(skip_serializing)]
@@ -133,7 +133,7 @@ impl Eq for TimestampedSignedEventMessage {}
 
 impl SignedEventMessage {
     pub fn new(
-        message: &EventMessage,
+        message: &EventMessage<Event>,
         sigs: Vec<AttachedSignaturePrefix>,
         delegator_seal: Option<SourceSeal>,
     ) -> Self {
@@ -163,14 +163,14 @@ impl EventSemantics for SignedEventMessage {
 /// Mostly intended for use by Validators
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SignedTransferableReceipt {
-    pub body: EventMessage,
+    pub body: EventMessage<Event>,
     pub validator_seal: EventSeal,
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
 
 impl SignedTransferableReceipt {
     pub fn new(
-        message: &EventMessage,
+        message: &EventMessage<Event>,
         event_seal: EventSeal,
         sigs: Vec<AttachedSignaturePrefix>,
     ) -> Self {
@@ -190,12 +190,12 @@ impl SignedTransferableReceipt {
 /// signatures
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SignedNontransferableReceipt {
-    pub body: EventMessage,
+    pub body: EventMessage<Event>,
     pub couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
 }
 
 impl SignedNontransferableReceipt {
-    pub fn new(message: &EventMessage, couplets: Vec<(BasicPrefix, SelfSigningPrefix)>) -> Self {
+    pub fn new(message: &EventMessage<Event>, couplets: Vec<(BasicPrefix, SelfSigningPrefix)>) -> Self {
         Self {
             body: message.clone(),
             couplets,
