@@ -197,6 +197,7 @@ fn test_event() {
     assert_eq!(event.unwrap().1.serialize().unwrap(), stream);
 }
 
+#[cfg(feature = "query")]
 #[test]
 fn test_qry() {
     let qry_event = r#"{"v":"KERI10JSON00011c_","t":"qry","dt":"2020-08-22T17:50:12.988921+00:00","r":"logs","rr":"log/processor","q":{"i":"EaU6JR2nmwyZ-i0d8JZAoTNZH3ULvYAfSVPzhzS6b5CM"}}"#;
@@ -209,10 +210,17 @@ fn test_qry() {
     assert_eq!(rest.as_bytes(), extra);
 }
 
+#[cfg(feature = "query")]
 #[test]
 fn test_signed_qry() {
+    use nom::Needed;
+
     let stream = br#"{"v":"KERI10JSON000097_","t":"qry","dt":"2021-01-01T00:00:00.000000+00:00","r":"logs","rr":"","q":{"i":"EUrtK94nJesKGJaY_ymhz0mtkAjRsBonwEGydYBFCiXY"}}-VAj-HABEQJ9AtK25vIlgjOH0tDPCU7_S7Xw81sdH7K4cVCXCvSc-AABAAc5J03WH5U1803tOyjqMYdc_DJ9UfptVAounOpX170bUBdjf5fdU0iJxNjwgo1kCG_ufcXHfd4u5m3QxM85UjCQ"#;
-    let se = signed_message(stream).unwrap();
+    let se = signed_message(&stream[..stream.len() - 1]);
+    assert!(matches!(se, Err(nom::Err::Incomplete(Needed::Size(1)))));
+    let se = signed_message(stream);
+    assert!(se.is_ok());
+    
 
 }
 

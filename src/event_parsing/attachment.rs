@@ -1,8 +1,8 @@
 use std::convert::TryFrom;
 
-use nom::{bytes::complete::take, combinator::map, error::ErrorKind, multi::count};
+use nom::{Needed, bytes::complete::take, combinator::map, error::ErrorKind, multi::{count, many0}};
 
-use crate::{derivation::attached_signature_code::b64_to_num, event::sections::seal::{EventSeal, SourceSeal}, event_parsing::payload_size::PayloadType, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}};
+use crate::{derivation::attached_signature_code::b64_to_num, event::sections::seal::{EventSeal, SourceSeal}, event_parsing::payload_size::PayloadType, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix}};
 
 use super::{Attachment, prefix::{
     attached_signature, attached_sn, basic_prefix, prefix, self_addressing_prefix,
@@ -69,6 +69,20 @@ fn couplets(s: &[u8]) -> nom::IResult<&[u8], Vec<(BasicPrefix, SelfSigningPrefix
     )(rest)
 }
 
+fn identifier_signatures(s: &[u8]) -> nom::IResult<&[u8], Vec<(IdentifierPrefix, Vec<AttachedSignaturePrefix>)>> {
+    let (rest, sc) = b64_count(s)?;
+    fn parse_signatures(input: &[u8]) ->  nom::IResult<&[u8], Vec<AttachedSignaturePrefix>> {
+        attachment(input).map(|(rest, att)| match att {
+            Attachment::AttachedSignatures(sigs) => Ok((rest, sigs)),
+            _ => Err(nom::Err::Error((rest, ErrorKind::IsNot)))
+        })?
+    }
+    count(
+        nom::sequence::tuple((prefix, parse_signatures)),
+        sc as usize,
+    )(rest)
+}
+
 pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
     let (rest, payload_type) = take(2u8)(s)?;
     let payload_type: PayloadType = PayloadType::try_from(
@@ -93,6 +107,31 @@ pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
             let (rest, couplets) = couplets(rest)?;
             Ok((rest, Attachment::ReceiptCouplets(couplets)))
         }
+        PayloadType::MH => {
+            let (rest, identifier_sigs) = identifier_signatures(rest)?;
+            Ok((rest, Attachment::LastEstablishmentSignatures(identifier_sigs)))
+        }
+        PayloadType::MV => {
+            let (rest, sc) = b64_count(rest)?;
+            // sc * 4 is all attachments length
+            match nom::bytes::complete::take(sc * 4)(rest) {
+                Ok((rest, total)) => {
+                    let (extra, atts) = many0(attachment)(total)?;
+                    if !extra.is_empty() {
+                        // something is wrong, should not happend
+                        Err(nom::Err::Incomplete(Needed::Size(((sc * 4) as usize - rest.len()).into()) ))
+                    } else {
+                        Ok((rest, Attachment::Frame(atts)))
+                    }
+                },
+                Err(nom::Err::Error((rest, _))) => {
+                    Err(nom::Err::Incomplete(Needed::Size(((sc * 4) as usize - rest.len()).into()) ))
+                },
+                Err(e) => Err(e)
+            }
+
+        }
+
         _ => todo!(),
     }
 }

@@ -1,4 +1,4 @@
-use crate::{event_message::serialization_info::SerializationInfo, prefix::{AttachedSignaturePrefix, IdentifierPrefix}};
+use crate::{prefix::{AttachedSignaturePrefix, IdentifierPrefix}};
 use chrono::{DateTime, FixedOffset};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
@@ -74,11 +74,12 @@ impl<D> SignedEnvelope<D> {
 }
 
 #[test]
-fn test_query_parsing() {
+fn test_query_deserialize() {
+    use crate::event_message::EventMessage;
     // From keripy
     let input_query = r#"{"v":"KERI10JSON00011c_","t":"qry","dt":"2020-08-22T17:50:12.988921+00:00","r":"logs","rr":"log/processor","q":{"i":"EaU6JR2nmwyZ-i0d8JZAoTNZH3ULvYAfSVPzhzS6b5CM"}}"#;
 
-    let qr: Result<Envelope<IdData>, _> = serde_json::from_str(input_query);
+    let qr: Result<EventMessage<Envelope<IdData>>, _> = serde_json::from_str(input_query);
     assert!(qr.is_ok());
 
     let qr = qr.unwrap();

@@ -71,6 +71,9 @@ pub enum PayloadType {
     /// Count of attached source seals (sn + dig)
     #[serde(rename = "-G")]
     MG,
+    /// Count of composed group: IdentifierPrefix + Controller Indexed Signatures
+    #[serde(rename = "-H")]
+    MH,
     #[serde(rename = "-U")]
     MU,
     #[serde(rename = "-V")]
@@ -243,6 +246,7 @@ impl TryFrom<&str> for PayloadType {
             "-E" => Ok(Self::ME),
             "-F" => Ok(Self::MF),
             "-G" => Ok(Self::MG),
+            "-H" => Ok(Self::MH),
             "-U" => Ok(Self::MU),
             "-V" => Ok(Self::MV),
             "-W" => Ok(Self::MW),
@@ -292,6 +296,7 @@ impl Display for PayloadType {
             Self::ME => f.write_str("-E"),
             Self::MF => f.write_str("-F"),
             Self::MG => f.write_str("-G"),
+            Self::MH => f.write_str("-H"),
             Self::MU => f.write_str("-U"),
             Self::MV => f.write_str("-V"),
             Self::MW => f.write_str("-W"),

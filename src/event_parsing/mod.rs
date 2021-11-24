@@ -6,7 +6,7 @@ use crate::event::{Event, EventMessage};
 use crate::event::sections::seal::{EventSeal, SourceSeal};
 use crate::event_message::signed_event_message::{Message, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt};
 use crate::event_parsing::payload_size::PayloadType;
-use crate::prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfSigningPrefix};
+use crate::prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix};
 
 #[cfg(feature = "query")]
 use crate::query::{Envelope, IdData};
@@ -24,6 +24,9 @@ pub enum Attachment {
     AttachedEventSeal(Vec<EventSeal>),
     AttachedSignatures(Vec<AttachedSignaturePrefix>),
     ReceiptCouplets(Vec<(BasicPrefix, SelfSigningPrefix)>),
+    // List of signatures made using keys from last establishment event od identifier of prefix 
+    LastEstablishmentSignatures(Vec<(IdentifierPrefix, Vec<AttachedSignaturePrefix>)>),
+    Frame(Vec<Attachment>),
 }
 
 impl Attachment {
@@ -61,6 +64,24 @@ impl Attachment {
 
                 (PayloadType::MC, couplets.len(), packed_couplets)
             }
+            Attachment::LastEstablishmentSignatures(signers) => {
+                let packed_signers = signers
+                    .iter()
+                    .fold("".to_string(), |acc, (signer, sigs)| {
+                        [
+                            acc, signer.to_str(), Attachment::AttachedSignatures(sigs.clone()).to_cesr()
+                        ].concat()
+                });
+                (PayloadType::MH, signers.len(), packed_signers)
+            },
+            Attachment::Frame(att) => {
+                let packed_attachments = att
+                    .iter()
+                    .fold("".to_string(), |acc, att| 
+                    [acc, att.to_cesr()].concat()
+                );
+                (PayloadType::MV, packed_attachments.len(), packed_attachments)
+            },
         };
         [
             payload_type.adjust_with_num(att_len as u16),
