@@ -1,6 +1,9 @@
-use std::ops::{Deref, DerefMut};
-use crate::{error::Error, keys::{ PrivateKey, PublicKey }};
+use crate::{
+    error::Error,
+    keys::{PrivateKey, PublicKey},
+};
 use rand::rngs::OsRng;
+use std::ops::{Deref, DerefMut};
 
 #[cfg(feature = "wallet")]
 pub mod wallet;

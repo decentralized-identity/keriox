@@ -2,15 +2,9 @@
 use universal_wallet::prelude::UnlockedWallet;
 
 #[cfg(test)]
-use crate::{
-    database::sled::SledEventDatabase,
-    error::Error,
-    keri::Keri,
-};
-use std::{
-    sync::Arc,
-    cell::RefCell,
-};
+use crate::{database::sled::SledEventDatabase, error::Error, keri::Keri};
+
+use std::sync::{Arc, Mutex};
 
 #[test]
 fn test_direct_mode() -> Result<(), Error> {
@@ -21,47 +15,44 @@ fn test_direct_mode() -> Result<(), Error> {
     std::fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
-    let alice_key_manager =
-    {
+    let alice_key_manager = {
         #[cfg(feature = "wallet")]
         {
             let mut alice_key_manager = UnlockedWallet::new("alice");
             crate::signer::wallet::incept_keys(&mut alice_key_manager)?;
-            alice_key_manager
+            Arc::new(Mutex::new(alice_key_manager))
         }
         #[cfg(not(feature = "wallet"))]
         {
             use crate::signer::CryptoBox;
-            CryptoBox::new()?
+            Arc::new(Mutex::new(CryptoBox::new()?))
         }
     };
 
     // Init alice.
-    let mut alice = Keri::new(
-        Arc::clone(&db),
-        Arc::new(RefCell::new(alice_key_manager)))?;
+    let mut alice = Keri::new(Arc::clone(&db), alice_key_manager.clone())?;
 
     assert_eq!(alice.get_state()?, None);
 
-    let bob_key_manager =
-    {
+    //lazy_static! {
+    //  static ref BK: Arc<Mutex<dyn KeyManager>> = {
+    let bob_key_manager = {
         #[cfg(feature = "wallet")]
         {
             let mut bob_key_manager = UnlockedWallet::new("alice");
             crate::signer::wallet::incept_keys(&mut bob_key_manager)?;
-            bob_key_manager
+            Arc::new(Mutex::new(bob_key_manager))
         }
         #[cfg(not(feature = "wallet"))]
         {
             use crate::signer::CryptoBox;
-            CryptoBox::new()?
+            Arc::new(Mutex::new(CryptoBox::new().unwrap()))
         }
     };
+    //}
 
     // Init bob.
-    let mut bob = Keri::new(
-        Arc::clone(&db),
-        Arc::new(RefCell::new(bob_key_manager)))?;
+    let mut bob = Keri::new(Arc::clone(&db), bob_key_manager.clone())?;
 
     bob.incept().unwrap();
     let bob_state = bob.get_state()?;

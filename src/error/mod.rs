@@ -83,6 +83,9 @@ pub enum Error {
     #[error("Zero send error")]
     ZeroSendError,
 
+    #[error("Failed to obtain mutable ref to Ark of KeyManager")]
+    MutArcKeyVaultError,
+
     #[error(transparent)]
     Ed25519DalekSignatureError(#[from] ed25519_dalek::SignatureError),
 
@@ -96,4 +99,6 @@ pub enum Error {
     #[error(transparent)]
     WalletError(#[from] universal_wallet::Error),
 
+    #[error("mutex is poisoned")]
+    MutexPoisoned,
 }
