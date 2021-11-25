@@ -20,12 +20,15 @@ pub mod message;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub enum Attachment {
+    // Count codes
     SealSourceCouplets(Vec<SourceSeal>),
-    AttachedEventSeal(Vec<EventSeal>),
     AttachedSignatures(Vec<AttachedSignaturePrefix>),
     ReceiptCouplets(Vec<(BasicPrefix, SelfSigningPrefix)>),
+    // Group codes
+    SealSignaturesGroups(Vec<(EventSeal, Vec<AttachedSignaturePrefix>)>),
     // List of signatures made using keys from last establishment event od identifier of prefix 
-    LastEstablishmentSignatures(Vec<(IdentifierPrefix, Vec<AttachedSignaturePrefix>)>),
+    LastEstSignaturesGroups(Vec<(IdentifierPrefix, Vec<AttachedSignaturePrefix>)>),
+    // Frame codes
     Frame(Vec<Attachment>),
 }
 
@@ -39,17 +42,18 @@ impl Attachment {
 
                 (PayloadType::MG, sources.len(), serialzied_sources)
             }
-            Attachment::AttachedEventSeal(seal) => {
-                let serialized_seals = seal.iter().fold("".into(), |acc, seal| {
+            Attachment::SealSignaturesGroups(seals_signatures) => {
+                let serialized_seals = seals_signatures.iter().fold("".into(), |acc, (seal, sigs)| {
                     [
                         acc,
                         seal.prefix.to_str(),
                         Self::pack_sn(seal.sn),
                         seal.event_digest.to_str(),
+                        Attachment::AttachedSignatures(sigs.to_vec()).to_cesr(),
                     ]
                     .join("")
                 });
-                (PayloadType::MF, seal.len(), serialized_seals)
+                (PayloadType::MF, seals_signatures.len(), serialized_seals)
             }
             Attachment::AttachedSignatures(sigs) => {
                 let serialized_sigs = sigs
@@ -64,12 +68,14 @@ impl Attachment {
 
                 (PayloadType::MC, couplets.len(), packed_couplets)
             }
-            Attachment::LastEstablishmentSignatures(signers) => {
+            Attachment::LastEstSignaturesGroups(signers) => {
                 let packed_signers = signers
                     .iter()
                     .fold("".to_string(), |acc, (signer, sigs)| {
                         [
-                            acc, signer.to_str(), Attachment::AttachedSignatures(sigs.clone()).to_cesr()
+                            acc, 
+                            signer.to_str(), 
+                            Attachment::AttachedSignatures(sigs.clone()).to_cesr()
                         ].concat()
                 });
                 (PayloadType::MH, signers.len(), packed_signers)
@@ -167,8 +173,7 @@ impl From<SignedNontransferableReceipt> for SignedEventData {
 impl From<SignedTransferableReceipt> for SignedEventData {
     fn from(rcp: SignedTransferableReceipt) -> SignedEventData {
         let attachments = [
-                Attachment::AttachedEventSeal(vec![rcp.validator_seal]), 
-                Attachment::AttachedSignatures(rcp.signatures)
+                Attachment::SealSignaturesGroups(vec![(rcp.validator_seal, rcp.signatures)]), 
             ].into();
         SignedEventData { 
             deserialized_event: Some(rcp.body), 
@@ -200,33 +205,18 @@ fn signed_message(mut des: SignedEventData) -> Result<Message, Error> {
                         couplets,
                     })
                 ),
-                Attachment::AttachedEventSeal(_) | Attachment::AttachedSignatures(_) => {
+                Attachment::SealSignaturesGroups(data) => {
                     // Should be transferable receipt
-                    let second_att = des.attachments.pop().ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
-
-                    let (seals, sigs) = match (att, second_att) {
-                        (
-                            Attachment::AttachedEventSeal(seals),
-                            Attachment::AttachedSignatures(sigs),
-                        ) => Ok((seals, sigs)),
-                        (
-                            Attachment::AttachedSignatures(sigs),
-                            Attachment::AttachedEventSeal(seals),
-                        ) => Ok((seals, sigs)),
-                        _ => {
-                            // improper attachments
-                            Err(Error::SemanticError("Improper attachment".into()))
-                        }
-                    }?;
-
+                    let (seal, sigs) = 
+                        // TODO what if more than one?
+                        data
+                            .last()
+                            .ok_or_else(|| Error::SemanticError("More than one seal".into()))?
+                            .to_owned();
                     Ok(
                         Message::TransferableRct(SignedTransferableReceipt::new(
                             &des.deserialized_event.unwrap(),
-                            // TODO what if more than one?
-                            seals
-                                .last()
-                                .ok_or_else(|| Error::SemanticError("More than one seal".into()))?
-                                .to_owned(),
+                            seal,
                             sigs,
                         )),
                     )

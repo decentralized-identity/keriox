@@ -40,13 +40,6 @@ fn event_seal(s: &[u8]) -> nom::IResult<&[u8], EventSeal> {
     Ok((rest, seal))
 }
 
-/// returns attached event seals
-fn event_seals(s: &[u8]) -> nom::IResult<&[u8], Vec<EventSeal>> {
-    let (rest, sc) = b64_count(s)?;
-
-    count(event_seal, sc as usize)(rest)
-}
-
 pub(crate) fn b64_count(s: &[u8]) -> nom::IResult<&[u8], u16> {
     let (rest, t) = map(nom::bytes::complete::take(2u8), |b64_count| {
         b64_to_num(b64_count).map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))
@@ -69,16 +62,25 @@ fn couplets(s: &[u8]) -> nom::IResult<&[u8], Vec<(BasicPrefix, SelfSigningPrefix
     )(rest)
 }
 
-fn identifier_signatures(s: &[u8]) -> nom::IResult<&[u8], Vec<(IdentifierPrefix, Vec<AttachedSignaturePrefix>)>> {
-    let (rest, sc) = b64_count(s)?;
-    fn parse_signatures(input: &[u8]) ->  nom::IResult<&[u8], Vec<AttachedSignaturePrefix>> {
+fn indexed_signatures(input: &[u8]) ->  nom::IResult<&[u8], Vec<AttachedSignaturePrefix>> {
         attachment(input).map(|(rest, att)| match att {
             Attachment::AttachedSignatures(sigs) => Ok((rest, sigs)),
             _ => Err(nom::Err::Error((rest, ErrorKind::IsNot)))
         })?
     }
+
+fn identifier_signatures(s: &[u8]) -> nom::IResult<&[u8], Vec<(IdentifierPrefix, Vec<AttachedSignaturePrefix>)>> {
+    let (rest, sc) = b64_count(s)?;
     count(
-        nom::sequence::tuple((prefix, parse_signatures)),
+        nom::sequence::tuple((prefix, indexed_signatures)),
+        sc as usize,
+    )(rest)
+}
+
+fn seal_signatures(s: &[u8]) -> nom::IResult<&[u8], Vec<(EventSeal, Vec<AttachedSignaturePrefix>)>> {
+    let (rest, sc) = b64_count(s)?;
+    count(
+        nom::sequence::tuple((event_seal, indexed_signatures)),
         sc as usize,
     )(rest)
 }
@@ -96,8 +98,8 @@ pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
             Ok((rest, Attachment::SealSourceCouplets(source_seals)))
         }
         PayloadType::MF => {
-            let (rest, event_seals) = event_seals(rest)?;
-            Ok((rest, Attachment::AttachedEventSeal(event_seals)))
+            let (rest, event_seals) = seal_signatures(rest)?;
+		    Ok((rest, Attachment::SealSignaturesGroups(event_seals)))
         }
         PayloadType::MA => {
             let (rest, sigs) = signatures(rest)?;
@@ -109,7 +111,7 @@ pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
         }
         PayloadType::MH => {
             let (rest, identifier_sigs) = identifier_signatures(rest)?;
-            Ok((rest, Attachment::LastEstablishmentSignatures(identifier_sigs)))
+            Ok((rest, Attachment::LastEstSignaturesGroups(identifier_sigs)))
         }
         PayloadType::MV => {
             let (rest, sc) = b64_count(rest)?;
@@ -196,19 +198,24 @@ fn test_attachement() {
         ])
     );
 
-    let attached_str = "-FABED9EB3sA5u2vCPOEmX3d7bEyHiSh7Xi8fjew2KMl3FQM0AAAAAAAAAAAAAAAAAAAAAAAEeGqW24EnxUgO_wfuFo6GR_vii-RNv5iGo8ibUrhe6Z0";
+    let attached_str = "-FABED9EB3sA5u2vCPOEmX3d7bEyHiSh7Xi8fjew2KMl3FQM0AAAAAAAAAAAAAAAAAAAAAAAEeGqW24EnxUgO_wfuFo6GR_vii-RNv5iGo8ibUrhe6Z0-AABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
     let (_rest, seal) = attachment(attached_str.as_bytes()).unwrap();
     assert_eq!(
         seal,
-        Attachment::AttachedEventSeal(vec![EventSeal {
-            prefix: "ED9EB3sA5u2vCPOEmX3d7bEyHiSh7Xi8fjew2KMl3FQM"
-                .parse()
-                .unwrap(),
-            sn: 0,
-            event_digest: "EeGqW24EnxUgO_wfuFo6GR_vii-RNv5iGo8ibUrhe6Z0"
-                .parse()
-                .unwrap()
-        },])
+        Attachment::SealSignaturesGroups(vec![
+            (
+                EventSeal {
+                    prefix: "ED9EB3sA5u2vCPOEmX3d7bEyHiSh7Xi8fjew2KMl3FQM"
+                        .parse()
+                        .unwrap(),
+                    sn: 0,
+                    event_digest: "EeGqW24EnxUgO_wfuFo6GR_vii-RNv5iGo8ibUrhe6Z0"
+                        .parse()
+                        .unwrap()
+                },
+                vec!["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".parse().unwrap()]
+        )
+        ])
     );
 
     let attached_str = "-CABBed2Tpxc8KeCEWoq3_RKKRjU_3P-chSser9J4eAtAK6I0B8npsG58rX1ex73gaGe-jvRnw58RQGsDLzoSXaGn-kHRRNu6Kb44zXDtMnx-_8CjnHqskvDbz6pbEbed3JTOnCQ";
@@ -219,4 +226,9 @@ fn test_attachement() {
             ]
         )
     );
+
+    let cesr_attachment = "-VAj-HABE4YPqsEOaPNaZxVIbY-Gx2bJgP-c7AH_K7pEE-YfcI9E-AABAAMX88afPpEfF_HF-E-1uZKyv8b_TdILi2x8vC3Yi7Q7yzHn2fR6Bkl2yn-ZxPqmsTfV3f-H_VQwMgk7jYEukVCA";
+    let (_rest, att) = attachment(cesr_attachment.as_bytes()).unwrap();
+    assert!(matches!(att, Attachment::Frame(_)));
+
 }

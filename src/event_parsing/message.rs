@@ -67,7 +67,7 @@ pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
             envelope: None,
             attachments,
         }))
-    };
+    }
 
     #[cfg(feature = "query")]
     fn get_envelope(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
