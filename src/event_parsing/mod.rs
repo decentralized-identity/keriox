@@ -240,33 +240,6 @@ fn signed_message(mut des: SignedEventData) -> Result<Message, Error> {
     }
 }
 
-// pub fn signed_event_stream_validate(s: &[u8]) -> nom::IResult<&[u8], IdentifierState> {
-//     let (rest, id) = fold_many1(
-//         signed_message,
-//         Ok(IdentifierState::default()),
-//         |acc, next| match next {
-//             Deserialized::Event(e) => {
-//                 let new_state = acc?
-//                     .apply(&e.deserialized_event)
-//                     .map_err(|_| nom::Err::Error((s, ErrorKind::Verify)))?;
-//                 if new_state
-//                     .current
-//                     .verify(&e.deserialized_event.serialize().unwrap(), &e.signatures)
-//                     .map_err(|_| nom::Err::Error((s, ErrorKind::Verify)))?
-//                 {
-//                     Ok(new_state)
-//                 } else {
-//                     Err(nom::Err::Error((s, ErrorKind::Verify)))
-//                 }
-//             }
-//             // TODO this probably should not just skip non-events
-//             _ => acc,
-//         },
-//     )(s)?;
-
-//     Ok((rest, id?))
-// }
-
 #[test]
 fn test_stream1() {
     use crate::event_parsing;
