@@ -12,7 +12,7 @@ use crate::event_message::serialization_info::SerializationInfo;
 
 use crate::{event::{Event, EventMessage}, event_parsing::{Attachment, SignedEventData, attachment::attachment}}; 
 #[cfg(feature = "query")]
-use crate::query::{Envelope, IdData};
+use crate::query::Envelope;
 use rmp_serde as serde_mgpk;
 
 
@@ -45,8 +45,8 @@ pub fn message(s: &[u8]) -> nom::IResult<&[u8], EventMessage<Event>> {
 }
 
 #[cfg(feature = "query")]
-pub fn envelope(s: &[u8]) -> nom::IResult<&[u8], EventMessage<Envelope<IdData>>> {
-    alt((json_message::<Envelope<IdData>>, cbor_message::<Envelope<IdData>>, mgpk_message::<Envelope<IdData>>))(s).map(|d| (d.0, d.1))
+pub fn envelope(s: &[u8]) -> nom::IResult<&[u8], EventMessage<Envelope>> {
+    alt((json_message::<Envelope>, cbor_message::<Envelope>, mgpk_message::<Envelope>))(s).map(|d| (d.0, d.1))
 }
 
 pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {

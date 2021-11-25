@@ -9,7 +9,7 @@ use crate::event_parsing::payload_size::PayloadType;
 use crate::prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix};
 
 #[cfg(feature = "query")]
-use crate::query::{Envelope, IdData};
+use crate::query::Envelope;
 
 use crate::{error::Error, event::event_data::EventData};
 
@@ -119,7 +119,7 @@ impl Attachment {
 pub struct SignedEventData {
     pub deserialized_event: Option<EventMessage<Event>>,
     #[cfg(feature = "query")]
-    pub envelope: Option<EventMessage<Envelope<IdData>>>,
+    pub envelope: Option<EventMessage<Envelope>>,
     pub attachments: Vec<Attachment>,
 }
 
