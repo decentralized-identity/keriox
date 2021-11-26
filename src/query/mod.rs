@@ -1,4 +1,4 @@
-use crate::prefix::{AttachedSignaturePrefix, IdentifierPrefix};
+use crate::{event::EventMessage, prefix::{AttachedSignaturePrefix, IdentifierPrefix}};
 use chrono::{DateTime, FixedOffset};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
@@ -29,7 +29,7 @@ impl Serialize for Envelope {
                 em.serialize_field("t", "qry")?;
                 em.serialize_field("dt", &self.timestamp)?;
                 em.serialize_field("r", &self.route)?;
-			    em.serialize_field("rr", &qry_data.replay_route)?;
+			    em.serialize_field("rr", &qry_data.reply_route)?;
                 em.serialize_field("q", &qry_data.data)?;
             }
         };
@@ -46,14 +46,14 @@ pub enum MessageType {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SignedEnvelope {
-    pub envelope: Envelope,
+    pub envelope: EventMessage<Envelope>,
     pub signer: IdentifierPrefix,
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
 
 impl SignedEnvelope {
     pub fn new(
-        envelope: Envelope,
+        envelope: EventMessage<Envelope>,
         signer: IdentifierPrefix,
         signatures: Vec<AttachedSignaturePrefix>,
     ) -> Self {

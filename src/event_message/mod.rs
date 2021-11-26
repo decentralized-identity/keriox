@@ -100,15 +100,15 @@ impl From<EventMessage<Event>> for TimestampedEventMessage {
     }
 }
 
-impl EventMessage<Event> {
-    pub fn new(event: Event, format: SerializationFormats) -> Result<Self, Error> {
+impl<T: Clone + Serialize> EventMessage<T> {
+    pub fn new(event: T, format: SerializationFormats) -> Result<Self, Error> {
         Ok(Self {
             serialization_info: SerializationInfo::new(format, Self::get_size(&event, format)?),
             event,
         })
     }
 
-    fn get_size(event: &Event, format: SerializationFormats) -> Result<usize, Error> {
+    fn get_size(event: &T, format: SerializationFormats) -> Result<usize, Error> {
         Ok(Self {
             serialization_info: SerializationInfo::new(format, 0),
             event: event.clone(),
@@ -128,7 +128,9 @@ impl EventMessage<Event> {
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         self.serialization().encode(self)
     }
+}
 
+impl EventMessage<Event> {
     pub fn sign(
         &self,
         sigs: Vec<AttachedSignaturePrefix>,

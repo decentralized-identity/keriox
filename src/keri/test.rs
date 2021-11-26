@@ -109,3 +109,70 @@ fn test_direct_mode() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[cfg(feature = "query")]
+#[test]
+fn test_qry() -> Result<(), Error> {
+    use tempfile::Builder;
+
+    use crate::{derivation::self_signing::SelfSigning, event::EventMessage, prefix::{AttachedSignaturePrefix, Prefix}, query::{Envelope, MessageType, SignedEnvelope, query::{IdData, QueryData}}, signer::KeyManager};
+
+    // Create test db and event processor.
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    std::fs::create_dir_all(root.path()).unwrap();
+    // Use one db for both, alice and bob to avoid sending their events between
+    // each other, just have all in one place.
+    let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+
+    let alice_key_manager = Arc::new(Mutex::new(
+        {
+            use crate::signer::CryptoBox;
+            CryptoBox::new()?
+        }
+    ));
+
+    // Init alice.
+    let mut alice = Keri::new(
+        Arc::clone(&db),
+        Arc::clone(&alice_key_manager))?;
+
+    let bob_key_manager =
+    {
+            use crate::signer::CryptoBox;
+            CryptoBox::new()?
+    };
+
+    // Init bob.
+    let mut bob = Keri::new(
+        Arc::clone(&db),
+        Arc::new(Mutex::new(bob_key_manager)))?;
+
+    bob.incept().unwrap();
+    bob.rotate().unwrap();
+
+    let bob_pref = bob.prefix();
+    println!("bobs pref: {}\n", bob_pref.to_str());
+
+    let alice_icp = alice.incept()?;
+    bob.respond(&alice_icp.serialize().unwrap())?;
+    let alice_pref = alice.prefix();
+
+    let vs = "KERI10JSON00011c_".parse()?;
+    let message = MessageType::Qry(QueryData { reply_route: "route".into(), data: IdData {i : bob_pref.to_owned()} });
+    let qry = EventMessage { serialization_info: vs, event: Envelope { timestamp: "2020-08-22T17:50:12.988921+00:00".parse().unwrap(), route: "logs".into(), message }};
+
+    let signature = AttachedSignaturePrefix::new(
+        SelfSigning::Ed25519Sha512,
+        Arc::clone(&alice_key_manager)
+            .lock()
+            .unwrap()
+            .sign(&serde_json::to_vec(&qry).unwrap())?, 
+        0
+    );
+    let s = SignedEnvelope::new(qry, alice_pref.to_owned(), vec![signature]);
+
+    let rep = bob.process_query(s)?;
+    println!("{}", String::from_utf8(rep).unwrap());
+
+    Ok(())
+}

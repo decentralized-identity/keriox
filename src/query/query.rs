@@ -5,7 +5,7 @@ use crate::prefix::IdentifierPrefix;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct QueryData {
     #[serde(rename = "rr")]
-    pub replay_route: String,
+    pub reply_route: String,
 
     #[serde(rename = "q")]
     pub data: IdData,

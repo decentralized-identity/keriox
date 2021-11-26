@@ -27,6 +27,9 @@ use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivat
 #[cfg(feature = "wallet")]
 use universal_wallet::prelude::{Content, UnlockedWallet};
 
+#[cfg(feature = "query")]
+use crate::query::SignedEnvelope;
+
 #[cfg(test)]
 mod test;
 pub struct Keri<K: KeyManager + 'static> {
@@ -452,7 +455,7 @@ impl<K: KeyManager> Keri<K> {
         self.processor.compute_state_at_sn(&seal.prefix, seal.sn)
     }
 
-    fn generate_ntr(&self, message: EventMessage) -> Result<SignedNontransferableReceipt, Error> {
+    fn generate_ntr(&self, message: EventMessage<Event>) -> Result<SignedNontransferableReceipt, Error> {
         let signature;
         let bp;
         match self.key_manager.lock() {
@@ -477,6 +480,26 @@ impl<K: KeyManager> Keri<K> {
             .add_receipt_nt(ntr.clone(), &message.event.prefix)?;
         Ok(ntr)
     }
+
+    #[cfg(feature = "query")]
+    fn process_query(&self, qr: SignedEnvelope) -> Result<Vec<u8>, Error> {
+        let signatures = qr.signatures;
+            // check signatures
+            let kc = self.get_state_for_prefix(&qr.signer)?
+                .ok_or(Error::SemanticError("No identifier in db".into()))?
+                .current;
+            if kc.verify(&qr.envelope.serialize().unwrap(), &signatures)? {
+                // TODO check timestamps
+                // unpack and check database for given id
+                match qr.envelope.event.message {
+                    crate::query::MessageType::Qry(qr) => {
+                        Ok(self.processor.get_kerl(&qr.data.i)?.ok_or(Error::SemanticError("No identifier in db".into()))?)
+                    },
+                }
+            } else {
+                Err(Error::SignatureVerificationError)
+            }
+        }
 }
 
 // Non re-allocating random `String` generator with output length of 10 char string
