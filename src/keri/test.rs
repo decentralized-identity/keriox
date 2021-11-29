@@ -115,7 +115,7 @@ fn test_direct_mode() -> Result<(), Error> {
 fn test_qry() -> Result<(), Error> {
     use tempfile::Builder;
 
-    use crate::{derivation::self_signing::SelfSigning, event::EventMessage, prefix::{AttachedSignaturePrefix, Prefix}, query::{Envelope, MessageType, SignedEnvelope, query::{IdData, QueryData}}, signer::KeyManager};
+    use crate::{derivation::self_signing::SelfSigning, event::EventMessage, prefix::{AttachedSignaturePrefix, Prefix, SelfAddressingPrefix}, query::{Envelope, MessageType, SignedEnvelope, query::{IdData, QueryData}}, signer::KeyManager};
 
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
@@ -159,7 +159,14 @@ fn test_qry() -> Result<(), Error> {
 
     let vs = "KERI10JSON00011c_".parse()?;
     let message = MessageType::Qry(QueryData { reply_route: "route".into(), data: IdData {i : bob_pref.to_owned()} });
-    let qry = EventMessage { serialization_info: vs, event: Envelope { timestamp: "2020-08-22T17:50:12.988921+00:00".parse().unwrap(), route: "logs".into(), message }};
+    let qry = EventMessage { 
+        serialization_info: vs, 
+        event: Envelope { 
+            timestamp: "2020-08-22T17:50:12.988921+00:00".parse().unwrap(), 
+            route: "logs".into(), 
+            message
+        }
+    };
 
     let signature = AttachedSignaturePrefix::new(
         SelfSigning::Ed25519Sha512,

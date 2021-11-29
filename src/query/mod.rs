@@ -2,9 +2,10 @@ use crate::{event::EventMessage, prefix::{AttachedSignaturePrefix, IdentifierPre
 use chrono::{DateTime, FixedOffset};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
-use self::query::QueryData;
+use self::{query::QueryData, reply::ReplyData};
 
 pub mod query;
+pub mod reply;
 
 #[derive(Deserialize, Debug, Clone, PartialEq)]
 pub struct Envelope {
@@ -32,6 +33,13 @@ impl Serialize for Envelope {
 			    em.serialize_field("rr", &qry_data.reply_route)?;
                 em.serialize_field("q", &qry_data.data)?;
             }
+            MessageType::Rpy(ref rpy_data) => {
+                em.serialize_field("t", "rpy")?;
+                em.serialize_field("d", &rpy_data.digest)?;
+                em.serialize_field("dt", &self.timestamp)?;
+                em.serialize_field("r", &self.route)?;
+                em.serialize_field("a", &rpy_data.data)?; 
+            },
         };
         em.end()
     }
@@ -41,7 +49,7 @@ impl Serialize for Envelope {
 #[serde(tag = "t", rename_all = "lowercase")]
 pub enum MessageType {
     Qry(QueryData),
-    // todo Rpy(ReplyData)
+    Rpy(ReplyData)
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -77,4 +85,18 @@ fn test_query_deserialize() {
     let qr = qr.unwrap();
 
     assert_eq!(serde_json::to_string(&qr).unwrap(), input_query);
+}
+
+#[test]
+fn test_reply_deserialize() {
+    use crate::event_message::EventMessage;
+    // From keripy
+    let rpy =  r#"{"v":"KERI10JSON000113_","t":"rpy","d":"El8evbsys_Z2gIEluLw6pr31EYpH6Cu52fjnRN8X8mKc","dt":"2021-01-01T00:00:00.000001+00:00","r":"/end/role/add","a":{"data":"Bsr9jFyYr-wCxJbUJs0smX8UDSDDQUoO4-v_FTApyPvI"}}"#;
+
+    let qr: Result<EventMessage<Envelope>, _> = serde_json::from_str(rpy);
+    assert!(qr.is_ok());
+
+    let qr = qr.unwrap();
+
+    assert_eq!(serde_json::to_string(&qr).unwrap(), rpy);
 }

@@ -495,6 +495,7 @@ impl<K: KeyManager> Keri<K> {
                     crate::query::MessageType::Qry(qr) => {
                         Ok(self.processor.get_kerl(&qr.data.i)?.ok_or(Error::SemanticError("No identifier in db".into()))?)
                     },
+                    crate::query::MessageType::Rpy(_) => todo!(),
                 }
             } else {
                 Err(Error::SignatureVerificationError)
