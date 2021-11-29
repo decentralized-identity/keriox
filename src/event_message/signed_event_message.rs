@@ -2,26 +2,28 @@ use chrono::{DateTime, Local};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use std::cmp::Ordering;
 
-use crate::{
-    error::Error,
-    event::sections::seal::EventSeal,
-    prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix},
-    state::{EventSemantics, IdentifierState},
-};
-
+use crate::{error::Error, event::sections::seal::{EventSeal, SourceSeal}, event_parsing::Attachment, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}, state::{EventSemantics, IdentifierState}};
 use super::serializer::to_string;
-use super::{attachment::Attachment, payload_size::PayloadType, EventMessage};
+
+use super::EventMessage;
+
+#[derive(Clone, Debug)]
+pub enum Message {
+    Event(SignedEventMessage),
+    // Rct's have an alternative appended signature structure,
+    // use SignedNontransferableReceipt and SignedTransferableReceipt
+    NontransferableRct(SignedNontransferableReceipt),
+    TransferableRct(SignedTransferableReceipt),
+}
 
 // KERI serializer should be used to serialize this
 #[derive(Debug, Clone, Deserialize)]
 pub struct SignedEventMessage {
     pub event_message: EventMessage,
     #[serde(skip_serializing)]
-    pub payload_type: PayloadType,
-    #[serde(skip_serializing)]
     pub signatures: Vec<AttachedSignaturePrefix>,
     #[serde(skip_serializing)]
-    pub attachment: Option<Attachment>,
+    pub delegator_seal: Option<SourceSeal>,
 }
 
 impl Serialize for SignedEventMessage {
@@ -34,13 +36,12 @@ impl Serialize for SignedEventMessage {
             let mut em = serializer.serialize_struct("EventMessage", 2)?;
             em.serialize_field("", &self.event_message)?;
             let att_sigs = Attachment::AttachedSignatures(self.signatures.clone());
-            em.serialize_field("-", &att_sigs.to_str())?;
+            em.serialize_field("-", &att_sigs.to_cesr())?;
             em.end()
         // . else - we pack as it is for DB / CBOR purpose
         } else {
-            let mut em = serializer.serialize_struct("SignedEventMessage", 3)?;
+            let mut em = serializer.serialize_struct("SignedEventMessage", 2)?;
             em.serialize_field("event_message", &self.event_message)?;
-            em.serialize_field("payload_type", &self.payload_type)?;
             em.serialize_field("signatures", &self.signatures)?;
             em.end()
         }
@@ -133,15 +134,13 @@ impl Eq for TimestampedSignedEventMessage {}
 impl SignedEventMessage {
     pub fn new(
         message: &EventMessage,
-        payload_type: PayloadType,
         sigs: Vec<AttachedSignaturePrefix>,
-        attachment: Option<Attachment>,
+        delegator_seal: Option<SourceSeal>,
     ) -> Self {
         Self {
             event_message: message.clone(),
-            payload_type,
             signatures: sigs,
-            attachment,
+            delegator_seal
         }
     }
 
@@ -181,19 +180,6 @@ impl SignedTransferableReceipt {
             signatures: sigs,
         }
     }
-
-    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        Ok([
-            &self.body.serialize()?,
-            Attachment::AttachedEventSeal(vec![self.validator_seal.clone()])
-                .to_str()
-                .as_bytes(),
-            Attachment::AttachedSignatures(self.signatures.clone())
-                .to_str()
-                .as_bytes(),
-        ]
-        .concat())
-    }
 }
 
 /// Signed Non-Transferrable Receipt
@@ -214,15 +200,5 @@ impl SignedNontransferableReceipt {
             body: message.clone(),
             couplets,
         }
-    }
-
-    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        Ok([
-            &self.body.serialize()?,
-            Attachment::ReceiptCouplets(self.couplets.clone())
-                .to_str()
-                .as_bytes(),
-        ]
-        .concat())
     }
 }

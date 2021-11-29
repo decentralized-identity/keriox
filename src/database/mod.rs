@@ -1,11 +1,7 @@
-use crate::{
-    event_message::parse::message,
-    prefix::{
+use crate::{event_parsing::message::message, prefix::{
         AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
         SelfSigningPrefix,
-    },
-    state::IdentifierState,
-};
+    }, state::IdentifierState};
 #[cfg(feature = "lmdb")]
 pub mod lmdb;
 
@@ -62,7 +58,7 @@ pub trait EventDatabase {
             let parsed = message(&raw).unwrap().1;
             // apply it to the state
             // TODO avoid .clone()
-            state = match state.clone().apply(&parsed.event_message) {
+            state = match state.clone().apply(&parsed) {
                 Ok(s) => s,
                 // will happen when a recovery has overridden some part of the KEL,
                 // stop processing here

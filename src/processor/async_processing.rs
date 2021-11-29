@@ -7,7 +7,7 @@ use async_std::{channel::Sender, io::{
         BufRead,
         BufReader,
     }, task::{Context, Poll, block_on}};
-use crate::{event_message::{parse::{message, sig_count, version}, payload_size::PayloadType}, keri::Keri, prefix::IdentifierPrefix, signer::KeyManager};
+use crate::{event_parsing::{SignedEventData, attachment::b64_count, message::message, message::version, payload_size::PayloadType}, keri::Keri, prefix::IdentifierPrefix, signer::KeyManager};
 use bitpat::bitpat;
 
 pub type Result<T> = std::result::Result<T, String>;
@@ -92,7 +92,7 @@ where
                                     .map_err(|e| e.to_string())?;
                                 let attachment_size = {
                                     let code = slice_to_string(&buffer[msg_length..msg_length + master_code.master_code_size(false)])?;
-                                    let count = sig_count(code.as_bytes())
+                                    let count = b64_count(code.as_bytes())
                                         .map_err(|e| e.to_string())?.1;
                                     count as usize * master_code.size()
                                 };
@@ -109,10 +109,11 @@ where
                         let response = this.keri.respond_single(sliced_message).map_err(|e| e.to_string())?;
                         // if we can make receipt for event - do it
                         // stream it back
-                        if let Ok(receipt) = this.keri.make_ntr(message(sliced_message).unwrap().1.event_message) {
+                        if let Ok(receipt) = this.keri.make_ntr(message(sliced_message).unwrap().1) {
+                            let rcp: SignedEventData = receipt.into();
                             futures_core::ready!(this.writer.as_mut().poll_write(
                                 cx,
-                                receipt.serialize().as_ref()
+                                rcp.to_cesr().as_ref()
                                     .map_err(|e| e.to_string())?))
                                 .map_err(|e| e.to_string())?;
                         } else {

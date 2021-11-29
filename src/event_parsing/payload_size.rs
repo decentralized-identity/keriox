@@ -1,5 +1,4 @@
-use crate::error::Error;
-use base64::encode_config;
+use crate::{derivation::attached_signature_code::num_to_b64, error::Error};
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt::Display};
 
@@ -205,16 +204,6 @@ impl PayloadType {
     }
 }
 
-pub fn num_to_b64(num: u16) -> String {
-    match num {
-        n if n < 63 => {
-            encode_config([num.to_be_bytes()[1] << 2], base64::URL_SAFE_NO_PAD)[..1].to_string()
-        }
-        n if n < 4095 => encode_config(num.to_be_bytes(), base64::URL_SAFE_NO_PAD)[..2].to_string(),
-        _ => encode_config(num.to_be_bytes(), base64::URL_SAFE_NO_PAD),
-    }
-}
-
 impl TryFrom<&str> for PayloadType {
     type Error = Error;
     fn try_from(data: &str) -> Result<Self, Error> {
@@ -311,16 +300,6 @@ impl Display for PayloadType {
             Self::MZ => f.write_str("-Z"),
         }
     }
-}
-
-#[test]
-fn num_to_b64_test() {
-    assert_eq!("A", num_to_b64(0));
-    assert_eq!("B", num_to_b64(1));
-    assert_eq!("C", num_to_b64(2));
-    assert_eq!("D", num_to_b64(3));
-    assert_eq!("b", num_to_b64(27));
-    assert_eq!("AE", num_to_b64(64));
 }
 
 #[test]

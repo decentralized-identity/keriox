@@ -1,3 +1,4 @@
+
 use serde::{Deserialize, Serialize};
 
 use crate::{derivation::self_addressing::SelfAddressing, error::Error, prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfAddressingPrefix}};
@@ -264,18 +265,20 @@ fn test_threshold() -> Result<(), Error> {
 #[test]
 fn test_verify() -> Result<(), Error> {
     use crate::event::event_data::EventData;
-    use crate::event_message::parse;
-    use crate::event_message::parse::Deserialized;
+    use crate::event_message::signed_event_message::Message;
+    use crate::event_parsing::message::signed_message; 
+    use std::convert::TryFrom;
 
     // test data taken from keripy
     // (keripy/tests/core/test_weighted_threshold.py::test_weighted)
     let ev = br#"{"v":"KERI10JSON00015b_","i":"EX0WJtv6vc0IWzOqa92Pv9v9pgs1f0BfIVrSch648Zf0","s":"0","t":"icp","kt":["1/2","1/2","1/2"],"k":["DK4OJI8JOr6oEEUMeSF_X-SbKysfwpKwW-ho5KARvH5c","D1RZLgYke0GmfZm-CH8AsW4HoTU4m-2mFgu8kbwp8jQU","DBVwzum-jPfuUXUcHEWdplB4YcoL3BWGXK0TMoF_NeFU"],"n":"EhJGhyJQTpSlZ9oWfQT-lHNl1woMazLC42O89fRHocTI","bt":"0","b":[],"c":[],"a":[]}-AADAAKWMK8k4Po2A0rBrUBjBom73DfTCNg_biwR-_LWm6DMHZHGDfCuOmEyR8sEdp7cPxhsavq4istIZ_QQ42yyUcDAABeTClYkN-yjbW3Kz3ot6MvAt5Se-jmcjhu-Cfsv4m_GKYgc_qwel1SbAcqF0TiY0EHFdjNKvIkg3q19KlhSbuBgACA6QMnsnZuy66xrZVg3c84mTodZCEvOFrAIDQtm8jeXeCTg7yFauoQECZyNIlUnnxVHuk2_Fqi5xK_Lu9Pt76Aw"#;
-    let signed_msg = parse::signed_message(ev).unwrap();
-    match signed_msg.1 {
-        Deserialized::Event(ref e) => {
-            if let EventData::Icp(icp) = e.to_owned().deserialized_event.event_message.event.event_data {
+    let parsed = signed_message(ev).unwrap().1;
+    let signed_msg = Message::try_from(parsed).unwrap();
+    match signed_msg {
+        Message::Event(ref e) => {
+            if let EventData::Icp(icp) = e.to_owned().event_message.event.event_data {
                 let kc = icp.key_config;
-                let msg = e.deserialized_event.event_message.serialize()?;
+                let msg = e.event_message.serialize()?;
                 assert!(kc.verify(&msg, &e.signatures)?);
             }
         }
@@ -283,12 +286,13 @@ fn test_verify() -> Result<(), Error> {
     };
     
     let ev = br#"{"v":"KERI10JSON0001fe_","i":"EX0WJtv6vc0IWzOqa92Pv9v9pgs1f0BfIVrSch648Zf0","s":"4","t":"rot","p":"EVfMO5GK8tg4KE8XCelX1s_TG_Hqr_kzb3ghIBYvzC6U","kt":[["1/2","1/2","1/2"],["1/1","1/1"]],"k":["DToUWoemnetqJoLFIqDI7lxIJEfF0W7xG5ZlqAseVUQc","Drz-IZjko61q-sPMDIW6n-0NGFubbXiZhzWZrO_BZ0Wc","DiGwL3hjQqiUgQlFPeA6kRR1EBXX0vSLm9b6QhPS8IkQ","Dxj5pcStgZ6CbQ2YktNaj8KLE_g9YAOZF6AL9fyLcWQw","DE5zr5eH8EUVQXyAaxWfQUWkGCId-QDCvvxMT77ibj2Q"],"n":"E3in3Z14va0kk4Wqd3vcCAojKNtQq7ZTrQaavR8x0yu4","bt":"0","br":[],"ba":[],"a":[]}-AAFAAdxx4UfoNYdXckLY9nSYvqYLJzvIRhixshBbqkQ6uwvqaVmwPqmvck0V9xl5x3ssVclasm8Ga3FTkcbmbV2jXDgABBWUhku-qDq8wYn5XMQuKzidAsA6bth8-EsCx9WwTIqWBR-AecW-3X1haAyJshqplDsS9MnZfVgmSHokwdLnRCQACp2tB0pFRv_C7nUXPf9rFKvlWUllrsY6Y1_F4bAOMvyCU-PES4HwyUQv3kQnLxEqnf0fbOYdHJNGosXi-UqL9BAADW89YpsS5m3IASAtXvXEPez-0y11JRP8bAiUUBdIxGB9ms79jPZnQtF3045byf3m0Dvi91Y9d4sh-xkzZ15v9DAAE6QR9qNXnHXLisg4Mbadav9AdMjS4uz6jNG1AL6UCa7P90Y53v1V6VRaOPu_RTWXcXYRGqA9BHJ2rLNYWJTJTBA"#;
-    let signed_msg = parse::signed_message(ev).unwrap();
-    match signed_msg.1 {
-        Deserialized::Event(ref e) => {
-            if let EventData::Icp(icp) = e.to_owned().deserialized_event.event_message.event.event_data {
+    let parsed = signed_message(ev).unwrap().1;
+    let signed_msg = Message::try_from(parsed).unwrap();
+    match signed_msg {
+        Message::Event(ref e) => {
+            if let EventData::Icp(icp) = e.to_owned().event_message.event.event_data {
                 let kc = icp.key_config;
-                let msg = e.deserialized_event.event_message.serialize()?;
+                let msg = e.event_message.serialize()?;
                 assert!(kc.verify(&msg, &e.signatures)?);
             }
         }

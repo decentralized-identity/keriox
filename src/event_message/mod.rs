@@ -1,7 +1,4 @@
-pub mod attachment;
 pub mod event_msg_builder;
-pub mod parse;
-pub mod payload_size;
 pub mod serialization_info;
 pub mod serializer;
 pub mod signed_event_message;
@@ -13,6 +10,7 @@ use crate::{
     event::{
         event_data::{DummyEvent, EventData},
         Event,
+        sections::seal::SourceSeal,
     },
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
     state::{EventSemantics, IdentifierState},
@@ -21,12 +19,7 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use serialization_info::*;
 
-use self::{
-    attachment::Attachment,
-    event_msg_builder::{EventMsgBuilder, EventType},
-    payload_size::PayloadType,
-    signed_event_message::SignedEventMessage,
-};
+use self::{event_msg_builder::{EventMsgBuilder, EventType}, signed_event_message::SignedEventMessage};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct EventMessage {
@@ -138,11 +131,10 @@ impl EventMessage {
 
     pub fn sign(
         &self,
-        payload_type: PayloadType,
         sigs: Vec<AttachedSignaturePrefix>,
-        attachment: Option<Attachment>,
+        delegator_seal: Option<SourceSeal>,
     ) -> SignedEventMessage {
-        SignedEventMessage::new(self, payload_type, sigs, attachment)
+        SignedEventMessage::new(self, sigs, delegator_seal)
     }
 }
 
@@ -319,7 +311,7 @@ mod tests {
 
         assert!(pref0.verify(&ser, &attached_sig.signature)?);
 
-        let signed_event = icp_m.sign(PayloadType::MA, vec![attached_sig], None);
+        let signed_event = icp_m.sign( vec![attached_sig], None);
 
         let s_ = IdentifierState::default();
 
@@ -402,7 +394,7 @@ mod tests {
 
         assert!(sig_pref_0.verify(&serialized, &attached_sig.signature)?);
 
-        let signed_event = icp.sign(PayloadType::MA, vec![attached_sig], None);
+        let signed_event = icp.sign(vec![attached_sig], None);
 
         let s_ = IdentifierState::default();
 

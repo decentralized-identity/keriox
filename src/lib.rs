@@ -9,3 +9,4 @@ pub mod processor;
 pub mod signer;
 pub mod state;
 pub mod keys;
+pub mod event_parsing;

@@ -5,12 +5,13 @@ use crate::{
         self_signing::SelfSigning, DerivationCode,
     },
     keys::PublicKey,
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{
+        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
+        SelfSigningPrefix,
+    },
 };
 use base64::URL_SAFE;
 use nom::{bytes::complete::take, error::ErrorKind};
-
-use super::SelfAddressingPrefix;
 
 // TODO this could be a lot nicer, but is currently written to be careful and "easy" to follow
 pub fn attached_signature(s: &[u8]) -> nom::IResult<&[u8], AttachedSignaturePrefix> {
@@ -95,7 +96,8 @@ pub fn basic_prefix(s: &[u8]) -> nom::IResult<&[u8], BasicPrefix> {
         .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
 
     let (extra, b) = take(code.derivative_b64_len())(rest)?;
-    let pk = PublicKey::new(base64::decode_config(b.to_vec(), URL_SAFE).unwrap());
+    let pk = PublicKey::new(base64::decode_config(b.to_vec(), URL_SAFE)
+        .map_err(|_| nom::Err::Error((s, ErrorKind::IsNot)))?);
     Ok((extra, code.derive(pk)))
 }
 
@@ -139,7 +141,8 @@ pub fn self_signing_prefix(s: &[u8]) -> nom::IResult<&[u8], SelfSigningPrefix> {
 
     let (extra, b) = take(code.derivative_b64_len())(rest)?;
 
-    let sig = base64::decode_config(b, URL_SAFE).unwrap();
+    let sig = base64::decode_config(b, URL_SAFE)
+    .map_err(|_| nom::Err::Error((s, ErrorKind::IsNot)))?;
     Ok((extra, code.derive(sig)))
 }
 
@@ -166,7 +169,7 @@ pub fn attached_sn(s: &[u8]) -> nom::IResult<&[u8], u64> {
     }
 }
 
-/// extracts Identifier preffx
+/// extracts Identifier prefix
 pub fn prefix(s: &[u8]) -> nom::IResult<&[u8], IdentifierPrefix> {
     let (rest, identifier) = match self_addressing_prefix(s) {
         Ok(sap) => Ok((sap.0, IdentifierPrefix::SelfAddressing(sap.1))),

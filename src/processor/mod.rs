@@ -7,10 +7,10 @@ use crate::{database::sled::SledEventDatabase, derivation::self_addressing::Self
             KeyConfig,
         },
         EventMessage,
-    }, event_message::{attachment::Attachment, parse::{Deserialized, DeserializedSignedEvent}, payload_size::PayloadType, signed_event_message::{
+    }, event_message::{signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
-            TimestampedSignedEventMessage,
-        }}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
+            TimestampedSignedEventMessage, Message
+        }},prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
 
 #[cfg(feature = "async")]
 pub mod async_processing;
@@ -216,11 +216,11 @@ impl EventProcessor {
     /// Process
     ///
     /// Process a deserialized KERI message
-    pub fn process(&self, data: Deserialized) -> Result<Option<IdentifierState>, Error> {
+    pub fn process(&self, data: Message) -> Result<Option<IdentifierState>, Error> {
         match data {
-            Deserialized::Event(e) => self.process_event(e),
-            Deserialized::NontransferableRct(rct) => self.process_witness_receipt(rct),
-            Deserialized::TransferableRct(rct) => self.process_validator_receipt(rct),
+            Message::Event(e) => self.process_event(&e),
+            Message::NontransferableRct(rct) => self.process_witness_receipt(rct),
+            Message::TransferableRct(rct) => self.process_validator_receipt(rct),
         }
     }
 
@@ -236,22 +236,6 @@ impl EventProcessor {
         }
     }
 
-    fn find_source_seal(event: &DeserializedSignedEvent) -> Result<(u64, SelfAddressingPrefix), Error> {
-        match event.attachment.clone().ok_or(Error::SemanticError(
-                "Missing source seal.".into(),
-            ))? {
-                Attachment::SealSourceCouplets(
-                    ref source_seal_list,
-                ) => {
-                    let ss = source_seal_list
-                        .last()
-                        .ok_or(Error::SemanticError("Missing source seal".into()))?;
-                    Ok((ss.sn, ss.digest.clone()))
-                }
-                _ => Err(Error::SemanticError("Missing source seal.".into())),
-            }
-    }
-
     /// Process Event
     ///
     /// Validates a Key Event against the latest state
@@ -260,58 +244,58 @@ impl EventProcessor {
     /// TODO improve checking and handling of errors!
     pub fn process_event(
         &self,
-        event: DeserializedSignedEvent,
+        signed_event: &SignedEventMessage,
     ) -> Result<Option<IdentifierState>, Error> {
         // Log event.
-        let signed_event = SignedEventMessage::new(
-            &event.deserialized_event.event_message,
-            PayloadType::MA,
-            event.signatures.clone(),
-            event.attachment.clone(),
-        );
-        let id = &event.deserialized_event.event_message.event.prefix;
+
+        let id = &signed_event.event_message.event.prefix;
 
         // If delegated event, check its delegator seal.
-        match event
-            .deserialized_event
+        match signed_event
             .event_message
             .event
             .event_data
             .clone()
         {
             EventData::Dip(dip) => {
-                let (sn, dig) = Self::find_source_seal(&event)?;
+                let (sn, dig) = signed_event
+                    .delegator_seal.as_ref()
+                    .map(|seal| (seal.sn, seal.digest.clone()))
+                    .ok_or(Error::SemanticError("Missing source seal".into()))?; 
                 let seal = EventSeal {
                     prefix: dip.delegator,
-                    sn,
+                    sn: sn,
                     event_digest: dig,
                 };
-                self.validate_seal(seal, &event.deserialized_event.raw)
+                self.validate_seal(seal, &signed_event.event_message.serialize()?)
             }
             EventData::Drt(_drt) => {
                 let delegator = self
-                    .compute_state(&event.deserialized_event.event_message.event.prefix)?
+                    .compute_state(&signed_event.event_message.event.prefix)?
                     .ok_or(Error::SemanticError("Missing state of delegated identifier".into()))?
                     .delegator
                     .ok_or(Error::SemanticError("Missing delegator".into()))?;
-                let (sn, dig) = Self::find_source_seal(&event)?;
+                let (sn, dig) = signed_event
+                    .delegator_seal.as_ref()
+                    .map(|seal| (seal.sn, seal.digest.clone()))
+                    .ok_or(Error::SemanticError("Missing source seal".into()))?;
                 let seal = EventSeal {
                     prefix: delegator,
                     sn,
                     event_digest: dig,
                 };
-                self.validate_seal(seal, &event.deserialized_event.raw)
+                self.validate_seal(seal, &signed_event.event_message.serialize()?)
             }
             _ => Ok(()),
         }?;
-        self.apply_to_state(event.deserialized_event.event_message.clone())
+        self.apply_to_state(signed_event.event_message.clone())
             .and_then(|new_state| {
                 // add event from the get go and clean it up on failure later
                 self.db.add_kel_finalized_event(signed_event.clone(), id)?;
                 // match on verification result
                 match new_state
                     .current
-                    .verify(&event.deserialized_event.raw, &event.signatures)
+                    .verify(&signed_event.event_message.serialize()?, &signed_event.signatures)
                     .and_then(|result| {
                         if !result {
                             Err(Error::SignatureVerificationError)
