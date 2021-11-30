@@ -68,11 +68,12 @@ impl EventSemantics for Event {
                 }
             }
         };
-        Ok(IdentifierState {
-            sn: self.sn,
-            prefix: self.prefix.clone(),
-            ..self.event_data.apply_to(state)?
-        })
+        self.event_data
+            .apply_to(IdentifierState {
+                sn: self.sn,
+                prefix: self.prefix.clone(),
+                ..state
+            })
     }
 }
 

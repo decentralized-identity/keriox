@@ -107,7 +107,7 @@ fn test_update_identifier_state(
     // Check if state is updated correctly.
     assert_eq!(new_state.prefix, prefix.clone());
     assert_eq!(new_state.sn, state_data.sn);
-    assert_eq!(new_state.last, sed);
+    assert_eq!(new_state.last, event_msg);
     assert_eq!(new_state.current.public_keys.len(), 1);
     assert_eq!(new_state.current.public_keys[0], current_key_pref);
     assert_eq!(new_state.current.threshold, SignatureThreshold::Simple(1));

@@ -1,5 +1,16 @@
-use crate::{error::Error, event::sections::KeyConfig, prefix::{BasicPrefix, IdentifierPrefix, Prefix}};
+use crate::{error::Error, event::{sections::KeyConfig, EventMessage, Event}, prefix::{BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix}};
 use serde::{Deserialize, Serialize, Serializer};
+
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct LastEstablishmentData {
+	#[serde(rename = "s")]
+	pub(crate) sn: u64,
+	#[serde(rename = "d")]
+	pub(crate) digest: SelfAddressingPrefix,
+	pub(crate) br: Vec<BasicPrefix>,
+	pub(crate) ba: Vec<BasicPrefix>,
+}
 
 /// Identifier State
 ///
@@ -11,7 +22,7 @@ pub struct IdentifierState {
     #[serde(rename = "s")] 
     pub sn: u64,
     #[serde(skip)]
-    pub last: Vec<u8>,
+    pub last: EventMessage<Event>,
     #[serde(flatten)] 
     pub current: KeyConfig,
     #[serde(skip)] 
@@ -22,6 +33,8 @@ pub struct IdentifierState {
     pub witnesses: Vec<BasicPrefix>,
     #[serde(rename = "di", serialize_with = "serialize_default")] 
     pub delegator: Option<IdentifierPrefix>,
+	#[serde(rename = "ee")]
+    pub last_est: LastEstablishmentData,
 }
 
 fn serialize_default<S>(x: &Option<IdentifierPrefix>, s: S) -> Result<S::Ok, S::Error>
