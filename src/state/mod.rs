@@ -1,24 +1,34 @@
-use crate::{
-    error::Error,
-    event::sections::KeyConfig,
-    prefix::{BasicPrefix, IdentifierPrefix},
-};
-use serde::{Deserialize, Serialize};
+use crate::{error::Error, event::sections::KeyConfig, prefix::{BasicPrefix, IdentifierPrefix, Prefix}};
+use serde::{Deserialize, Serialize, Serializer};
 
 /// Identifier State
 ///
 /// represents the accumulated state after applying events, based on section 13 of the paper
 #[derive(Default, PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct IdentifierState {
+    #[serde(rename = "i")] 
     pub prefix: IdentifierPrefix,
+    #[serde(rename = "s")] 
     pub sn: u64,
     #[serde(skip)]
     pub last: Vec<u8>,
+    #[serde(flatten)] 
     pub current: KeyConfig,
+    #[serde(skip)] 
     pub delegates: Vec<IdentifierPrefix>,
+    #[serde(rename = "bt")] 
     pub tally: u64,
+    #[serde(rename = "b")] 
     pub witnesses: Vec<BasicPrefix>,
+    #[serde(rename = "di", serialize_with = "serialize_default")] 
     pub delegator: Option<IdentifierPrefix>,
+}
+
+fn serialize_default<S>(x: &Option<IdentifierPrefix>, s: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    s.serialize_str(&(x.clone().unwrap_or_default()).to_str())
 }
 
 impl IdentifierState {

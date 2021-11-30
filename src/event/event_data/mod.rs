@@ -108,7 +108,7 @@ impl DummyEvent {
         self.serialization_info.kind.encode(&self)
     }
 
-    fn dummy_prefix(derivation: &SelfAddressing) -> String {
+    pub fn dummy_prefix(derivation: &SelfAddressing) -> String {
         std::iter::repeat("#")
             .take(derivation.code_len() + derivation.derivative_b64_len())
             .collect::<String>()

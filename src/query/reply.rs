@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-use crate::prefix::SelfAddressingPrefix;
+use crate::{event::EventMessage, prefix::SelfAddressingPrefix};
+
+use super::key_state_notice::KeyStateNotice;
 
 // {
 //   "v" : "KERI10JSON00011c_",  
@@ -17,12 +19,12 @@ use crate::prefix::SelfAddressingPrefix;
 //   }
 // }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct ReplyData {
 	#[serde(rename = "d")]
     pub digest: SelfAddressingPrefix,
     #[serde(rename = "a")]
-	pub data: Data,
+	pub data: EventMessage<KeyStateNotice>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

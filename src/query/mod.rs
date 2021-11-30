@@ -6,6 +6,7 @@ use self::{query::QueryData, reply::ReplyData};
 
 pub mod query;
 pub mod reply;
+pub mod key_state_notice;
 
 #[derive(Deserialize, Debug, Clone, PartialEq)]
 pub struct Envelope {
