@@ -115,7 +115,7 @@ fn test_direct_mode() -> Result<(), Error> {
 fn test_qry() -> Result<(), Error> {
     use tempfile::Builder;
 
-    use crate::{derivation::self_signing::SelfSigning, event::EventMessage, prefix::{AttachedSignaturePrefix, Prefix, SelfAddressingPrefix}, query::{Envelope, MessageType, SignedEnvelope, query::{IdData, QueryData}}, signer::KeyManager};
+    use crate::{derivation::self_signing::SelfSigning, event::EventMessage, prefix::{AttachedSignaturePrefix, Prefix}, query::{Envelope, MessageType, SignedEnvelope, query::{IdData, QueryData}}, signer::KeyManager};
 
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
