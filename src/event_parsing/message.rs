@@ -58,7 +58,7 @@ pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
             acc.push(item);
             acc
         })(rest)?;
-
+        
     Ok((
         rest,
         SignedEventData {
@@ -220,8 +220,6 @@ fn test_signed_qry() {
     assert!(matches!(se, Err(nom::Err::Incomplete(Needed::Size(1)))));
     let se = signed_message(stream);
     assert!(se.is_ok());
-    
-
 }
 
 #[test]

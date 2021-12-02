@@ -1,10 +1,11 @@
 use crate::{error::Error, event::{sections::KeyConfig, EventMessage, Event}, prefix::{BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix}};
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer, de};
+use serde_hex::{Compact, SerHex};
 
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct LastEstablishmentData {
-	#[serde(rename = "s")]
+	#[serde(rename = "s", with = "SerHex::<Compact>")]
 	pub(crate) sn: u64,
 	#[serde(rename = "d")]
 	pub(crate) digest: SelfAddressingPrefix,
@@ -19,7 +20,7 @@ pub struct LastEstablishmentData {
 pub struct IdentifierState {
     #[serde(rename = "i")] 
     pub prefix: IdentifierPrefix,
-    #[serde(rename = "s")] 
+    #[serde(rename = "s", with = "SerHex::<Compact>")] 
     pub sn: u64,
     #[serde(skip)]
     pub last: EventMessage<Event>,
@@ -27,11 +28,11 @@ pub struct IdentifierState {
     pub current: KeyConfig,
     #[serde(skip)] 
     pub delegates: Vec<IdentifierPrefix>,
-    #[serde(rename = "bt")] 
+    #[serde(rename = "bt", with = "SerHex::<Compact>")] 
     pub tally: u64,
     #[serde(rename = "b")] 
     pub witnesses: Vec<BasicPrefix>,
-    #[serde(rename = "di", serialize_with = "serialize_default")] 
+    #[serde(rename = "di", serialize_with = "serialize_default", deserialize_with = "deserialize_default")] 
     pub delegator: Option<IdentifierPrefix>,
 	#[serde(rename = "ee")]
     pub last_est: LastEstablishmentData,
@@ -42,6 +43,19 @@ where
     S: Serializer,
 {
     s.serialize_str(&(x.clone().unwrap_or_default()).to_str())
+}
+
+// TODO do we want to have empty delegator field in serialized event?
+fn deserialize_default<'de, D>(deserializer: D) -> Result<Option<IdentifierPrefix>, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    let s: &str = de::Deserialize::deserialize(deserializer)?;
+    if s.is_empty() {
+        Ok(None)
+    } else {
+        serde_json::from_str(s).map_err(de::Error::custom)
+    }
 }
 
 impl IdentifierState {

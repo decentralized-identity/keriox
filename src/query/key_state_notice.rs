@@ -1,5 +1,6 @@
-use chrono::{DateTime, FixedOffset, Utc};
-use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
+use chrono::{DateTime, FixedOffset, Utc, SecondsFormat};
+use serde::{de, ser::SerializeStruct, Deserialize, Serialize, Serializer};
+use serde_hex::{Compact, SerHex};
 
 use crate::{
     derivation::self_addressing::SelfAddressing,
@@ -48,10 +49,10 @@ pub struct KeyStateNotice {
     #[serde(flatten)]
     state: IdentifierState,
 
-    #[serde(rename = "f")]
+    #[serde(rename = "f", with = "SerHex::<Compact>")]
     first_seen_sn: u64,
 
-    #[serde(rename = "p")]
+    #[serde(rename = "p", deserialize_with = "deserialize_default")]
     previous: Option<SelfAddressingPrefix>,
 
     #[serde(rename = "dt")]
@@ -65,6 +66,19 @@ pub struct KeyStateNotice {
 
     #[serde(rename = "c")]
     config: Vec<String>,
+}
+
+// TODO do we want to have empty 'p' file in serialized event?
+fn deserialize_default<'de, D>(deserializer: D) -> Result<Option<SelfAddressingPrefix>, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    let s: &str = de::Deserialize::deserialize(deserializer)?;
+    if s.is_empty() {
+        Ok(None)
+    } else {
+        serde_json::from_str(s).map_err(de::Error::custom)
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -103,11 +117,11 @@ impl Serialize for KeyStateNotice {
         };
         let mut em = serializer.serialize_struct("Envelope", 15)?;
         em.serialize_field("i", &self.state.prefix)?;
-        em.serialize_field("s", &self.state.sn)?;
+        em.serialize_field("s", &self.state.sn.to_string())?;
         em.serialize_field("p", &self.previous.clone().unwrap_or_default())?;
         em.serialize_field("d", &digest)?;
-        em.serialize_field("f", &self.first_seen_sn)?;
-        em.serialize_field("dt", &self.timestamp)?;
+        em.serialize_field("f", &self.first_seen_sn.to_string())?;
+        em.serialize_field("dt", &self.timestamp.to_rfc3339_opts(SecondsFormat::Micros, false))?;
         em.serialize_field("et", &self.event_data)?;
         em.serialize_field("kt", &self.state.current.threshold)?;
         em.serialize_field("k", &self.state.current.public_keys)?;
@@ -115,7 +129,7 @@ impl Serialize for KeyStateNotice {
             "n",
             &self.state.current.threshold_key_digest.clone().unwrap(),
         )?;
-        em.serialize_field("bt", &self.state.tally)?;
+        em.serialize_field("bt", &self.state.tally.to_string())?;
         em.serialize_field("b", &self.state.witnesses)?;
         em.serialize_field("c", &self.config)?;
         em.serialize_field("ee", &self.state.last_est)?;

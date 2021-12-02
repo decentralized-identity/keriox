@@ -112,10 +112,10 @@ fn test_direct_mode() -> Result<(), Error> {
 
 #[cfg(feature = "query")]
 #[test]
-fn test_qry() -> Result<(), Error> {
+fn test_qry_rpy() -> Result<(), Error> {
     use tempfile::Builder;
 
-    use crate::{derivation::self_signing::SelfSigning, event::EventMessage, prefix::{AttachedSignaturePrefix, Prefix}, query::{Envelope, MessageType, SignedEnvelope, query::{IdData, QueryData}}, signer::KeyManager};
+    use crate::{derivation::self_signing::SelfSigning, event::EventMessage, prefix::{AttachedSignaturePrefix, Prefix}, query::{Envelope, MessageType, SignedEnvelope, query::{IdData, QueryData}, Route}, signer::KeyManager};
 
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
@@ -153,21 +153,22 @@ fn test_qry() -> Result<(), Error> {
     let bob_pref = bob.prefix();
     println!("bobs pref: {}\n", bob_pref.to_str());
 
-    let alice_icp = alice.incept()?;
-    bob.respond(&alice_icp.serialize().unwrap())?;
+    alice.incept()?;
     let alice_pref = alice.prefix();
 
+    // construct qry message, to ask of bob key state message
     let vs = "KERI10JSON00011c_".parse()?;
     let message = MessageType::Qry(QueryData { reply_route: "route".into(), data: IdData {i : bob_pref.to_owned()} });
     let qry = EventMessage { 
         serialization_info: vs, 
         event: Envelope { 
             timestamp: "2020-08-22T17:50:12.988921+00:00".parse().unwrap(), 
-            route: "logs".into(), 
+            route: Route::Ksn,
             message
         }
     };
 
+    // sign message by alice
     let signature = AttachedSignaturePrefix::new(
         SelfSigning::Ed25519Sha512,
         Arc::clone(&alice_key_manager)
@@ -178,7 +179,8 @@ fn test_qry() -> Result<(), Error> {
     );
     let s = SignedEnvelope::new(qry, alice_pref.to_owned(), vec![signature]);
 
-    let rep = bob.process_query(s)?;
+    // ask bob about bobs's key state notice
+    let rep = bob.process_envelope(s)?;
     println!("{}", String::from_utf8(rep).unwrap());
 
     Ok(())

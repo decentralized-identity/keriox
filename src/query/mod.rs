@@ -1,15 +1,20 @@
 use crate::{
-    event::EventMessage,
-    prefix::{AttachedSignaturePrefix, IdentifierPrefix},
+    derivation::self_addressing::SelfAddressing,
+    event::{event_data::DummyEvent, EventMessage, SerializationFormats},
+    prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix}, error::Error,
 };
-use chrono::{DateTime, FixedOffset};
-use serde::{ser::SerializeStruct, Deserialize, Serialize};
+use chrono::{DateTime, FixedOffset, Utc, SecondsFormat};
+use serde::{
+    ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer, de,
+};
 
-use self::{query::QueryData, reply::ReplyData};
+use self::{key_state_notice::KeyStateNotice, query::QueryData, reply::ReplyData};
 
 pub mod key_state_notice;
 pub mod query;
 pub mod reply;
+
+pub type TimeStamp = DateTime<FixedOffset>;
 
 #[derive(Deserialize, Debug, Clone, PartialEq)]
 pub struct Envelope {
@@ -17,13 +22,45 @@ pub struct Envelope {
     pub timestamp: DateTime<FixedOffset>,
 
     #[serde(rename = "r")]
-    pub route: String,
+    pub route: Route,
 
     #[serde(rename = "t", flatten)]
     pub message: MessageType,
 }
 
-impl Serialize for Envelope {
+pub fn new_reply(
+    ksn: EventMessage<KeyStateNotice>,
+    route: Route,
+    self_addressing: SelfAddressing,
+) -> EventMessage<Envelope> {
+    // To create reply message we need to use dummy string in digest field,
+    // compute digest and update d field.
+    let rpy_data = ReplyData {
+        digest: None,
+        data: ksn.clone(),
+    };
+    let env = Envelope {
+        timestamp: Utc::now().into(),
+        route: route.clone(),
+        message: MessageType::Rpy(rpy_data),
+    };
+    let ev_msg = EventMessage::new(env.clone(), SerializationFormats::JSON).unwrap();
+    let dig = self_addressing.derive(&ev_msg.serialize().unwrap());
+    let version = ev_msg.serialization_info;
+    let rpy_data = ReplyData {
+        digest: Some(dig),
+        data: ksn,
+    };
+    let env = Envelope {
+        message: MessageType::Rpy(rpy_data),
+        ..env
+    };
+    EventMessage {
+        serialization_info: version,
+        event: env,
+    }
+}
+ impl Serialize for Envelope {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -32,15 +69,20 @@ impl Serialize for Envelope {
         match self.message {
             MessageType::Qry(ref qry_data) => {
                 em.serialize_field("t", "qry")?;
-                em.serialize_field("dt", &self.timestamp)?;
+                em.serialize_field("dt", &self.timestamp.to_rfc3339_opts(SecondsFormat::Micros, false))?;
                 em.serialize_field("r", &self.route)?;
                 em.serialize_field("rr", &qry_data.reply_route)?;
                 em.serialize_field("q", &qry_data.data)?;
             }
             MessageType::Rpy(ref rpy_data) => {
+                let digest = match rpy_data.digest {
+                    Some(ref sai) => sai.to_str(),
+                    // TODO shouldn't be set to Blake3_265
+                    None => DummyEvent::dummy_prefix(&SelfAddressing::Blake3_256),
+                };
                 em.serialize_field("t", "rpy")?;
-                em.serialize_field("d", &rpy_data.digest)?;
-                em.serialize_field("dt", &self.timestamp)?;
+                em.serialize_field("d", &digest)?;
+                em.serialize_field("dt", &self.timestamp.to_rfc3339_opts(SecondsFormat::Micros, false))?;
                 em.serialize_field("r", &self.route)?;
                 em.serialize_field("a", &rpy_data.data)?;
             }
@@ -48,6 +90,46 @@ impl Serialize for Envelope {
         em.end()
     }
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Route {
+    Logs,
+    Ksn,
+    ReplyKsn(IdentifierPrefix),
+}
+
+impl Serialize for Route {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&match self {
+            Route::Logs => "logs".into(),
+            Route::Ksn => "ksn".into(),
+            Route::ReplyKsn(id) => ["/ksn/", &id.to_str()].join(""),
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for Route {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        if s.starts_with("/ksn/") {
+            let id: &IdentifierPrefix = &s[5..].parse().unwrap();
+            Ok(Route::ReplyKsn(id.clone()))
+        } else {
+            match &s[..] {
+                "ksn" => Ok(Route::Ksn),
+                "logs" => Ok(Route::Logs),
+                _ => Err(Error::SemanticError("".into())).map_err(de::Error::custom),
+            }
+        }
+    }
+}
+
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(tag = "t", rename_all = "lowercase")]
@@ -80,8 +162,7 @@ impl SignedEnvelope {
 #[test]
 fn test_query_deserialize() {
     use crate::event_message::EventMessage;
-    // From keripy
-    let input_query = r#"{"v":"KERI10JSON00011c_","t":"qry","dt":"2020-08-22T17:50:12.988921+00:00","r":"logs","rr":"log/processor","q":{"i":"EaU6JR2nmwyZ-i0d8JZAoTNZH3ULvYAfSVPzhzS6b5CM"}}"#;
+    let input_query = r#"{"v":"KERI10JSON00011c_","t":"qry","dt":"2020-08-22T17:50:12.988921+00:00","r":"ksn","rr":"route","q":{"i":"DQ0NRLhqsdR2KomXD9l8JWI-03OHAKnQHKEJSNj8qwhE"}}"#;
 
     let qr: Result<EventMessage<Envelope>, _> = serde_json::from_str(input_query);
     assert!(qr.is_ok());
@@ -95,12 +176,12 @@ fn test_query_deserialize() {
 fn test_reply_deserialize() {
     use crate::event_message::EventMessage;
     // From keripy
-    let rpy = r#"{"v":"KERI10JSON000113_","t":"rpy","d":"El8evbsys_Z2gIEluLw6pr31EYpH6Cu52fjnRN8X8mKc","dt":"2021-01-01T00:00:00.000001+00:00","r":"/end/role/add","a":{"data":"Bsr9jFyYr-wCxJbUJs0smX8UDSDDQUoO4-v_FTApyPvI"}}"#;
+    let rpy = r#"{"v":"KERI10JSON000294_","t":"rpy","d":"EPeNPAtRcVjY7lLxl_DZ3qFPb0R0n_6wmGAMgO-u8_YU","dt":"2021-01-01T00:00:00.000000+00:00","r":"/ksn/BFUOWBaJz-sB_6b-_u_P9W8hgBQ8Su9mAtN9cY2sVGiY","a":{"v":"KERI10JSON0001d9_","i":"E4BsxCYUtUx3d6UkDVIQ9Ke3CLQfqWBfICSmjIzkS1u4","s":"0","p":"","d":"EYk4PigtRsCd5W2so98c8r8aeRHoixJK7ntv9mTrZPmM","f":"0","dt":"2021-01-01T00:00:00.000000+00:00","et":"icp","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","bt":"1","b":["BFUOWBaJz-sB_6b-_u_P9W8hgBQ8Su9mAtN9cY2sVGiY"],"c":[],"ee":{"s":"0","d":"EYk4PigtRsCd5W2so98c8r8aeRHoixJK7ntv9mTrZPmM","br":[],"ba":[]},"di":""}}"#;
 
     let qr: Result<EventMessage<Envelope>, _> = serde_json::from_str(rpy);
     assert!(qr.is_ok());
-
     let qr = qr.unwrap();
 
     assert_eq!(serde_json::to_string(&qr).unwrap(), rpy);
 }
+

@@ -28,7 +28,8 @@ use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivat
 use universal_wallet::prelude::{Content, UnlockedWallet};
 
 #[cfg(feature = "query")]
-use crate::query::SignedEnvelope;
+use crate::query::{Route, new_reply, query::QueryData, MessageType, SignedEnvelope};
+
 
 #[cfg(test)]
 mod test;
@@ -482,27 +483,48 @@ impl<K: KeyManager> Keri<K> {
     }
 
     #[cfg(feature = "query")]
-    fn process_query(&self, qr: SignedEnvelope) -> Result<Vec<u8>, Error> {
+    fn process_envelope(&self, qr: SignedEnvelope) -> Result<Vec<u8>, Error> {
         let signatures = qr.signatures;
-            // check signatures
-            let kc = self.get_state_for_prefix(&qr.signer)?
-                .ok_or(Error::SemanticError("No identifier in db".into()))?
-                .current;
-            if kc.verify(&qr.envelope.serialize().unwrap(), &signatures)? {
-                // TODO check timestamps
-                // unpack and check database for given id
-                match qr.envelope.event.message {
-                    crate::query::MessageType::Qry(qr) => {
-                        Ok(self.processor.get_kerl(&qr.data.i)?.ok_or(Error::SemanticError("No identifier in db".into()))?)
-                    },
-                    crate::query::MessageType::Rpy(_) => todo!(),
-                }
-            } else {
-                Err(Error::SignatureVerificationError)
+        // check signatures
+        let kc = self.get_state_for_prefix(&qr.signer)?
+            .ok_or(Error::SemanticError("No identifier in db".into()))?
+            .current;
+        if kc.verify(&qr.envelope.serialize().unwrap(), &signatures)? {
+            // TODO check timestamps
+            // unpack and check what's inside
+            let route = qr.envelope.event.route;
+            match qr.envelope.event.message {
+                MessageType::Qry(qr) => {
+                    self.process_query(route, qr)
+                },
+                MessageType::Rpy(_) => todo!(),
             }
+        } else {
+            Err(Error::SignatureVerificationError)
         }
-}
+    }
 
+    #[cfg(feature = "query")]
+    pub fn process_query(&self, route: Route, qr: QueryData ) -> Result<Vec<u8>, Error> {
+        match route {
+            Route::Logs => {
+                Ok(self.processor.get_kerl(&qr.data.i)?.ok_or(Error::SemanticError("No identifier in db".into()))?)
+            },
+            Route::Ksn => {
+                let i = qr.data.i;
+                // return reply message with ksn inside
+                let state = self.processor
+                    .compute_state(&i)
+                    .unwrap()
+                    .ok_or(Error::SemanticError("No id in database".into()))?;
+                let ksn = EventMessage::new_ksn(state, SerializationFormats::JSON, SelfAddressing::Blake3_256);
+                let rpy = new_reply(ksn, Route::ReplyKsn(self.prefix.clone()), SelfAddressing::Blake3_256);
+                rpy.serialize()
+            },
+            _ => todo!()
+        }
+    }
+}
 // Non re-allocating random `String` generator with output length of 10 char string
 #[cfg(feature = "wallet")]
 fn generate_random_string() -> String {
