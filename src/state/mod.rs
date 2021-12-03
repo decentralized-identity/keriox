@@ -1,4 +1,4 @@
-use crate::{error::Error, event::{sections::KeyConfig, EventMessage, Event}, prefix::{BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix}};
+use crate::{error::Error, event::{sections::KeyConfig, event_data::EventData}, prefix::{BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix}};
 use serde::{Deserialize, Serialize, Serializer, de};
 use serde_hex::{Compact, SerHex};
 
@@ -20,22 +20,73 @@ pub struct LastEstablishmentData {
 pub struct IdentifierState {
     #[serde(rename = "i")] 
     pub prefix: IdentifierPrefix,
+
     #[serde(rename = "s", with = "SerHex::<Compact>")] 
     pub sn: u64,
+    
     #[serde(skip)]
-    pub last: EventMessage<Event>,
+    pub last: Vec<u8>,
+
+    #[serde(rename = "p", deserialize_with = "deserialize_said_default")]
+    pub last_previous: SelfAddressingPrefix,
+    
+    #[serde(rename = "et")]
+    pub last_event_type: Option<EventType>,
+    
     #[serde(flatten)] 
     pub current: KeyConfig,
+    
     #[serde(skip)] 
     pub delegates: Vec<IdentifierPrefix>,
+    
     #[serde(rename = "bt", with = "SerHex::<Compact>")] 
     pub tally: u64,
+    
     #[serde(rename = "b")] 
     pub witnesses: Vec<BasicPrefix>,
+    
     #[serde(rename = "di", serialize_with = "serialize_default", deserialize_with = "deserialize_default")] 
     pub delegator: Option<IdentifierPrefix>,
-	#[serde(rename = "ee")]
+	
+    #[serde(rename = "ee")]
     pub last_est: LastEstablishmentData,
+}
+
+// TODO do we want to have empty 'p' file in serialized event?
+fn deserialize_said_default<'de, D>(deserializer: D) -> Result<SelfAddressingPrefix, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    let s: &str = de::Deserialize::deserialize(deserializer)?;
+    if s.is_empty() {
+        Ok(SelfAddressingPrefix::default())
+    } else {
+        serde_json::from_str(s).map_err(de::Error::custom)
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum EventType {
+    Icp,
+    Rot,
+    Ixn,
+    Dip,
+    Drt,
+    Rct,
+}
+
+impl From<&EventData> for EventType {
+    fn from(ed: &EventData) -> Self {
+        match ed {
+            EventData::Icp(_) => EventType::Icp,
+            EventData::Rot(_) => EventType::Rot,
+            EventData::Ixn(_) => EventType::Ixn,
+            EventData::Dip(_) => EventType::Dip,
+            EventData::Drt(_) => EventType::Drt,
+            EventData::Rct(_) => EventType::Rct,
+        }
+    }
 }
 
 fn serialize_default<S>(x: &Option<IdentifierPrefix>, s: S) -> Result<S::Ok, S::Error>

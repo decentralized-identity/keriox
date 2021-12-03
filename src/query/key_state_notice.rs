@@ -47,13 +47,10 @@ use crate::{
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct KeyStateNotice {
     #[serde(flatten)]
-    state: IdentifierState,
+    pub state: IdentifierState,
 
     #[serde(rename = "f", with = "SerHex::<Compact>")]
     first_seen_sn: u64,
-
-    #[serde(rename = "p", deserialize_with = "deserialize_default")]
-    previous: Option<SelfAddressingPrefix>,
 
     #[serde(rename = "dt")]
     timestamp: DateTime<FixedOffset>,
@@ -61,48 +58,8 @@ pub struct KeyStateNotice {
     #[serde(rename = "d")]
     digest: Option<SelfAddressingPrefix>, // digest of latest (current) event
 
-    #[serde(rename = "et")]
-    event_data: EventType,
-
     #[serde(rename = "c")]
     config: Vec<String>,
-}
-
-// TODO do we want to have empty 'p' file in serialized event?
-fn deserialize_default<'de, D>(deserializer: D) -> Result<Option<SelfAddressingPrefix>, D::Error>
-where
-    D: de::Deserializer<'de>,
-{
-    let s: &str = de::Deserialize::deserialize(deserializer)?;
-    if s.is_empty() {
-        Ok(None)
-    } else {
-        serde_json::from_str(s).map_err(de::Error::custom)
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-enum EventType {
-    Icp,
-    Rot,
-    Ixn,
-    Dip,
-    Drt,
-    Rct,
-}
-
-impl From<&EventData> for EventType {
-    fn from(ed: &EventData) -> Self {
-        match ed {
-            EventData::Icp(_) => EventType::Icp,
-            EventData::Rot(_) => EventType::Rot,
-            EventData::Ixn(_) => EventType::Ixn,
-            EventData::Dip(_) => EventType::Dip,
-            EventData::Drt(_) => EventType::Drt,
-            EventData::Rct(_) => EventType::Rct,
-        }
-    }
 }
 
 impl Serialize for KeyStateNotice {
@@ -118,11 +75,11 @@ impl Serialize for KeyStateNotice {
         let mut em = serializer.serialize_struct("Envelope", 15)?;
         em.serialize_field("i", &self.state.prefix)?;
         em.serialize_field("s", &self.state.sn.to_string())?;
-        em.serialize_field("p", &self.previous.clone().unwrap_or_default())?;
+        em.serialize_field("p", &self.state.last_previous.clone())?;
         em.serialize_field("d", &digest)?;
         em.serialize_field("f", &self.first_seen_sn.to_string())?;
         em.serialize_field("dt", &self.timestamp.to_rfc3339_opts(SecondsFormat::Micros, false))?;
-        em.serialize_field("et", &self.event_data)?;
+        em.serialize_field("et", &self.state.last_event_type)?;
         em.serialize_field("kt", &self.state.current.threshold)?;
         em.serialize_field("k", &self.state.current.public_keys)?;
         em.serialize_field(
@@ -145,24 +102,12 @@ impl EventMessage<KeyStateNotice> {
         derivation: SelfAddressing,
     ) -> Self {
         let dt: DateTime<FixedOffset> = DateTime::from(Utc::now());
-        let previous = match state.last.event.event_data.clone() {
-            EventData::Icp(_) => None,
-            EventData::Rot(rot) => Some(rot.previous_event_hash),
-            EventData::Ixn(ixn) => Some(ixn.previous_event_hash),
-            EventData::Dip(_) => None,
-            EventData::Drt(drt) => Some(drt.previous_event_hash),
-            EventData::Rct(_) => todo!(),
-        };
-
-        let event_data = EventType::from(&state.last.event.event_data);
 
         let ksn = KeyStateNotice {
             timestamp: dt,
             state,
-            previous,
             digest: None,
             first_seen_sn: 0,
-            event_data,
             config: vec![],
         };
         // Compute digest of event with dummy digest

@@ -38,7 +38,7 @@ impl EventSemantics for RotationEvent {
             let last_est = LastEstablishmentData { 
                 sn: state.sn, 
                 // TODO shouldn't be set to Blake3
-                digest: SelfAddressing::Blake3_256.derive(&state.last.serialize()?), 
+                digest: SelfAddressing::Blake3_256.derive(&state.last), 
                 br: self.witness_config.graft.clone(), 
                 ba: self.witness_config.prune.clone(), 
             };

@@ -147,7 +147,7 @@ impl EventSemantics for EventMessage<Event> {
             EventData::Icp(_) | EventData::Dip(_) => {
                 if verify_identifier_binding(self)? {
                     self.event.apply_to(IdentifierState {
-                        last: self.clone(),
+                        last: self.serialize()?,
                         ..state
                     })
                 } else {
@@ -167,9 +167,9 @@ impl EventSemantics for EventMessage<Event> {
                     // to the state. It will return EventOutOfOrderError or
                     // EventDuplicateError in that cases.
                     self.event.apply_to(state.clone()).and_then(|next_state| {
-                        if rot.previous_event_hash.verify_binding(&state.last.serialize()?) {
+                        if rot.previous_event_hash.verify_binding(&state.last) {
                             Ok(IdentifierState {
-                                last: self.clone(),
+                                last: self.serialize()?,
                                 ..next_state
                             })
                         } else {
@@ -185,9 +185,9 @@ impl EventSemantics for EventMessage<Event> {
                     Err(Error::SemanticError(
                         "Applying delegated rotation to non-delegated state.".into(),
                     ))
-                } else if drt.previous_event_hash.verify_binding(&state.last.serialize()?) {
+                } else if drt.previous_event_hash.verify_binding(&state.last) {
                     Ok(IdentifierState {
-                        last: self.clone(),
+                        last: self.serialize()?,
                         ..next_state
                     })
                 } else {
@@ -198,9 +198,9 @@ impl EventSemantics for EventMessage<Event> {
             }),
             EventData::Ixn(ref inter) => {
                 self.event.apply_to(state.clone()).and_then(|next_state| {
-                    if inter.previous_event_hash.verify_binding(&state.last.serialize()?) {
+                    if inter.previous_event_hash.verify_binding(&state.last) {
                         Ok(IdentifierState {
-                            last: self.clone(),
+                            last: self.serialize()?,
                             ..next_state
                         })
                     } else {
@@ -323,7 +323,7 @@ mod tests {
 
         assert_eq!(s0.prefix, IdentifierPrefix::Basic(pref0.clone()));
         assert_eq!(s0.sn, 0);
-        assert_eq!(s0.last, icp_m);
+        assert_eq!(s0.last, icp_m.serialize()?);
         assert_eq!(s0.current.public_keys.len(), 1);
         assert_eq!(s0.current.public_keys[0], pref0);
         assert_eq!(s0.current.threshold, SignatureThreshold::Simple(1));
@@ -406,7 +406,7 @@ mod tests {
 
         assert_eq!(s0.prefix, icp.event.prefix);
         assert_eq!(s0.sn, 0);
-        assert_eq!(s0.last, icp);
+        assert_eq!(s0.last, icp.serialize()?);
         assert_eq!(s0.current.public_keys.len(), 2);
         assert_eq!(s0.current.public_keys[0], sig_pref_0);
         assert_eq!(s0.current.public_keys[1], enc_pref_0);

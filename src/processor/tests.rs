@@ -344,7 +344,7 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
         .unwrap();
     assert_eq!(state_at_sn.sn, event_seal.sn);
     assert_eq!(state_at_sn.prefix, event_seal.prefix);
-    let ev_dig = event_seal.event_digest.derivation.derive(&state_at_sn.last.serialize()?);
+    let ev_dig = event_seal.event_digest.derivation.derive(&state_at_sn.last);
     assert_eq!(event_seal.event_digest, ev_dig);
 
     Ok(())

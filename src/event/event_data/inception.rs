@@ -71,7 +71,7 @@ impl EventSemantics for InceptionEvent {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         let last_est = LastEstablishmentData { 
             sn: state.sn, 
-            digest: SelfAddressing::Blake3_256.derive(&state.last.serialize()?), 
+            digest: SelfAddressing::Blake3_256.derive(&state.last), 
             br: vec![], 
             ba: vec![] 
         };
