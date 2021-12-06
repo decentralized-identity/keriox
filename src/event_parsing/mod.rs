@@ -11,6 +11,8 @@ use crate::prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Pref
 #[cfg(feature = "query")]
 use crate::query::Envelope;
 
+use crate::query::query::QueryData;
+use crate::query::reply::ReplyData;
 use crate::{error::Error, event::event_data::EventData};
 
 pub mod attachment;
@@ -119,8 +121,15 @@ impl Attachment {
 pub struct SignedEventData {
     pub deserialized_event: Option<EventMessage<Event>>,
     #[cfg(feature = "query")]
-    pub envelope: Option<EventMessage<Envelope>>,
+    pub envelope: Option<QueryEvent>,
     pub attachments: Vec<Attachment>,
+}
+
+#[cfg(feature = "query")]
+#[derive(Clone, Debug, PartialEq)]
+pub enum QueryEvent {
+    Qry(EventMessage<Envelope<QueryData>>),
+    Rpy(EventMessage<Envelope<ReplyData>>),
 }
 
 impl SignedEventData {

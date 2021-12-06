@@ -12,6 +12,8 @@ use crate::event_message::serialization_info::SerializationInfo;
 
 use crate::{event::{Event, EventMessage}, event_parsing::{Attachment, SignedEventData, attachment::attachment}}; 
 #[cfg(feature = "query")]
+use serde::Serialize;
+use super::QueryEvent;
 use crate::query::Envelope;
 use rmp_serde as serde_mgpk;
 
@@ -45,8 +47,8 @@ pub fn message(s: &[u8]) -> nom::IResult<&[u8], EventMessage<Event>> {
 }
 
 #[cfg(feature = "query")]
-pub fn envelope(s: &[u8]) -> nom::IResult<&[u8], EventMessage<Envelope>> {
-    alt((json_message::<Envelope>, cbor_message::<Envelope>, mgpk_message::<Envelope>))(s).map(|d| (d.0, d.1))
+pub fn envelope<'a, D: Serialize + Deserialize<'a>>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<Envelope<D>>> {
+    alt((json_message::<Envelope<D>>, cbor_message::<Envelope<D>>, mgpk_message::<Envelope<D>>))(s).map(|d| (d.0, d.1))
 }
 
 pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
@@ -70,8 +72,13 @@ pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
     }
 
     #[cfg(feature = "query")]
-    fn get_envelope(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
-        let (rest, envelope) = envelope(s)?;
+    fn get_query_event(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
+        use crate::query::{query::QueryData, reply::ReplyData};
+
+        let (rest, envelope) = match envelope::<QueryData>(s) {
+            Ok((rest, qr)) => (rest, QueryEvent::Qry(qr)),
+            Err(_) => envelope::<ReplyData>(s).map(|(rest, rpy)| (rest, QueryEvent::Rpy(rpy)))?,
+        };
         let (rest, attachments): (&[u8], Vec<Attachment>) =
         fold_many0(attachment, vec![], |mut acc: Vec<_>, item| {
             acc.push(item);
@@ -92,7 +99,7 @@ pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
         Ok((rest, ev)) => Ok((rest, ev)),
         #[cfg(feature = "query")]
         Err(_e) => {
-            get_envelope(s)
+            get_query_event(s)
         },
         #[cfg(not(feature = "query"))]
         Err(e) => {
@@ -200,11 +207,13 @@ fn test_event() {
 #[cfg(feature = "query")]
 #[test]
 fn test_qry() {
+    use crate::query::query::QueryData;
+
     let qry_event = r#"{"v":"KERI10JSON00011c_","t":"qry","dt":"2020-08-22T17:50:12.988921+00:00","r":"logs","rr":"log/processor","q":{"i":"EaU6JR2nmwyZ-i0d8JZAoTNZH3ULvYAfSVPzhzS6b5CM"}}"#;
     let rest = "something more";
     let stream = [qry_event, rest].join("");
 
-    let (extra, event) = envelope(stream.as_bytes()).unwrap();
+    let (extra, event): (_, EventMessage<Envelope<QueryData>>) = envelope(stream.as_bytes()).unwrap();
 
     assert_eq!(serde_json::to_string(&event).unwrap(), qry_event);
     assert_eq!(rest.as_bytes(), extra);

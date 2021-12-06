@@ -54,12 +54,12 @@ fn test_direct_mode() -> Result<(), Error> {
     // Init bob.
     let mut bob = Keri::new(Arc::clone(&db), bob_key_manager.clone())?;
 
-    bob.incept().unwrap();
+    bob.incept(None).unwrap();
     let bob_state = bob.get_state()?;
     assert_eq!(bob_state.unwrap().sn, 0);
 
     // Get alice's inception event.
-    let alice_incepted = alice.incept()?;
+    let alice_incepted = alice.incept(None)?;
     let mut msg_to_bob = alice_incepted.serialize()?;
 
     // Send it to bob.
@@ -115,7 +115,7 @@ fn test_direct_mode() -> Result<(), Error> {
 fn test_qry_rpy() -> Result<(), Error> {
     use tempfile::Builder;
 
-    use crate::{derivation::self_signing::SelfSigning, event::EventMessage, prefix::{AttachedSignaturePrefix, Prefix}, query::{Envelope, MessageType, SignedEnvelope, query::{IdData, QueryData}, Route}, signer::KeyManager};
+    use crate::{derivation::{self_signing::SelfSigning, basic::Basic}, event::{EventMessage, SerializationFormats}, prefix::{AttachedSignaturePrefix, Prefix, BasicPrefix, SelfSigningPrefix}, query::{Envelope, SignedQuery, query::{IdData, QueryData}, Route, key_state_notice::KeyStateNotice, reply::ReplyData, SignedReply}, signer::KeyManager, keys::PublicKey};
 
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
@@ -123,6 +123,30 @@ fn test_qry_rpy() -> Result<(), Error> {
     // Use one db for both, alice and bob to avoid sending their events between
     // each other, just have all in one place.
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    std::fs::create_dir_all(root.path()).unwrap();
+    let db2 = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    std::fs::create_dir_all(root.path()).unwrap();
+    let witness_db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+    let witness_key_manager = Arc::new(Mutex::new(
+        {
+            use crate::signer::CryptoBox;
+            CryptoBox::new()?
+        }
+    ));
+
+    let mut witness = Keri::new(
+        Arc::clone(&witness_db),
+        Arc::clone(&witness_key_manager))?;
+    witness.incept(None)?;
+    
+    println!("witness: {}", witness.prefix().to_str());
+    let witness_prefix = match witness.prefix() {
+        crate::prefix::IdentifierPrefix::Basic(bp) => bp.clone(),
+        _ => BasicPrefix::new(Basic::Ed25519, PublicKey::new(vec![])),
+    };
 
     let alice_key_manager = Arc::new(Mutex::new(
         {
@@ -136,52 +160,64 @@ fn test_qry_rpy() -> Result<(), Error> {
         Arc::clone(&db),
         Arc::clone(&alice_key_manager))?;
 
-    let bob_key_manager =
+    let bob_key_manager = Arc::new( Mutex::new(
     {
             use crate::signer::CryptoBox;
             CryptoBox::new()?
-    };
+    }));
 
     // Init bob.
     let mut bob = Keri::new(
-        Arc::clone(&db),
-        Arc::new(Mutex::new(bob_key_manager)))?;
+        Arc::clone(&db2),
+        Arc::clone(&bob_key_manager))?;
 
-    bob.incept().unwrap();
-    bob.rotate().unwrap();
+    let bob_icp = bob.incept(None).unwrap();
+    // bob.rotate().unwrap();
 
     let bob_pref = bob.prefix();
     println!("bobs pref: {}\n", bob_pref.to_str());
 
-    alice.incept()?;
+    let alice_icp = alice.incept(Some(vec![witness_prefix.clone()]))?;
+    // send alices icp to witness
+    let rcps = witness.respond(&alice_icp.serialize()?)?;
+    // send bobs icp to witness to have his keys
+    let rcps = witness.respond(&bob_icp.serialize()?)?;
+
+    println!("\nrcps: {}\n", String::from_utf8(rcps).unwrap());
     let alice_pref = alice.prefix();
 
-    // construct qry message, to ask of bob key state message
-    let vs = "KERI10JSON00011c_".parse()?;
-    let message = MessageType::Qry(QueryData { reply_route: "route".into(), data: IdData {i : bob_pref.to_owned()} });
-    let qry = EventMessage { 
-        serialization_info: vs, 
-        event: Envelope { 
-            timestamp: "2020-08-22T17:50:12.988921+00:00".parse().unwrap(), 
-            route: Route::Ksn,
-            message
-        }
-    };
+    // Bob asks about alices key state
+    // construct qry message, to ask of alice key state message
+    let message = QueryData { reply_route: "route".into(), data: IdData {i : alice_pref.to_owned()} };
+    let qry = Envelope::new(Route::Ksn, message).to_message(SerializationFormats::JSON)?;
 
-    // sign message by alice
+    // sign message by bob
     let signature = AttachedSignaturePrefix::new(
         SelfSigning::Ed25519Sha512,
-        Arc::clone(&alice_key_manager)
+        Arc::clone(&bob_key_manager)
             .lock()
             .unwrap()
             .sign(&serde_json::to_vec(&qry).unwrap())?, 
         0
     );
-    let s = SignedEnvelope::new(qry, alice_pref.to_owned(), vec![signature]);
+    // Qry message signed by Bob
+    let s = SignedQuery::new(qry, bob_pref.to_owned(), vec![signature]);
 
-    // ask bob about bobs's key state notice
-    let rep = bob.process_envelope(s)?;
-    println!("{}", String::from_utf8(rep).unwrap());
+    // ask witness about alice's key state notice
+    let rep = witness.process_signed_query(s)?;
+
+    // sign message by witness
+    let signature = SelfSigning::Ed25519Sha512.derive(
+        witness.key_manager().lock().unwrap() 
+            .sign(&rep)?, 
+    );
+
+    // reply with ksn inside
+    let rp: EventMessage<Envelope<ReplyData>> = serde_json::from_str(&String::from_utf8(rep).unwrap()).unwrap();
+    let signed = SignedReply::new(rp, witness_prefix.to_owned(), signature);
+
+    // send reply message with ksn to bob
+    let rep = bob.process_signed_reply(signed)?;
 
     Ok(())
 }

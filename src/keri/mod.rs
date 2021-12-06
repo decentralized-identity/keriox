@@ -28,7 +28,7 @@ use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivat
 use universal_wallet::prelude::{Content, UnlockedWallet};
 
 #[cfg(feature = "query")]
-use crate::query::{Route, new_reply, query::QueryData, MessageType, SignedEnvelope};
+use crate::query::{Route, new_reply, query::QueryData, SignedQuery, reply::ReplyData, SignedReply};
 
 
 #[cfg(test)]
@@ -110,12 +110,13 @@ impl<K: KeyManager> Keri<K> {
         }
     }
 
-    pub fn incept(&mut self) -> Result<SignedEventMessage, Error> {
+    pub fn incept(&mut self, initial_witness: Option<Vec<BasicPrefix>>) -> Result<SignedEventMessage, Error> {
         let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
         let icp = EventMsgBuilder::new(EventType::Inception)
             .with_prefix(&self.prefix)
             .with_keys(vec![Basic::Ed25519.derive(km.public_key())])
             .with_next_keys(vec![Basic::Ed25519.derive(km.next_public_key())])
+            .with_witness_list(&initial_witness.unwrap_or(vec![]))
             .build()?;
 
         let signed = icp.sign(vec![AttachedSignaturePrefix::new(
@@ -244,7 +245,7 @@ impl<K: KeyManager> Keri<K> {
             Ok(kv) => EventMsgBuilder::new(EventType::Rotation)
                 .with_prefix(&self.prefix)
                 .with_sn(state.sn + 1)
-                .with_previous_event(&SelfAddressing::Blake3_256.derive(&state.last.serialize()?))
+                .with_previous_event(&SelfAddressing::Blake3_256.derive(&state.last))
                 .with_keys(vec![Basic::Ed25519.derive(kv.public_key())])
                 .with_next_keys(vec![Basic::Ed25519.derive(kv.next_public_key())])
                 .build(),
@@ -269,7 +270,7 @@ impl<K: KeyManager> Keri<K> {
         let ev = EventMsgBuilder::new(EventType::Interaction)
             .with_prefix(&self.prefix)
             .with_sn(state.sn + 1)
-            .with_previous_event(&SelfAddressing::Blake3_256.derive(&state.last.serialize()?))
+            .with_previous_event(&SelfAddressing::Blake3_256.derive(&state.last))
             .with_seal(seal_list)
             .build()?;
 
@@ -483,29 +484,27 @@ impl<K: KeyManager> Keri<K> {
     }
 
     #[cfg(feature = "query")]
-    fn process_envelope(&self, qr: SignedEnvelope) -> Result<Vec<u8>, Error> {
+    fn process_signed_query(&self, qr: SignedQuery) -> Result<Vec<u8>, Error> {
+
         let signatures = qr.signatures;
         // check signatures
         let kc = self.get_state_for_prefix(&qr.signer)?
             .ok_or(Error::SemanticError("No identifier in db".into()))?
             .current;
+
         if kc.verify(&qr.envelope.serialize().unwrap(), &signatures)? {
             // TODO check timestamps
             // unpack and check what's inside
             let route = qr.envelope.event.route;
-            match qr.envelope.event.message {
-                MessageType::Qry(qr) => {
-                    self.process_query(route, qr)
-                },
-                MessageType::Rpy(_) => todo!(),
-            }
+            self.process_query(route, qr.envelope.event.data)
+            
         } else {
             Err(Error::SignatureVerificationError)
         }
     }
 
     #[cfg(feature = "query")]
-    pub fn process_query(&self, route: Route, qr: QueryData ) -> Result<Vec<u8>, Error> {
+    fn process_query(&self, route: Route, qr: QueryData ) -> Result<Vec<u8>, Error> {
         match route {
             Route::Logs => {
                 Ok(self.processor.get_kerl(&qr.data.i)?.ok_or(Error::SemanticError("No identifier in db".into()))?)
@@ -522,6 +521,58 @@ impl<K: KeyManager> Keri<K> {
                 rpy.serialize()
             },
             _ => todo!()
+        }
+    }
+
+    #[cfg(feature = "query")]
+    fn process_signed_reply(&self, qr: SignedReply) -> Result<Vec<u8>, Error> {
+        if qr.signer.verify(&qr.envelope.serialize().unwrap(), &qr.signature)? {
+            // TODO check timestamps and digest
+            // unpack and check what's inside
+            let route = qr.envelope.event.route;
+            let rd = qr.envelope.event.data;
+            match route {
+                Route::ReplyKsn(id) => {
+                    match self.check_rpy(rd) {
+                        Ok(_) => {
+                            // Latest kel event already in database 
+                        },
+                        Err(_) => {
+						    // TODO ksn was escrowed. Generate query message.
+                        },
+                    };
+                    Ok(vec![])
+                },
+                _ => todo!()
+                }
+        } else {
+            Err(Error::SignatureVerificationError)
+        }
+    }
+
+    #[cfg(feature = "query")]
+    fn check_rpy(&self, rd: ReplyData) -> Result<(), Error> {
+        // TODO check timestmps
+        // get ksn, check if you have current events
+        let rep_data = rd.data;
+        let state_from_db = self.processor.compute_state(&rep_data.event.state.prefix)?;
+        match state_from_db {
+            Some(state) => {
+                if &rep_data.event.state.sn <= &state.sn {
+                    // latest kel event already in db
+                    Ok(())
+                } else {
+                    // missing events in database.
+                    // escrow ksn
+                    self.processor.escrow_ksn(rep_data)?;
+                    Err(Error::SemanticError("KSN escrowed".into()))
+                }},
+            None => {
+                // no kel in database
+                // escrow ksn
+                self.processor.escrow_ksn(rep_data)?;
+                Err(Error::SemanticError("KSN escrowed".into()))
+            },
         }
     }
 }

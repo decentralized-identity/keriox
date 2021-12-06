@@ -1,11 +1,11 @@
 use chrono::{DateTime, FixedOffset, Utc, SecondsFormat};
-use serde::{de, ser::SerializeStruct, Deserialize, Serialize, Serializer};
+use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use serde_hex::{Compact, SerHex};
 
 use crate::{
     derivation::self_addressing::SelfAddressing,
     event::{
-        event_data::{DummyEvent, EventData},
+        event_data::DummyEvent,
         EventMessage, SerializationFormats,
     },
     prefix::{Prefix, SelfAddressingPrefix},

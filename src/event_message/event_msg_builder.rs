@@ -34,6 +34,10 @@ pub struct EventMsgBuilder {
     prev_event: SelfAddressingPrefix,
     data: Vec<Seal>,
     delegator: IdentifierPrefix,
+    witness_threshold: u64,
+    witnesses: Vec<BasicPrefix>,
+    witness_to_add: Vec<BasicPrefix>,
+    witness_to_remove: Vec<BasicPrefix>,
     format: SerializationFormats,
     derivation: SelfAddressing,
 }
@@ -78,6 +82,10 @@ impl EventMsgBuilder {
             prev_event: SelfAddressing::Blake3_256.derive(&[0u8; 32]),
             data: vec![],
             delegator: IdentifierPrefix::default(),
+            witness_threshold: 0,
+            witnesses: vec![],
+            witness_to_add: vec![],
+            witness_to_remove: vec![],
             format: SerializationFormats::JSON,
             derivation: SelfAddressing::Blake3_256,
         }
@@ -134,6 +142,27 @@ impl EventMsgBuilder {
         }
     }
 
+    pub fn with_witness_list(self, witnesses: &[BasicPrefix]) -> Self {
+        EventMsgBuilder {
+            witnesses: witnesses.to_vec(),
+            ..self
+        }
+    }
+
+    pub fn with_witness_to_add(self, witness_to_add: &[BasicPrefix]) -> Self {
+        EventMsgBuilder {
+            witnesses: witness_to_add.to_vec(),
+            ..self
+        }
+    }
+
+    pub fn with_witness_to_remove(self, witness_to_remove: &[BasicPrefix]) -> Self {
+        EventMsgBuilder {
+            witnesses: witness_to_remove.to_vec(),
+            ..self
+        }
+    }
+
     pub fn build(self) -> Result<EventMessage<Event>, Error> {
         let next_key_hash =
             nxt_commitment(&self.next_key_threshold, &self.next_keys, &self.derivation);
@@ -154,7 +183,7 @@ impl EventMsgBuilder {
             EventType::Inception => {
                 let icp_event = InceptionEvent {
                     key_config,
-                    witness_config: InceptionWitnessConfig::default(),
+                    witness_config: InceptionWitnessConfig { tally: self.witness_threshold, initial_witnesses: self.witnesses },
                     inception_configuration: vec![],
                     data: vec![],
                 };
@@ -179,7 +208,11 @@ impl EventMsgBuilder {
                 event_data: EventData::Rot(RotationEvent {
                     previous_event_hash: self.prev_event,
                     key_config,
-                    witness_config: WitnessConfig::default(),
+                    witness_config: WitnessConfig { 
+                        tally: self.witness_threshold, 
+                        prune: self.witness_to_remove, 
+                        graft: self.witness_to_add 
+                    },
                     data: self.data,
                 }),
             }

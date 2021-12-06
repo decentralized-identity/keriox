@@ -6,7 +6,7 @@ use crate::{database::sled::SledEventDatabase, derivation::self_addressing::Self
         }}, event_message::{signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
             TimestampedSignedEventMessage, Message
-        }}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}};
+        }}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}, query::key_state_notice::KeyStateNotice};
 
 #[cfg(feature = "async")]
 pub mod async_processing;
@@ -420,5 +420,10 @@ impl EventProcessor {
             .and_then(|opt| Ok(opt.map_or_else(|| IdentifierState::default(), |s| s)))
             // process the event update
             .and_then(|state| event.apply_to(state))
+    }
+
+    pub fn escrow_ksn(&self, ksn: EventMessage<KeyStateNotice>) -> Result<(), Error> {
+        let id = ksn.event.state.prefix.clone();
+        self.db.add_escrow_key_state_notice(ksn, &id)
     }
 }
