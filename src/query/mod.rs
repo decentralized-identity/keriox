@@ -10,6 +10,8 @@ use serde::{
 
 use self::{key_state_notice::KeyStateNotice, query::QueryData, reply::ReplyData};
 
+use thiserror::Error;
+
 pub mod key_state_notice;
 pub mod query;
 pub mod reply;
@@ -159,14 +161,14 @@ impl<'de> Deserialize<'de> for Route {
 }
 
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct SignedReply {
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct SignedNontransReply {
     pub envelope: EventMessage<Envelope<ReplyData>>,
     pub signer: BasicPrefix,
     pub signature: SelfSigningPrefix,
 }
 
-impl SignedReply {
+impl SignedNontransReply {
     pub fn new(
         envelope: EventMessage<Envelope<ReplyData>>,
         signer: BasicPrefix,
@@ -199,6 +201,14 @@ impl SignedQuery {
             signatures,
         }
     }
+}
+
+#[derive(Error, Debug)]
+pub enum QueryError {
+    #[error("Got stale key state notice")]
+    StaleKsn,
+    #[error("Key state notice is newer than state in db")]
+    ObsoleteKel,
 }
 
 #[test]

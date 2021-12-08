@@ -8,6 +8,9 @@ use crate::{database::sled::SledEventDatabase, derivation::self_addressing::Self
             TimestampedSignedEventMessage, Message
         }}, prefix::{IdentifierPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState}, query::key_state_notice::KeyStateNotice};
 
+#[cfg(feature = "query")]
+use crate::query::SignedNontransReply;
+
 #[cfg(feature = "async")]
 pub mod async_processing;
 #[cfg(test)]
@@ -217,6 +220,7 @@ impl EventProcessor {
             Message::Event(e) => self.process_event(&e),
             Message::NontransferableRct(rct) => self.process_witness_receipt(rct),
             Message::TransferableRct(rct) => self.process_validator_receipt(rct),
+            Message::KeyStateNotice(ksn_rpy) => self.process_signed_reply(ksn_rpy),
         }
     }
 
@@ -422,8 +426,107 @@ impl EventProcessor {
             .and_then(|state| event.apply_to(state))
     }
 
-    pub fn escrow_ksn(&self, ksn: EventMessage<KeyStateNotice>) -> Result<(), Error> {
-        let id = ksn.event.state.prefix.clone();
-        self.db.add_escrow_key_state_notice(ksn, &id)
+    #[cfg(feature = "query")]
+    pub fn process_signed_reply(&self, rpy: SignedNontransReply) -> Result<Option<IdentifierState>, Error> {
+
+        use crate::query::Route;
+
+        let signer = rpy.signer;
+        let signature = rpy.signature;
+        let route = rpy.envelope.event.route.clone();
+        // check if signature was made by ksn creator
+        if let Route::ReplyKsn(ref aid) = route {
+            // check signature
+             if signer.verify(&rpy.envelope.serialize().unwrap(), &signature)? {
+                // check rpy digest
+                let digest = rpy.envelope.event.data.digest.clone().unwrap();
+                let mut def_dig = rpy.envelope.clone();
+                def_dig.event.data.digest = None;
+                if digest.verify_binding(&def_dig.serialize()?) {
+                    // TODO how to check timestamp?
+                    // get last reply for prefix with route with aid
+                    let last_rpy = self.db
+                        .get_escrow_key_state_notice(&rpy.envelope.event.data.data.event.state.prefix)
+                        .and_then(|mut o|
+                        o.find(|r| r.envelope.event.route.clone() == route.clone()));
+                    match last_rpy {
+                        Some(old_rpy) => {
+                            let new_dt = rpy.envelope.event.timestamp;
+                            let old_dt = old_rpy.envelope.event.timestamp;
+                            if old_dt > new_dt {
+                                return Err(Error::SemanticError("new rpy older than old one".into()))
+                            }
+                        },
+                        None => (),
+                    };
+                    // now unpack ksn and check its details
+                    let ksn = rpy.envelope.event.data.data;
+                    self.check_ksn(&ksn, aid)
+                } else {
+                    // wrong digest
+                    Err(Error::SemanticError("wrong digest".into()))
+                }
+            } else {
+                // wrong signature
+                Err(Error::SemanticError("wrong signature".into()))
+            }
+        } else {
+            Err(Error::SemanticError("wrong route".into()))
+            //wrong route
+        }
+    }
+
+
+    #[cfg(feature = "query")]
+    fn check_ksn(&self, ksn: &EventMessage<KeyStateNotice>, aid: &IdentifierPrefix) -> Result<Option<IdentifierState>, Error> {
+        use crate::query::QueryError;
+
+
+        let digest = ksn.event.digest.clone().unwrap();
+        let mut def_dig = ksn.clone();
+        def_dig.event.digest = None;
+        if digest.verify_binding(&def_dig.serialize()?) {
+            // check timestamp?
+            // get last reply for prefix with route with aid
+            let last_ksn = self.db
+                .get_key_state_notice(&ksn.event.state.prefix)
+                .and_then(|mut o|
+                o.find(|(from_who, r)| {aid == from_who}));
+            match last_ksn {
+                Some((_, old_ksn)) => {
+                    let new_dt = ksn.event.timestamp;
+                    let old_dt = old_ksn.event.timestamp;
+                    if old_dt > new_dt {
+                        return Err(Error::SemanticError("new ksn older than old one".into()));
+                    } 
+                   
+                },
+                None => (),
+            };
+             // check new ksn with actual database state for that prefix
+            let state = self.compute_state(&ksn.event.state.prefix)?.ok_or::<Error>(QueryError::ObsoleteKel.into())?;
+            if state.sn < ksn.event.state.sn {
+                // ask for kel
+                // escrow ksn
+                Err(QueryError::ObsoleteKel.into())
+
+            } else if state.sn == ksn.event.state.sn {
+                // the same, ok succes
+                // update accepted ksn
+                Ok(None)
+            } else {
+                // stale ksn
+                // do nothing ?
+                Err(QueryError::StaleKsn.into())
+            }
+        } else {
+            Err(Error::SemanticError("Wrong digest".into()))
+        }
+        // Ok(None)
+    }
+
+    fn escrow_ksn(&self, rpy: SignedNontransReply) -> Result<(), Error> {
+        let id = rpy.envelope.event.data.data.event.state.prefix.clone();
+        self.db.add_escrow_key_state_notice(rpy, &id)
     }
 }

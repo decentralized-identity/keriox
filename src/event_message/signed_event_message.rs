@@ -2,7 +2,7 @@ use chrono::{DateTime, Local};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use std::cmp::Ordering;
 
-use crate::{error::Error, event::{Event, sections::seal::{EventSeal, SourceSeal}}, event_parsing::Attachment, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}, state::{EventSemantics, IdentifierState}};
+use crate::{error::Error, event::{Event, sections::seal::{EventSeal, SourceSeal}}, event_parsing::Attachment, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}, state::{EventSemantics, IdentifierState}, query::{key_state_notice::KeyStateNotice, SignedNontransReply}};
 use super::serializer::to_string;
 
 use super::EventMessage;
@@ -14,6 +14,8 @@ pub enum Message {
     // use SignedNontransferableReceipt and SignedTransferableReceipt
     NontransferableRct(SignedNontransferableReceipt),
     TransferableRct(SignedTransferableReceipt),
+    #[cfg(feature = "query")]
+    KeyStateNotice(SignedNontransReply),
 }
 
 // KERI serializer should be used to serialize this

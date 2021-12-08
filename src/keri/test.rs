@@ -115,7 +115,7 @@ fn test_direct_mode() -> Result<(), Error> {
 fn test_qry_rpy() -> Result<(), Error> {
     use tempfile::Builder;
 
-    use crate::{derivation::{self_signing::SelfSigning, basic::Basic}, event::{EventMessage, SerializationFormats}, prefix::{AttachedSignaturePrefix, Prefix, BasicPrefix, SelfSigningPrefix}, query::{Envelope, SignedQuery, query::{IdData, QueryData}, Route, key_state_notice::KeyStateNotice, reply::ReplyData, SignedReply}, signer::KeyManager, keys::PublicKey};
+    use crate::{derivation::{self_signing::SelfSigning, basic::Basic}, event::{EventMessage, SerializationFormats}, prefix::{AttachedSignaturePrefix, Prefix, BasicPrefix}, query::{Envelope, SignedQuery, query::{IdData, QueryData}, Route, reply::ReplyData, SignedNontransReply}, signer::KeyManager, keys::PublicKey};
 
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
@@ -141,7 +141,7 @@ fn test_qry_rpy() -> Result<(), Error> {
         Arc::clone(&witness_db),
         Arc::clone(&witness_key_manager))?;
     witness.incept(None)?;
-    
+
     println!("witness: {}", witness.prefix().to_str());
     let witness_prefix = match witness.prefix() {
         crate::prefix::IdentifierPrefix::Basic(bp) => bp.clone(),
@@ -214,10 +214,106 @@ fn test_qry_rpy() -> Result<(), Error> {
 
     // reply with ksn inside
     let rp: EventMessage<Envelope<ReplyData>> = serde_json::from_str(&String::from_utf8(rep).unwrap()).unwrap();
-    let signed = SignedReply::new(rp, witness_prefix.to_owned(), signature);
+    let signed = SignedNontransReply::new(rp, witness_prefix.to_owned(), signature);
 
     // send reply message with ksn to bob
-    let rep = bob.process_signed_reply(signed)?;
+    let rep = bob.processor.process_signed_reply(signed)?;
 
     Ok(())
+}
+
+#[cfg(feature = "query")]
+#[test]
+pub fn test_rpy_ksn() -> Result<(), Error>{
+    use tempfile::Builder;
+    use crate::{derivation::{self_signing::SelfSigning, basic::Basic, self_addressing::SelfAddressing}, event::{EventMessage, SerializationFormats}, prefix::{Prefix, BasicPrefix, IdentifierPrefix}, query::{Envelope, SignedQuery, query::{IdData, QueryData}, Route, key_state_notice::KeyStateNotice, SignedNontransReply, new_reply, QueryError}, signer::{KeyManager, CryptoBox}, processor::EventProcessor};
+
+
+    struct Witness {
+        pub prefix: BasicPrefix,
+        signer: CryptoBox,
+        pub processor: EventProcessor,
+    }
+
+    impl Witness {
+        pub fn new() -> Result<Self, Error> {
+            let signer = CryptoBox::new()?;
+            let processor = {
+                let root = Builder::new().prefix("test-db").tempdir().unwrap();
+                std::fs::create_dir_all(root.path()).unwrap();
+                let witness_db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+                EventProcessor::new(witness_db.clone())
+            };
+            let prefix = Basic::Ed25519.derive(signer.public_key());
+            Ok(Self {
+                prefix, 
+                signer, 
+                processor
+            })
+        }
+
+        pub fn get_ksn_for_prefix(&self, prefix: &IdentifierPrefix) -> Result<SignedNontransReply, Error> {
+            let state = self.processor.compute_state(prefix).unwrap().unwrap();
+            let ksn = EventMessage::<KeyStateNotice>::new_ksn(state, SerializationFormats::JSON, SelfAddressing::Blake3_256);
+            let rpy = new_reply(ksn, Route::ReplyKsn(IdentifierPrefix::Basic(self.prefix.clone())), SelfAddressing::Blake3_256);
+
+            let signature = SelfSigning::Ed25519Sha512.derive( self.signer.sign(&rpy.serialize()?).unwrap());
+            Ok(
+                SignedNontransReply { envelope: rpy, signer: self.prefix.clone(), signature } 
+            )
+        }
+    }
+
+    let witness = Witness::new()?;
+    
+    // Init bob.
+    let mut bob = {
+        // Create test db and event processor.
+        let root = Builder::new().prefix("test-db").tempdir().unwrap();
+        std::fs::create_dir_all(root.path()).unwrap();
+        let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+        
+        let bob_key_manager = Arc::new( Mutex::new(CryptoBox::new()?));
+        Keri::new(
+            Arc::clone(&db),
+            Arc::clone(&bob_key_manager))?
+        };
+        
+    let alice = {
+        let root = Builder::new().prefix("test-db").tempdir().unwrap();
+        std::fs::create_dir_all(root.path()).unwrap();
+        let db2 = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+        EventProcessor::new(db2)
+    };
+
+    let bob_icp = bob.incept(Some(vec![witness.prefix.clone()])).unwrap();
+    // bob.rotate().unwrap();
+
+    let bob_pref = bob.prefix().clone();
+    println!("bobs pref: {}\n", bob_pref.to_str());
+
+    // send bobs icp to witness to have his keys
+    witness.processor.process_event(&bob_icp)?;
+
+    // construct bobs ksn msg in rpy made by witness
+    let signed_rpy = witness.get_ksn_for_prefix(&bob_pref)?; 
+
+    let res = alice.process_signed_reply(signed_rpy.clone());
+    assert!(matches!(res, Err(Error::QueryError(QueryError::ObsoleteKel))));
+    alice.process_event(&bob_icp)?;
+
+    let bob_rot = bob.rotate()?;
+    witness.processor.process_event(&bob_rot)?;
+    alice.process_event(&bob_rot)?;
+
+    let res = alice.process_signed_reply(signed_rpy.clone());
+    assert!(matches!(res, Err(Error::QueryError(QueryError::StaleKsn))));
+
+    let new_reply = witness.get_ksn_for_prefix(&bob_pref)?;
+    let res = alice.process_signed_reply(new_reply);
+    println!("{:?}", res);
+    assert!(res.is_ok());
+
+    Ok(())
+
 }

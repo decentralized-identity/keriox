@@ -28,7 +28,7 @@ use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivat
 use universal_wallet::prelude::{Content, UnlockedWallet};
 
 #[cfg(feature = "query")]
-use crate::query::{Route, new_reply, query::QueryData, SignedQuery, reply::ReplyData, SignedReply};
+use crate::query::{Route, new_reply, query::QueryData, SignedQuery, SignedNontransReply};
 
 
 #[cfg(test)]
@@ -524,57 +524,6 @@ impl<K: KeyManager> Keri<K> {
         }
     }
 
-    #[cfg(feature = "query")]
-    fn process_signed_reply(&self, qr: SignedReply) -> Result<Vec<u8>, Error> {
-        if qr.signer.verify(&qr.envelope.serialize().unwrap(), &qr.signature)? {
-            // TODO check timestamps and digest
-            // unpack and check what's inside
-            let route = qr.envelope.event.route;
-            let rd = qr.envelope.event.data;
-            match route {
-                Route::ReplyKsn(id) => {
-                    match self.check_rpy(rd) {
-                        Ok(_) => {
-                            // Latest kel event already in database 
-                        },
-                        Err(_) => {
-						    // TODO ksn was escrowed. Generate query message.
-                        },
-                    };
-                    Ok(vec![])
-                },
-                _ => todo!()
-                }
-        } else {
-            Err(Error::SignatureVerificationError)
-        }
-    }
-
-    #[cfg(feature = "query")]
-    fn check_rpy(&self, rd: ReplyData) -> Result<(), Error> {
-        // TODO check timestmps
-        // get ksn, check if you have current events
-        let rep_data = rd.data;
-        let state_from_db = self.processor.compute_state(&rep_data.event.state.prefix)?;
-        match state_from_db {
-            Some(state) => {
-                if &rep_data.event.state.sn <= &state.sn {
-                    // latest kel event already in db
-                    Ok(())
-                } else {
-                    // missing events in database.
-                    // escrow ksn
-                    self.processor.escrow_ksn(rep_data)?;
-                    Err(Error::SemanticError("KSN escrowed".into()))
-                }},
-            None => {
-                // no kel in database
-                // escrow ksn
-                self.processor.escrow_ksn(rep_data)?;
-                Err(Error::SemanticError("KSN escrowed".into()))
-            },
-        }
-    }
 }
 // Non re-allocating random `String` generator with output length of 10 char string
 #[cfg(feature = "wallet")]

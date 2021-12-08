@@ -53,10 +53,10 @@ pub struct KeyStateNotice {
     first_seen_sn: u64,
 
     #[serde(rename = "dt")]
-    timestamp: DateTime<FixedOffset>,
+    pub timestamp: DateTime<FixedOffset>,
 
     #[serde(rename = "d")]
-    digest: Option<SelfAddressingPrefix>, // digest of latest (current) event
+    pub digest: Option<SelfAddressingPrefix>, // digest of latest (current) event
 
     #[serde(rename = "c")]
     config: Vec<String>,

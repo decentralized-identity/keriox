@@ -2,7 +2,7 @@ mod tables;
 
 use tables::{SledEventTree, SledEventTreeVec};
 use std::path::Path;
-use crate::{error::Error, event::{Event, EventMessage}, event_message::{TimestampedEventMessage, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedSignedEventMessage}}, prefix::IdentifierPrefix};
+use crate::{error::Error, event::{Event, EventMessage}, event_message::{TimestampedEventMessage, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedSignedEventMessage}}, prefix::IdentifierPrefix, query::{Envelope, SignedNontransReply}};
 
 #[cfg(feature = "query")]
 use crate::query::{key_state_notice::KeyStateNotice};
@@ -27,7 +27,10 @@ pub struct SledEventDatabase {
     escrowed_receipts_t: SledEventTreeVec<SignedTransferableReceipt>,
 
     #[cfg(feature = "query")]
-    escrowed_key_state_notices: SledEventTreeVec<EventMessage<KeyStateNotice>>,
+    key_state_notices: SledEventTreeVec<(IdentifierPrefix, EventMessage<KeyStateNotice>)>,
+
+    #[cfg(feature = "query")]
+    escrowed_key_state_notices: SledEventTreeVec<SignedNontransReply>,
 }
 
 
@@ -46,7 +49,9 @@ impl SledEventDatabase {
             likely_duplicious_events: SledEventTreeVec::new(db.open_tree(b"ldes")?),
             duplicitous_events: SledEventTreeVec::new(db.open_tree(b"dels")?),
             #[cfg(feature = "query")]
-            escrowed_key_state_notices: SledEventTreeVec::new(db.open_tree(b"ksns")?),
+            key_state_notices: SledEventTreeVec::new(db.open_tree(b"ksns")?),
+            #[cfg(feature = "query")]
+            escrowed_key_state_notices: SledEventTreeVec::new(db.open_tree(b"knes")?),
         })
     }
 
@@ -148,22 +153,42 @@ impl SledEventDatabase {
         }
 
     #[cfg(feature = "query")]
-     pub fn add_escrow_key_state_notice(&self, ksn: EventMessage<KeyStateNotice>, id: &IdentifierPrefix)
+     pub fn add_escrow_key_state_notice(&self, rpy: SignedNontransReply, id: &IdentifierPrefix)
         -> Result<(), Error> {
 
             self.escrowed_key_state_notices
-                .push(self.identifiers.designated_key(id), ksn)
+                .push(self.identifiers.designated_key(id), rpy)
         }
 
     #[cfg(feature = "query")]
     pub fn get_escrow_key_state_notice(&self, id: &IdentifierPrefix)
-        -> Option<impl DoubleEndedIterator<Item = EventMessage<KeyStateNotice>>> {
+        -> Option<impl DoubleEndedIterator<Item = SignedNontransReply>> {
             self.escrowed_key_state_notices.iter_values(self.identifiers.designated_key(id))
         }
 
     #[cfg(feature = "query")]
-    pub fn remove_escrow_key_state_notice(&self, id: &IdentifierPrefix, ksn: EventMessage<KeyStateNotice>)
+    pub fn remove_escrow_key_state_notice(&self, id: &IdentifierPrefix, rpy: SignedNontransReply)
         -> Result<(), Error> {
-            self.escrowed_key_state_notices.remove(self.identifiers.designated_key(id), &ksn)
+            self.escrowed_key_state_notices.remove(self.identifiers.designated_key(id), &rpy)
+        }
+
+    #[cfg(feature = "query")]
+     pub fn add_key_state_notice(&self, from_who: IdentifierPrefix, ksn: EventMessage<KeyStateNotice>, id: &IdentifierPrefix)
+        -> Result<(), Error> {
+
+            self.key_state_notices
+                .put(self.identifiers.designated_key(id), vec![(from_who, ksn)])
+        }
+
+    #[cfg(feature = "query")]
+    pub fn get_key_state_notice(&self, id: &IdentifierPrefix)
+        -> Option<impl DoubleEndedIterator<Item = (IdentifierPrefix, EventMessage<KeyStateNotice>)>> {
+            self.key_state_notices.iter_values(self.identifiers.designated_key(id))
+        }
+
+    #[cfg(feature = "query")]
+    pub fn remove_key_state_notice(&self, from_who: IdentifierPrefix, id: &IdentifierPrefix, ksn: EventMessage<KeyStateNotice>)
+        -> Result<(), Error> {
+            self.key_state_notices.remove(self.identifiers.designated_key(id), &(from_who, ksn))
         }
 }
