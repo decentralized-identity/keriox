@@ -28,7 +28,7 @@ use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivat
 use universal_wallet::prelude::{Content, UnlockedWallet};
 
 #[cfg(feature = "query")]
-use crate::query::{Route, new_reply, query::QueryData, SignedQuery, SignedNontransReply};
+use crate::query::{Route, new_reply, query::QueryData, SignedQuery, SignedReply}; 
 
 
 #[cfg(test)]
@@ -523,6 +523,47 @@ impl<K: KeyManager> Keri<K> {
             _ => todo!()
         }
     }
+
+    #[cfg(feature = "query")]
+    pub fn get_ksn_for_prefix(
+            &self,
+            prefix: &IdentifierPrefix,
+        ) -> Result<SignedReply, Error> {
+            use crate::query::{key_state_notice::KeyStateNotice, Signature};
+
+
+            let state = self.processor.compute_state(prefix).unwrap().unwrap();
+            let ksn = EventMessage::<KeyStateNotice>::new_ksn(
+                state,
+                SerializationFormats::JSON,
+                SelfAddressing::Blake3_256,
+            );
+            let rpy = new_reply(
+                ksn,
+                Route::ReplyKsn(self.prefix.clone()),
+                SelfAddressing::Blake3_256,
+            );
+
+            let sig = vec![AttachedSignaturePrefix::new(
+                SelfSigning::Ed25519Sha512,
+                self.key_manager
+                        .lock()
+                        .map_err(|_| Error::MutexPoisoned)?
+                        .sign(&rpy.serialize()?)?,
+                    0,
+                )];
+
+            Ok(SignedReply { 
+                reply: rpy, 
+                signature: Signature::Transferable(
+                    EventSeal { 
+                        prefix: self.prefix.clone(), 
+                        sn: self.get_state()?.unwrap().last_est.sn, 
+                        event_digest: SelfAddressing::Blake3_256.derive(&self.get_state()?.unwrap().last)
+                    }, 
+                    sig
+                )})
+        }
 
 }
 // Non re-allocating random `String` generator with output length of 10 char string

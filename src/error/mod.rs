@@ -79,6 +79,9 @@ pub enum Error {
     #[error("Invalid identifier state")]
     InvalidIdentifierStat,
 
+    #[error("Event not yet in database")]
+    MissingEventError,
+
     #[cfg(feature = "async")]
     #[error("Zero send error")]
     ZeroSendError,

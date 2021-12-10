@@ -349,3 +349,38 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[cfg(feature = "query")]
+#[test]
+pub fn test_keystate() -> Result<(), Error> {
+    use tempfile::Builder;
+
+    // Create test db and event processor.
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    fs::create_dir_all(root.path()).unwrap();
+    let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+    let event_processor = EventProcessor::new(Arc::clone(&db));
+
+    let icp_str = r#"{"v":"KERI10JSON00011b_","i":"E4BsxCYUtUx3d6UkDVIQ9Ke3CLQfqWBfICSmjIzkS1u4","s":"0","t":"icp","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","bt":"1","b":["BFUOWBaJz-sB_6b-_u_P9W8hgBQ8Su9mAtN9cY2sVGiY"],"c":[],"a":[]}-AABAA7V0xYbPAcnYvVZMy19noS-u_hJ6BmUWw38SFlJYifYmxdYfUkBu3toMLxoxmtLYVh7T5hqCFpV0gb_JesiDuDA"#;
+    let parsed = signed_message(icp_str.as_bytes()).unwrap().1;
+    let deserialized_icp = Message::try_from(parsed).unwrap();
+    // event_processor.process(deserialized_icp)?;
+
+    let rpy_str = r#"{"v":"KERI10JSON000294_","t":"rpy","d":"EPeNPAtRcVjY7lLxl_DZ3qFPb0R0n_6wmGAMgO-u8_YU","dt":"2021-01-01T00:00:00.000000+00:00","r":"/ksn/BFUOWBaJz-sB_6b-_u_P9W8hgBQ8Su9mAtN9cY2sVGiY","a":{"v":"KERI10JSON0001d9_","i":"E4BsxCYUtUx3d6UkDVIQ9Ke3CLQfqWBfICSmjIzkS1u4","s":"0","p":"","d":"EYk4PigtRsCd5W2so98c8r8aeRHoixJK7ntv9mTrZPmM","f":"0","dt":"2021-01-01T00:00:00.000000+00:00","et":"icp","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","bt":"1","b":["BFUOWBaJz-sB_6b-_u_P9W8hgBQ8Su9mAtN9cY2sVGiY"],"c":[],"ee":{"s":"0","d":"EYk4PigtRsCd5W2so98c8r8aeRHoixJK7ntv9mTrZPmM","br":[],"ba":[]},"di":""}}-CABBFUOWBaJz-sB_6b-_u_P9W8hgBQ8Su9mAtN9cY2sVGiY0B8nPsrW2sCoJ9JA_MaghAUxQPXZV94p8Jv_Ex_JV1zNyNlSPUTlUAAqZwaUf0ijY8ETqSgOi9z5tTv0POovmUDQ"#;
+    let parsed = signed_message(rpy_str.as_bytes()).unwrap().1;
+    let deserialized_rpy = Message::try_from(parsed).unwrap();
+
+    assert!(matches!(event_processor.process(deserialized_rpy), Err(Error::MissingEventError)));
+    // check if out of order ksn was escrowed
+    let escrow = event_processor.db.get_escrowed_replys(&"E4BsxCYUtUx3d6UkDVIQ9Ke3CLQfqWBfICSmjIzkS1u4".parse()?);
+    assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 1);
+
+    event_processor.process(deserialized_icp)?;
+
+    // TODO
+    // event_processor.process_escrow();
+    // let escrow = event_processor.db.get_escrowed_replys(&"E4BsxCYUtUx3d6UkDVIQ9Ke3CLQfqWBfICSmjIzkS1u4".parse()?);
+    // assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 0);
+
+    Ok(())
+}

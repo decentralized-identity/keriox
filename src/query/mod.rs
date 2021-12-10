@@ -1,6 +1,6 @@
 use crate::{
     derivation::self_addressing::SelfAddressing,
-    event::{event_data::DummyEvent, EventMessage, SerializationFormats},
+    event::{event_data::DummyEvent, EventMessage, SerializationFormats, sections::seal::EventSeal},
     prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix, BasicPrefix, SelfSigningPrefix}, error::Error,
 };
 use chrono::{DateTime, FixedOffset, Utc, SecondsFormat};
@@ -160,23 +160,61 @@ impl<'de> Deserialize<'de> for Route {
     }
 }
 
-
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct SignedNontransReply {
-    pub envelope: EventMessage<Envelope<ReplyData>>,
-    pub signer: BasicPrefix,
-    pub signature: SelfSigningPrefix,
+pub enum Signature {
+    Transferable(EventSeal, Vec<AttachedSignaturePrefix>),
+    NonTransferable(BasicPrefix, SelfSigningPrefix),
 }
 
-impl SignedNontransReply {
-    pub fn new(
+impl Signature {
+    pub fn get_signer(&self) -> IdentifierPrefix {
+        match self {
+            Signature::Transferable(seal, _) => seal.prefix.clone(),
+            Signature::NonTransferable(id, _) => IdentifierPrefix::Basic(id.clone()),
+        }
+    }
+
+    
+}
+
+pub type Reply = EventMessage<Envelope<ReplyData>>;
+
+impl Reply {
+    pub fn get_timestamp(&self) -> DateTime<FixedOffset> {
+        self.event.timestamp
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct SignedReply {
+    pub reply: Reply,
+    // pub signer: BasicPrefix,
+    // pub signature: SelfSigningPrefix,
+    pub signature: Signature,
+}
+
+impl SignedReply {
+    pub fn new_nontrans(
         envelope: EventMessage<Envelope<ReplyData>>,
         signer: BasicPrefix,
         signature: SelfSigningPrefix,
     ) -> Self {
+        let signature = Signature::NonTransferable(signer, signature);
         Self {
-            envelope,
-            signer,
+            reply: envelope,
+            // signer,
+            signature,
+        }
+    }
+
+    pub fn new_trans(
+        envelope: EventMessage<Envelope<ReplyData>>,
+        signer_seal: EventSeal,
+        signatures: Vec<AttachedSignaturePrefix>,
+    ) -> Self {
+        let signature = Signature::Transferable(signer_seal, signatures);
+        Self {
+            reply: envelope,
             signature,
         }
     }
@@ -207,8 +245,16 @@ impl SignedQuery {
 pub enum QueryError {
     #[error("Got stale key state notice")]
     StaleKsn,
+    #[error("Got stale reply message")]
+    StaleRpy,
     #[error("Key state notice is newer than state in db")]
     ObsoleteKel,
+    #[error("No key state notice is db")]
+    MissingKsn,
+    #[error("Incorrect event digest")]
+    IncorrectDigest,
+    #[error("Error: {0}")]
+    Error(String),
 }
 
 #[test]

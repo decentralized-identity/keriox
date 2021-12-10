@@ -103,24 +103,26 @@ impl EventMessage<KeyStateNotice> {
     ) -> Self {
         let dt: DateTime<FixedOffset> = DateTime::from(Utc::now());
 
+        let last_digest = derivation.derive(&state.last); 
         let ksn = KeyStateNotice {
             timestamp: dt,
             state,
-            digest: None,
+            digest: Some(last_digest),
             first_seen_sn: 0,
             config: vec![],
         };
-        // Compute digest of event with dummy digest
-        let ev_msg = EventMessage::new(ksn.clone(), serialization).unwrap();
-        let dig = derivation.derive(&ev_msg.serialize().unwrap());
-        let hashed_ksn = KeyStateNotice {
-            digest: Some(dig),
-            ..ksn.clone()
-        };
-        EventMessage {
-            event: hashed_ksn,
-            ..ev_msg
-        }
+        // // Compute digest of event with dummy digest
+        // let ev_msg = EventMessage::new(ksn.clone(), serialization).unwrap();
+        // let dig = derivation.derive(&ev_msg.serialize().unwrap());
+        // let hashed_ksn = KeyStateNotice {
+        //     digest: Some(dig),
+        //     ..ksn.clone()
+        // };
+        // EventMessage {
+        //     event: hashed_ksn,
+        //     ..ev_msg
+        // }
+        EventMessage::new(ksn.clone(), serialization).unwrap()
     }
 }
 

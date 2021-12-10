@@ -197,7 +197,47 @@ impl TryFrom<SignedEventData> for Message {
     type Error = Error;
 
     fn try_from(value: SignedEventData) -> Result<Self, Self::Error> {
-        signed_message(value)
+        if value.deserialized_event.is_some() {
+            signed_message(value)
+        } else {
+            #[cfg(feature = "query")]
+            signed_reply(value)
+        }
+    }
+}
+
+#[cfg(feature = "query")]
+fn signed_reply(mut des: SignedEventData) -> Result<Message, Error> {
+    use crate::query::SignedReply;
+    match des.envelope.unwrap() {
+        QueryEvent::Qry(_) => todo!(),
+        QueryEvent::Rpy(rpy) => {
+            // let sr = SignedReply::new(des.envelope, );
+            match des.attachments.pop().ok_or_else(|| Error::SemanticError("Missing attachment".into()))? {
+                // Should be nontransferable receipt
+                Attachment::ReceiptCouplets(couplets) => {
+                let signer = couplets[0].0.clone();
+                let signature = couplets[0].1.clone();
+                Ok(
+                    Message::KeyStateNotice(SignedReply::new_nontrans(rpy, signer, signature))
+                )},
+                Attachment::SealSignaturesGroups(data) => {
+                    let (seal, sigs) = 
+                        // TODO what if more than one?
+                        data
+                            .last()
+                            .ok_or_else(|| Error::SemanticError("More than one seal".into()))?
+                            .to_owned();
+                   Ok(
+                    Message::KeyStateNotice(SignedReply::new_trans(rpy, seal, sigs))
+                    ) 
+                }
+                _ => {
+                    // Improper payload type
+                    Err(Error::SemanticError("Improper payload type".into()))
+                }
+            }
+        },
     }
 }
 

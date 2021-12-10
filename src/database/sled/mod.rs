@@ -2,7 +2,7 @@ mod tables;
 
 use tables::{SledEventTree, SledEventTreeVec};
 use std::path::Path;
-use crate::{error::Error, event::{Event, EventMessage}, event_message::{TimestampedEventMessage, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedSignedEventMessage}}, prefix::IdentifierPrefix, query::{Envelope, SignedNontransReply}};
+use crate::{error::Error, event::{Event, EventMessage}, event_message::{TimestampedEventMessage, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedSignedEventMessage}}, prefix::IdentifierPrefix, query::{Envelope, SignedReply}};
 
 #[cfg(feature = "query")]
 use crate::query::{key_state_notice::KeyStateNotice};
@@ -27,10 +27,13 @@ pub struct SledEventDatabase {
     escrowed_receipts_t: SledEventTreeVec<SignedTransferableReceipt>,
 
     #[cfg(feature = "query")]
-    key_state_notices: SledEventTreeVec<(IdentifierPrefix, EventMessage<KeyStateNotice>)>,
+    key_state_notices: SledEventTree<EventMessage<KeyStateNotice>>,
 
     #[cfg(feature = "query")]
-    escrowed_key_state_notices: SledEventTreeVec<SignedNontransReply>,
+    accepted_rpy: SledEventTreeVec<SignedReply>,
+
+    #[cfg(feature = "query")]
+    reply_escrow: SledEventTreeVec<SignedReply>,
 }
 
 
@@ -49,9 +52,10 @@ impl SledEventDatabase {
             likely_duplicious_events: SledEventTreeVec::new(db.open_tree(b"ldes")?),
             duplicitous_events: SledEventTreeVec::new(db.open_tree(b"dels")?),
             #[cfg(feature = "query")]
-            key_state_notices: SledEventTreeVec::new(db.open_tree(b"ksns")?),
+            key_state_notices: SledEventTree::new(db.open_tree(b"ksns")?),
             #[cfg(feature = "query")]
-            escrowed_key_state_notices: SledEventTreeVec::new(db.open_tree(b"knes")?),
+            accepted_rpy: SledEventTreeVec::new(db.open_tree(b"knes")?),
+            reply_escrow: SledEventTreeVec::new(db.open_tree(b"knes")?),
         })
     }
 
@@ -153,42 +157,62 @@ impl SledEventDatabase {
         }
 
     #[cfg(feature = "query")]
-     pub fn add_escrow_key_state_notice(&self, rpy: SignedNontransReply, id: &IdentifierPrefix)
+     pub fn add_accepted_reply(&self, rpy: SignedReply, id: &IdentifierPrefix)
         -> Result<(), Error> {
 
-            self.escrowed_key_state_notices
+            self.accepted_rpy
                 .push(self.identifiers.designated_key(id), rpy)
         }
 
     #[cfg(feature = "query")]
-    pub fn get_escrow_key_state_notice(&self, id: &IdentifierPrefix)
-        -> Option<impl DoubleEndedIterator<Item = SignedNontransReply>> {
-            self.escrowed_key_state_notices.iter_values(self.identifiers.designated_key(id))
+    pub fn get_accepted_replys(&self, id: &IdentifierPrefix)
+        -> Option<impl DoubleEndedIterator<Item = SignedReply>> {
+            self.accepted_rpy.iter_values(self.identifiers.designated_key(id))
         }
 
     #[cfg(feature = "query")]
-    pub fn remove_escrow_key_state_notice(&self, id: &IdentifierPrefix, rpy: SignedNontransReply)
+    pub fn remove_accepted_reply(&self, id: &IdentifierPrefix, rpy: SignedReply)
         -> Result<(), Error> {
-            self.escrowed_key_state_notices.remove(self.identifiers.designated_key(id), &rpy)
+            self.accepted_rpy.remove(self.identifiers.designated_key(id), &rpy)
         }
 
-    #[cfg(feature = "query")]
-     pub fn add_key_state_notice(&self, from_who: IdentifierPrefix, ksn: EventMessage<KeyStateNotice>, id: &IdentifierPrefix)
+     #[cfg(feature = "query")]
+     pub fn add_escrowed_reply(&self, rpy: SignedReply, id: &IdentifierPrefix)
         -> Result<(), Error> {
 
-            self.key_state_notices
-                .put(self.identifiers.designated_key(id), vec![(from_who, ksn)])
+            self.reply_escrow
+                .push(self.identifiers.designated_key(id), rpy)
         }
 
     #[cfg(feature = "query")]
-    pub fn get_key_state_notice(&self, id: &IdentifierPrefix)
-        -> Option<impl DoubleEndedIterator<Item = (IdentifierPrefix, EventMessage<KeyStateNotice>)>> {
-            self.key_state_notices.iter_values(self.identifiers.designated_key(id))
+    pub fn get_escrowed_replys(&self, id: &IdentifierPrefix)
+        -> Option<impl DoubleEndedIterator<Item = SignedReply>> {
+            self.reply_escrow.iter_values(self.identifiers.designated_key(id))
         }
 
     #[cfg(feature = "query")]
-    pub fn remove_key_state_notice(&self, from_who: IdentifierPrefix, id: &IdentifierPrefix, ksn: EventMessage<KeyStateNotice>)
+    pub fn remove_escrowed_reply(&self, id: &IdentifierPrefix, rpy: SignedReply)
         -> Result<(), Error> {
-            self.key_state_notices.remove(self.identifiers.designated_key(id), &(from_who, ksn))
+            self.reply_escrow.remove(self.identifiers.designated_key(id), &rpy)
         }
+
+    // #[cfg(feature = "query")]
+    //  pub fn update_key_state_notice(&self,ksn: EventMessage<KeyStateNotice>, id: &IdentifierPrefix)
+    //     -> Result<(), Error> {
+
+    //         self.key_state_notices
+    //             .insert(self.identifiers.designated_key(id), &ksn)
+    //     }
+
+    // #[cfg(feature = "query")]
+    // pub fn get_key_state_notice(&self, id: &IdentifierPrefix)
+    //     -> Result<Option<EventMessage<KeyStateNotice>>, Error> {
+    //         self.key_state_notices.get(self.identifiers.designated_key(id))
+    //     }
+
+    // #[cfg(feature = "query")]
+    // pub fn remove_key_state_notice(&self, from_who: IdentifierPrefix, id: &IdentifierPrefix, ksn: EventMessage<KeyStateNotice>)
+    //     -> Result<(), Error> {
+    //         self.key_state_notices.remove(self.identifiers.designated_key(id), &ksn)
+    //     }
 }
