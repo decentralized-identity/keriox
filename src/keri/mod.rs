@@ -27,12 +27,9 @@ use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivat
 #[cfg(feature = "wallet")]
 use universal_wallet::prelude::{Content, UnlockedWallet};
 
-#[cfg(feature = "query")]
-use crate::query::{Route, new_reply, query::QueryData, SignedQuery, SignedReply}; 
-
-
 #[cfg(test)]
 mod test;
+pub mod witness;
 pub struct Keri<K: KeyManager + 'static> {
     prefix: IdentifierPrefix,
     key_manager: Arc<Mutex<K>>,
@@ -483,87 +480,6 @@ impl<K: KeyManager> Keri<K> {
         Ok(ntr)
     }
 
-    #[cfg(feature = "query")]
-    fn process_signed_query(&self, qr: SignedQuery) -> Result<Vec<u8>, Error> {
-
-        let signatures = qr.signatures;
-        // check signatures
-        let kc = self.get_state_for_prefix(&qr.signer)?
-            .ok_or(Error::SemanticError("No identifier in db".into()))?
-            .current;
-
-        if kc.verify(&qr.envelope.serialize().unwrap(), &signatures)? {
-            // TODO check timestamps
-            // unpack and check what's inside
-            let route = qr.envelope.event.route;
-            self.process_query(route, qr.envelope.event.data)
-            
-        } else {
-            Err(Error::SignatureVerificationError)
-        }
-    }
-
-    #[cfg(feature = "query")]
-    fn process_query(&self, route: Route, qr: QueryData ) -> Result<Vec<u8>, Error> {
-        match route {
-            Route::Logs => {
-                Ok(self.processor.get_kerl(&qr.data.i)?.ok_or(Error::SemanticError("No identifier in db".into()))?)
-            },
-            Route::Ksn => {
-                let i = qr.data.i;
-                // return reply message with ksn inside
-                let state = self.processor
-                    .compute_state(&i)
-                    .unwrap()
-                    .ok_or(Error::SemanticError("No id in database".into()))?;
-                let ksn = EventMessage::new_ksn(state, SerializationFormats::JSON, SelfAddressing::Blake3_256);
-                let rpy = new_reply(ksn, Route::ReplyKsn(self.prefix.clone()), SelfAddressing::Blake3_256);
-                rpy.serialize()
-            },
-            _ => todo!()
-        }
-    }
-
-    #[cfg(feature = "query")]
-    pub fn get_ksn_for_prefix(
-            &self,
-            prefix: &IdentifierPrefix,
-        ) -> Result<SignedReply, Error> {
-            use crate::query::{key_state_notice::KeyStateNotice, Signature};
-
-
-            let state = self.processor.compute_state(prefix).unwrap().unwrap();
-            let ksn = EventMessage::<KeyStateNotice>::new_ksn(
-                state,
-                SerializationFormats::JSON,
-                SelfAddressing::Blake3_256,
-            );
-            let rpy = new_reply(
-                ksn,
-                Route::ReplyKsn(self.prefix.clone()),
-                SelfAddressing::Blake3_256,
-            );
-
-            let sig = vec![AttachedSignaturePrefix::new(
-                SelfSigning::Ed25519Sha512,
-                self.key_manager
-                        .lock()
-                        .map_err(|_| Error::MutexPoisoned)?
-                        .sign(&rpy.serialize()?)?,
-                    0,
-                )];
-
-            Ok(SignedReply { 
-                reply: rpy, 
-                signature: Signature::Transferable(
-                    EventSeal { 
-                        prefix: self.prefix.clone(), 
-                        sn: self.get_state()?.unwrap().last_est.sn, 
-                        event_digest: SelfAddressing::Blake3_256.derive(&self.get_state()?.unwrap().last)
-                    }, 
-                    sig
-                )})
-        }
 
 }
 // Non re-allocating random `String` generator with output length of 10 char string

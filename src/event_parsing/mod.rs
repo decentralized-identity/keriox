@@ -208,7 +208,7 @@ impl TryFrom<SignedEventData> for Message {
 
 #[cfg(feature = "query")]
 fn signed_reply(mut des: SignedEventData) -> Result<Message, Error> {
-    use crate::query::SignedReply;
+    use crate::query::reply::SignedReply;
     match des.envelope.unwrap() {
         QueryEvent::Qry(_) => todo!(),
         QueryEvent::Rpy(rpy) => {

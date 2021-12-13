@@ -355,6 +355,8 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
 pub fn test_keystate() -> Result<(), Error> {
     use tempfile::Builder;
 
+    use crate::query::reply::SignedReply;
+
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
@@ -373,7 +375,7 @@ pub fn test_keystate() -> Result<(), Error> {
     assert!(matches!(event_processor.process(deserialized_rpy), Err(Error::MissingEventError)));
     // check if out of order ksn was escrowed
     let escrow = event_processor.db.get_escrowed_replys(&"E4BsxCYUtUx3d6UkDVIQ9Ke3CLQfqWBfICSmjIzkS1u4".parse()?);
-    assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 1);
+    assert_eq!(escrow.unwrap().collect::<Vec<SignedReply>>().len(), 1);
 
     event_processor.process(deserialized_icp)?;
 

@@ -1,12 +1,10 @@
-use chrono::{DateTime, FixedOffset, Utc, SecondsFormat};
+use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use serde_hex::{Compact, SerHex};
 
 use crate::{
     derivation::self_addressing::SelfAddressing,
-    event::{
-        EventMessage, SerializationFormats,
-    },
+    event::{EventMessage, SerializationFormats},
     prefix::SelfAddressingPrefix,
     state::IdentifierState,
 };
@@ -40,7 +38,10 @@ impl Serialize for KeyStateNotice {
         em.serialize_field("p", &self.state.last_previous.clone())?;
         em.serialize_field("d", &self.digest)?;
         em.serialize_field("f", &self.first_seen_sn.to_string())?;
-        em.serialize_field("dt", &self.timestamp.to_rfc3339_opts(SecondsFormat::Micros, false))?;
+        em.serialize_field(
+            "dt",
+            &self.timestamp.to_rfc3339_opts(SecondsFormat::Micros, false),
+        )?;
         em.serialize_field("et", &self.state.last_event_type)?;
         em.serialize_field("kt", &self.state.current.threshold)?;
         em.serialize_field("k", &self.state.current.public_keys)?;
@@ -65,7 +66,7 @@ impl EventMessage<KeyStateNotice> {
     ) -> Self {
         let dt: DateTime<FixedOffset> = DateTime::from(Utc::now());
 
-        let last_digest = derivation.derive(&state.last); 
+        let last_digest = derivation.derive(&state.last);
         let ksn = KeyStateNotice {
             timestamp: dt,
             state,
@@ -73,7 +74,7 @@ impl EventMessage<KeyStateNotice> {
             first_seen_sn: 0,
             config: vec![],
         };
-        
+
         EventMessage::new(ksn.clone(), serialization).unwrap()
     }
 }

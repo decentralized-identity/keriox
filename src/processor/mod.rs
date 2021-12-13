@@ -17,12 +17,12 @@ use crate::{
         TimestampedSignedEventMessage,
     },
     prefix::{IdentifierPrefix, SelfAddressingPrefix},
-    query::{key_state_notice::KeyStateNotice, Signature, QueryError, Reply},
+    query::{key_state_notice::KeyStateNotice, Signature, QueryError},
     state::{EventSemantics, IdentifierState},
 };
 
 #[cfg(feature = "query")]
-use crate::query::SignedReply;
+use crate::query::reply::SignedReply;
 use chrono::{FixedOffset, DateTime};
 
 #[cfg(feature = "async")]
@@ -463,7 +463,7 @@ impl EventProcessor {
 
     #[cfg(feature = "query")]
     fn bada_logic(&self, new_rpy: &SignedReply) -> Result<(), Error> {
-        use crate::query::Route;
+        use crate::query::{Route, reply::Reply};
         let accepted_replys = self
             .db
             .get_accepted_replys(&new_rpy.reply.event.data.data.event.state.prefix);
@@ -493,7 +493,7 @@ impl EventProcessor {
                 // get last reply for prefix with route with sender_prefix
                 match accepted_replys
                 .and_then(|mut o| {
-                    o.find(|r| r.reply.event.route.clone() == Route::ReplyKsn(seal.prefix.clone()))
+                    o.find(|r: &SignedReply| r.reply.event.route.clone() == Route::ReplyKsn(seal.prefix.clone()))
                 }) {
                     Some(old_rpy) => {
                         // check sns
@@ -547,10 +547,8 @@ impl EventProcessor {
             let verification_result = self.verify(&rpy.reply.serialize()?, &rpy.signature);
             if let Err(Error::MissingEventError) = verification_result {
                     self.escrow_reply(&rpy)?;
-                    Ok(())
-            } else {
-                verification_result
-            }?;
+            }
+            verification_result?;
             rpy.reply.check_digest()?;
             
             let bada_result = self.bada_logic(&rpy);
@@ -558,7 +556,6 @@ impl EventProcessor {
                     self.escrow_reply(&rpy)?;
             }
             bada_result?;
-            
             // now unpack ksn and check its details
             let ksn = rpy.reply.event.data.data.clone();
             let ksn_checking_result =  self.check_ksn(&ksn, aid);
@@ -578,7 +575,7 @@ impl EventProcessor {
 
         match self.db.get_accepted_replys(pref)
             .ok_or(Error::MissingEventError)?
-            .find(|sr| sr.reply.event.route == Route::ReplyKsn(aid.clone())) {
+            .find(|sr: &SignedReply| sr.reply.event.route == Route::ReplyKsn(aid.clone())) {
                 Some(old_ksn) => {
                     let old_dt = old_ksn.reply.event.data.data.event.timestamp;
                     if old_dt > new_dt {
@@ -634,21 +631,3 @@ impl EventProcessor {
         self.db.add_escrowed_reply(rpy.clone(), &id)
     }
 }
-
-    #[cfg(feature = "query")]
-    impl Reply {
-        fn with_dummy_digest(&self) -> Vec<u8> {
-            let mut def_dig = self.clone();
-            def_dig.event.data.digest = None;
-            def_dig.serialize().unwrap()
-        }
-
-        fn get_digest(&self) -> Option<SelfAddressingPrefix> {
-            self.event.data.digest.clone()
-        }
-
-        pub fn check_digest(&self) -> Result<(), Error> {
-            let digest = self.get_digest().unwrap();
-            digest.verify_binding(&self.with_dummy_digest()).then(|| ()).ok_or(QueryError::IncorrectDigest.into())
-        }
-    }

@@ -5,7 +5,7 @@ use std::path::Path;
 use crate::{error::Error, event::{Event, EventMessage}, event_message::{TimestampedEventMessage, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedSignedEventMessage}}, prefix::IdentifierPrefix};
 
 #[cfg(feature = "query")]
-use crate::query::SignedReply;
+use crate::query::reply::SignedReply;
 
 pub struct SledEventDatabase {
     // "iids" tree
@@ -30,7 +30,7 @@ pub struct SledEventDatabase {
     accepted_rpy: SledEventTreeVec<SignedReply>,
 
     #[cfg(feature = "query")]
-    reply_escrow: SledEventTreeVec<SignedReply>,
+    escrowed_replys: SledEventTreeVec<SignedReply>,
 }
 
 
@@ -50,7 +50,7 @@ impl SledEventDatabase {
             duplicitous_events: SledEventTreeVec::new(db.open_tree(b"dels")?),
             #[cfg(feature = "query")]
             accepted_rpy: SledEventTreeVec::new(db.open_tree(b"knes")?),
-            reply_escrow: SledEventTreeVec::new(db.open_tree(b"knes")?),
+            escrowed_replys: SledEventTreeVec::new(db.open_tree(b"knes")?),
         })
     }
 
@@ -175,39 +175,19 @@ impl SledEventDatabase {
      pub fn add_escrowed_reply(&self, rpy: SignedReply, id: &IdentifierPrefix)
         -> Result<(), Error> {
 
-            self.reply_escrow
+            self.escrowed_replys
                 .push(self.identifiers.designated_key(id), rpy)
         }
 
     #[cfg(feature = "query")]
     pub fn get_escrowed_replys(&self, id: &IdentifierPrefix)
         -> Option<impl DoubleEndedIterator<Item = SignedReply>> {
-            self.reply_escrow.iter_values(self.identifiers.designated_key(id))
+            self.escrowed_replys.iter_values(self.identifiers.designated_key(id))
         }
 
     #[cfg(feature = "query")]
     pub fn remove_escrowed_reply(&self, id: &IdentifierPrefix, rpy: SignedReply)
         -> Result<(), Error> {
-            self.reply_escrow.remove(self.identifiers.designated_key(id), &rpy)
+            self.escrowed_replys.remove(self.identifiers.designated_key(id), &rpy)
         }
-
-    // #[cfg(feature = "query")]
-    //  pub fn update_key_state_notice(&self,ksn: EventMessage<KeyStateNotice>, id: &IdentifierPrefix)
-    //     -> Result<(), Error> {
-
-    //         self.key_state_notices
-    //             .insert(self.identifiers.designated_key(id), &ksn)
-    //     }
-
-    // #[cfg(feature = "query")]
-    // pub fn get_key_state_notice(&self, id: &IdentifierPrefix)
-    //     -> Result<Option<EventMessage<KeyStateNotice>>, Error> {
-    //         self.key_state_notices.get(self.identifiers.designated_key(id))
-    //     }
-
-    // #[cfg(feature = "query")]
-    // pub fn remove_key_state_notice(&self, from_who: IdentifierPrefix, id: &IdentifierPrefix, ksn: EventMessage<KeyStateNotice>)
-    //     -> Result<(), Error> {
-    //         self.key_state_notices.remove(self.identifiers.designated_key(id), &ksn)
-    //     }
 }
