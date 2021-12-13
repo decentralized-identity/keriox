@@ -16,13 +16,13 @@ use crate::{
         Message, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         TimestampedSignedEventMessage,
     },
-    prefix::{IdentifierPrefix, SelfAddressingPrefix, Prefix},
+    prefix::{IdentifierPrefix, SelfAddressingPrefix},
     query::{key_state_notice::KeyStateNotice, Signature, QueryError, Reply},
     state::{EventSemantics, IdentifierState},
 };
 
 #[cfg(feature = "query")]
-use crate::query::{SignedReply, Envelope, reply::ReplyData};
+use crate::query::SignedReply;
 use chrono::{FixedOffset, DateTime};
 
 #[cfg(feature = "async")]
@@ -463,12 +463,12 @@ impl EventProcessor {
 
     #[cfg(feature = "query")]
     fn bada_logic(&self, new_rpy: &SignedReply) -> Result<(), Error> {
-        use crate::query::{Route, Reply};
+        use crate::query::Route;
         let accepted_replys = self
             .db
             .get_accepted_replys(&new_rpy.reply.event.data.data.event.state.prefix);
 
-        // helper function for reply dts checking
+        // helper function for reply timestamps checking
         fn check_dts(new_rpy: Reply, old_rpy: Reply) -> Result<(), Error> {
             let new_dt = new_rpy.get_timestamp();
             let old_dt = old_rpy.get_timestamp();
@@ -604,7 +604,7 @@ impl EventProcessor {
         // check ksn digest
         let sn = ksn.event.state.sn;
         let pre = ksn.event.state.prefix.clone();
-        let digest = ksn.event.digest.clone().unwrap();
+        let digest = ksn.event.digest.clone();
         let event_from_db = self.get_event_at_sn(&pre, sn)?.ok_or(Error::MissingEventError)?.signed_event_message.event_message;
         digest.verify_binding(&event_from_db.serialize()?).then(|| ()).ok_or::<Error>(QueryError::IncorrectDigest.into())?;
 

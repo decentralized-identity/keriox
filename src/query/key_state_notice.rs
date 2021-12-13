@@ -5,44 +5,11 @@ use serde_hex::{Compact, SerHex};
 use crate::{
     derivation::self_addressing::SelfAddressing,
     event::{
-        event_data::DummyEvent,
         EventMessage, SerializationFormats,
     },
-    prefix::{Prefix, SelfAddressingPrefix},
+    prefix::SelfAddressingPrefix,
     state::IdentifierState,
 };
-
-// # {
-// #   "v":"KERI10JSON000294_",
-// #   "t":"rpy",
-// #   "d":"EPeNPAtRcVjY7lLxl_DZ3qFPb0R0n_6wmGAMgO-u8_YU",
-// #   "dt":"2021-01-01T00:00:00.000000+00:00",
-// #   "r":"/ksn/BFUOWBaJz-sB_6b-_u_P9W8hgBQ8Su9mAtN9cY2sVGiY",
-// #   "a":{
-// #     "v":"KERI10JSON0001d9_",
-// #     "i":"E4BsxCYUtUx3d6UkDVIQ9Ke3CLQfqWBfICSmjIzkS1u4",
-// #     "s":"0",
-// #     "p":"",
-// #     "d":"EYk4PigtRsCd5W2so98c8r8aeRHoixJK7ntv9mTrZPmM",
-// #     "f":"0",
-// #     "dt":"2021-01-01T00:00:00.000000+00:00",
-// #     "et":"icp",
-// #     "kt":"1",
-// #     "k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],
-// #     "n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss",
-// #     "bt":"1",
-// #     "b":["BFUOWBaJz-sB_6b-_u_P9W8hgBQ8Su9mAtN9cY2sVGiY"],
-// #     "c":[],
-// #     "ee":{
-// #       "s":"0",
-// #       "d":"EYk4PigtRsCd5W2so98c8r8aeRHoixJK7ntv9mTrZPmM",
-// #       "br":[],
-// #       "ba":[]
-// #     },
-// #     "di":""
-// #   }
-// # }
-// # -VAi-CABBFUOWBaJz-sB_6b-_u_P9W8hgBQ8Su9mAtN9cY2sVGiY0B8nPsrW2sCoJ9JA_MaghAUxQPXZV94p8Jv_Ex_JV1zNyNlSPUTlUAAqZwaUf0ijY8ETqSgOi9z5tTv0POovmUDQ
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct KeyStateNotice {
@@ -56,7 +23,7 @@ pub struct KeyStateNotice {
     pub timestamp: DateTime<FixedOffset>,
 
     #[serde(rename = "d")]
-    pub digest: Option<SelfAddressingPrefix>, // digest of latest (current) event
+    pub digest: SelfAddressingPrefix, // digest of latest (current) event
 
     #[serde(rename = "c")]
     config: Vec<String>,
@@ -67,16 +34,11 @@ impl Serialize for KeyStateNotice {
     where
         S: Serializer,
     {
-        let digest = match &self.digest {
-            Some(sai) => sai.to_str(),
-            // TODO shouldn't be set to Blake3_265
-            None => DummyEvent::dummy_prefix(&SelfAddressing::Blake3_256),
-        };
         let mut em = serializer.serialize_struct("Envelope", 15)?;
         em.serialize_field("i", &self.state.prefix)?;
         em.serialize_field("s", &self.state.sn.to_string())?;
         em.serialize_field("p", &self.state.last_previous.clone())?;
-        em.serialize_field("d", &digest)?;
+        em.serialize_field("d", &self.digest)?;
         em.serialize_field("f", &self.first_seen_sn.to_string())?;
         em.serialize_field("dt", &self.timestamp.to_rfc3339_opts(SecondsFormat::Micros, false))?;
         em.serialize_field("et", &self.state.last_event_type)?;
@@ -107,27 +69,17 @@ impl EventMessage<KeyStateNotice> {
         let ksn = KeyStateNotice {
             timestamp: dt,
             state,
-            digest: Some(last_digest),
+            digest: last_digest,
             first_seen_sn: 0,
             config: vec![],
         };
-        // // Compute digest of event with dummy digest
-        // let ev_msg = EventMessage::new(ksn.clone(), serialization).unwrap();
-        // let dig = derivation.derive(&ev_msg.serialize().unwrap());
-        // let hashed_ksn = KeyStateNotice {
-        //     digest: Some(dig),
-        //     ..ksn.clone()
-        // };
-        // EventMessage {
-        //     event: hashed_ksn,
-        //     ..ev_msg
-        // }
+        
         EventMessage::new(ksn.clone(), serialization).unwrap()
     }
 }
 
 #[test]
-pub fn test() {
+pub fn test_ksn() {
     use crate::{
         database::sled::SledEventDatabase, event_message::signed_event_message::Message,
         event_parsing::message::signed_event_stream, processor::EventProcessor,

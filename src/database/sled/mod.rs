@@ -2,10 +2,10 @@ mod tables;
 
 use tables::{SledEventTree, SledEventTreeVec};
 use std::path::Path;
-use crate::{error::Error, event::{Event, EventMessage}, event_message::{TimestampedEventMessage, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedSignedEventMessage}}, prefix::IdentifierPrefix, query::{Envelope, SignedReply}};
+use crate::{error::Error, event::{Event, EventMessage}, event_message::{TimestampedEventMessage, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedSignedEventMessage}}, prefix::IdentifierPrefix};
 
 #[cfg(feature = "query")]
-use crate::query::{key_state_notice::KeyStateNotice};
+use crate::query::SignedReply;
 
 pub struct SledEventDatabase {
     // "iids" tree
@@ -25,9 +25,6 @@ pub struct SledEventDatabase {
     receipts_t: SledEventTreeVec<SignedTransferableReceipt>,
     // "vres" tree
     escrowed_receipts_t: SledEventTreeVec<SignedTransferableReceipt>,
-
-    #[cfg(feature = "query")]
-    key_state_notices: SledEventTree<EventMessage<KeyStateNotice>>,
 
     #[cfg(feature = "query")]
     accepted_rpy: SledEventTreeVec<SignedReply>,
@@ -51,8 +48,6 @@ impl SledEventDatabase {
             key_event_logs: SledEventTreeVec::new(db.open_tree(b"kels")?),
             likely_duplicious_events: SledEventTreeVec::new(db.open_tree(b"ldes")?),
             duplicitous_events: SledEventTreeVec::new(db.open_tree(b"dels")?),
-            #[cfg(feature = "query")]
-            key_state_notices: SledEventTree::new(db.open_tree(b"ksns")?),
             #[cfg(feature = "query")]
             accepted_rpy: SledEventTreeVec::new(db.open_tree(b"knes")?),
             reply_escrow: SledEventTreeVec::new(db.open_tree(b"knes")?),
