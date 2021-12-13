@@ -379,10 +379,10 @@ pub fn test_keystate() -> Result<(), Error> {
 
     event_processor.process(deserialized_icp)?;
 
-    // TODO
-    // event_processor.process_escrow();
-    // let escrow = event_processor.db.get_escrowed_replys(&"E4BsxCYUtUx3d6UkDVIQ9Ke3CLQfqWBfICSmjIzkS1u4".parse()?);
-    // assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 0);
+    // process escrow and check if reply was removed
+    event_processor.process_escrow()?;
+    let escrow = event_processor.db.get_escrowed_replys(&"E4BsxCYUtUx3d6UkDVIQ9Ke3CLQfqWBfICSmjIzkS1u4".parse()?);
+    assert_eq!(escrow.unwrap().collect::<Vec<SignedReply>>().len(), 0);
 
     Ok(())
 }

@@ -190,4 +190,11 @@ impl SledEventDatabase {
         -> Result<(), Error> {
             self.escrowed_replys.remove(self.identifiers.designated_key(id), &rpy)
         }
+    
+    #[cfg(feature = "query")]
+    pub fn get_all_escrowed_replys(&self)
+        -> Option<impl DoubleEndedIterator<Item = SignedReply>> {
+            self.escrowed_replys.get_all()
+        }
+
 }

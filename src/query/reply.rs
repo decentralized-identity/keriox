@@ -5,7 +5,10 @@ use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
     event::{sections::seal::EventSeal, EventMessage, SerializationFormats},
-    prefix::{AttachedSignaturePrefix, BasicPrefix, SelfAddressingPrefix, SelfSigningPrefix},
+    prefix::{
+        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
+        SelfSigningPrefix,
+    }, state::IdentifierState,
 };
 
 use super::{key_state_notice::KeyStateNotice, Envelope, QueryError, Route, Signature};
@@ -57,6 +60,15 @@ impl Reply {
 
     pub fn get_timestamp(&self) -> DateTime<FixedOffset> {
         self.event.timestamp
+    }
+
+    pub fn get_prefix(&self) -> IdentifierPrefix {
+        self.event.data.data.event.state.prefix.clone()
+    }
+
+
+    pub fn get_state(&self) -> IdentifierState {
+        self.event.data.data.event.state.clone()
     }
 
     fn with_dummy_digest(&self) -> Vec<u8> {

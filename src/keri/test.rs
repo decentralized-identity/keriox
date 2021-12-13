@@ -249,7 +249,7 @@ pub fn test_rpy_ksn() -> Result<(), Error> {
     let signed_rpy = witness.get_ksn_for_prefix(&bob_pref)?;
 
     // Process reply message before having any bob's events in db.
-    let res = alice.process_signed_reply(signed_rpy.clone());
+    let res = alice.process_signed_reply(&signed_rpy.clone());
     let escrow = alice.db.get_escrowed_replys(&bob_pref);
     assert_eq!(escrow.unwrap().collect::<Vec<SignedReply>>().len(), 1);
     assert!(matches!(
@@ -264,24 +264,24 @@ pub fn test_rpy_ksn() -> Result<(), Error> {
     alice.process_event(&bob_rot)?;
 
     // try to process old reply message
-    let res = alice.process_signed_reply(signed_rpy.clone());
+    let res = alice.process_signed_reply(&signed_rpy.clone());
     assert!(matches!(res, Err(Error::QueryError(QueryError::StaleKsn))));
 
     // now create new reply event by witness, and process it by alice.
     let new_reply = witness.get_ksn_for_prefix(&bob_pref)?;
-    let res = alice.process_signed_reply(new_reply);
+    let res = alice.process_signed_reply(&new_reply);
     assert!(res.is_ok());
 
     let new_bob_rot = bob.rotate()?;
     witness.processor.process_event(&new_bob_rot)?;
     // Create transferable reply by bob and process it by alice.
     let trans_rpy = witness.get_ksn_for_prefix(&bob_pref)?;
-    let res = alice.process_signed_reply(trans_rpy.clone());
+    let res = alice.process_signed_reply(&trans_rpy.clone());
     assert!(matches!(res, Err(Error::MissingEventError)));
 
     // Now update bob's state in alice's db to most recent.
     alice.process_event(&new_bob_rot)?;
-    let res = alice.process_signed_reply(trans_rpy.clone());
+    let res = alice.process_signed_reply(&trans_rpy.clone());
     assert!(res.is_ok());
 
     Ok(())

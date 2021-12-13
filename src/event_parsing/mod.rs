@@ -210,7 +210,7 @@ impl TryFrom<SignedEventData> for Message {
 fn signed_reply(mut des: SignedEventData) -> Result<Message, Error> {
     use crate::query::reply::SignedReply;
     match des.envelope.unwrap() {
-        QueryEvent::Qry(_) => todo!(),
+        QueryEvent::Qry(_) => Err(Error::SemanticError("Improper event type".into())),
         QueryEvent::Rpy(rpy) => {
             // let sr = SignedReply::new(des.envelope, );
             match des.attachments.pop().ok_or_else(|| Error::SemanticError("Missing attachment".into()))? {
