@@ -2,10 +2,12 @@ use chrono::{DateTime, Local};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use std::cmp::Ordering;
 
-use crate::{error::Error, event::{Event, sections::seal::{EventSeal, SourceSeal}}, event_parsing::Attachment, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}, state::{EventSemantics, IdentifierState}, query::reply::SignedReply};
+use crate::{error::Error, event::{Event, sections::seal::{EventSeal, SourceSeal}}, event_parsing::Attachment, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}, state::{EventSemantics, IdentifierState}};
 use super::serializer::to_string;
-
 use super::EventMessage;
+
+#[cfg(feature = "query")]
+use crate::query::reply::SignedReply;
 
 #[derive(Clone, Debug)]
 pub enum Message {

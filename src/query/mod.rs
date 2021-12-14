@@ -2,9 +2,9 @@ use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
     event::{
-        event_data::DummyEvent, sections::seal::EventSeal, EventMessage, SerializationFormats,
+        event_data::DummyEvent, EventMessage, SerializationFormats,
     },
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
+    prefix::{IdentifierPrefix, Prefix},
 };
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use serde::{de, ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
@@ -23,7 +23,7 @@ pub mod reply;
 pub type TimeStamp = DateTime<FixedOffset>;
 
 #[derive(Deserialize, Debug, Clone, PartialEq)]
-pub struct Envelope<D> {
+pub struct Envelope<D: Serialize> {
     #[serde(rename = "dt")]
     pub timestamp: DateTime<FixedOffset>,
 
@@ -34,7 +34,7 @@ pub struct Envelope<D> {
     pub data: D,
 }
 
-impl<D> Envelope<D> {
+impl<D: Serialize> Envelope<D> {
     pub fn new(route: Route, data: D) -> Self {
         let timestamp: DateTime<FixedOffset> = Utc::now().into();
         Envelope {
@@ -144,20 +144,6 @@ pub enum ReplyType {
     Kel(Vec<u8>),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub enum Signature {
-    Transferable(EventSeal, Vec<AttachedSignaturePrefix>),
-    NonTransferable(BasicPrefix, SelfSigningPrefix),
-}
-
-impl Signature {
-    pub fn get_signer(&self) -> IdentifierPrefix {
-        match self {
-            Signature::Transferable(seal, _) => seal.prefix.clone(),
-            Signature::NonTransferable(id, _) => IdentifierPrefix::Basic(id.clone()),
-        }
-    }
-}
 
 #[derive(Error, Debug)]
 pub enum QueryError {

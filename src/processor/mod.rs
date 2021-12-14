@@ -1,4 +1,8 @@
 use std::sync::Arc;
+#[cfg(feature = "query")]
+use crate::query::{key_state_notice::KeyStateNotice, QueryError, reply::SignedReply};
+#[cfg(feature = "query")]
+use chrono::{DateTime, FixedOffset};
 
 use crate::{
     database::sled::SledEventDatabase,
@@ -9,21 +13,16 @@ use crate::{
         sections::{
             seal::{EventSeal, Seal},
             KeyConfig,
-        },
+        },    
         Event, EventMessage,
-    },
-    event_message::signed_event_message::{
+    },    
+    event_message::{signed_event_message::{
         Message, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         TimestampedSignedEventMessage,
-    },
+    }, signature::Signature},    
     prefix::{IdentifierPrefix, SelfAddressingPrefix},
-    query::{key_state_notice::KeyStateNotice, QueryError, Signature},
     state::{EventSemantics, IdentifierState},
-};
-
-#[cfg(feature = "query")]
-use crate::query::reply::SignedReply;
-use chrono::{DateTime, FixedOffset};
+};    
 
 #[cfg(feature = "async")]
 pub mod async_processing;
@@ -232,6 +231,7 @@ impl EventProcessor {
             Message::Event(e) => self.process_event(&e),
             Message::NontransferableRct(rct) => self.process_witness_receipt(rct),
             Message::TransferableRct(rct) => self.process_validator_receipt(rct),
+            #[cfg(feature = "query")]
             Message::KeyStateNotice(ksn_rpy) => self.process_signed_reply(&ksn_rpy),
         }
     }

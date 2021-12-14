@@ -5,7 +5,9 @@ use crate::query::reply::{Reply, SignedReply};
 use crate::query::{
     query::{QueryData, SignedQuery},
     ReplyType,
+    key_state_notice::KeyStateNotice, Route
 };
+
 use crate::{
     database::sled::SledEventDatabase,
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
@@ -13,9 +15,9 @@ use crate::{
     event::{EventMessage, SerializationFormats},
     prefix::{BasicPrefix, IdentifierPrefix},
     processor::EventProcessor,
-    query::{key_state_notice::KeyStateNotice, Route},
     signer::{CryptoBox, KeyManager},
 };
+
 pub struct Witness {
     pub prefix: BasicPrefix,
     signer: CryptoBox,

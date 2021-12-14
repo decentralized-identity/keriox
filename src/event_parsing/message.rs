@@ -10,10 +10,10 @@ use serde::Deserialize;
 #[cfg(feature = "async")]
 use crate::event_message::serialization_info::SerializationInfo;
 
-use crate::{event::{Event, EventMessage}, event_parsing::{Attachment, SignedEventData, attachment::attachment}}; 
+use crate::{event::{Event, EventMessage}, event_parsing::{Attachment, SignedEventData, attachment::attachment, EventType}}; 
 #[cfg(feature = "query")]
 use serde::Serialize;
-use super::QueryEvent;
+#[cfg(feature = "query")]
 use crate::query::Envelope;
 use rmp_serde as serde_mgpk;
 
@@ -42,20 +42,43 @@ fn mgpk_message<'a, D: Deserialize<'a>>(s: &[u8]) -> nom::IResult<&[u8], EventMe
     }
 }
 
-pub fn message(s: &[u8]) -> nom::IResult<&[u8], EventMessage<Event>> {
-    alt((json_message::<Event>, cbor_message::<Event>, mgpk_message::<Event>))(s).map(|d| (d.0, d.1))
+pub fn message<'a, D: Deserialize<'a>>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<D>> {
+    alt((json_message::<D>, cbor_message::<D>, mgpk_message::<D>))(s)
+
+}
+
+pub fn event_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
+    message::<Event>(s)
+        .map(|d| (d.0, EventType::KeyEvent(d.1)))
+
 }
 
 #[cfg(feature = "query")]
-pub fn envelope<'a, D: Serialize + Deserialize<'a>>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<Envelope<D>>> {
-    alt((json_message::<Envelope<D>>, cbor_message::<Envelope<D>>, mgpk_message::<Envelope<D>>))(s).map(|d| (d.0, d.1))
+fn envelope<'a, D: Serialize + Deserialize<'a>>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<Envelope<D>>> {
+    message::<Envelope<D>>(s)
+        .map(|d| (d.0, d.1))
+}
+
+#[cfg(feature = "query")]
+pub fn query_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], EventType> {
+    use crate::query::query::QueryData;
+
+    envelope::<QueryData>(s).map(|d| (d.0, EventType::Qry(d.1)))
+}
+
+#[cfg(feature = "query")]
+pub fn reply_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], EventType> {
+    use crate::query::reply::ReplyData;
+
+    envelope::<ReplyData>(s).map(|d| (d.0, EventType::Rpy(d.1)))
 }
 
 pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
-
-    fn get_key_event(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
-        let (rest, event) = message(s)?;
-        let (rest, attachments): (&[u8], Vec<Attachment>) =
+    #[cfg(feature = "query")]
+    let (rest, event) = alt((event_message, reply_message, query_message))(s)?;
+    #[cfg(not(feature = "query"))]
+    let (rest, event) = event_message(s)?;
+    let (rest, attachments): (&[u8], Vec<Attachment>) =
         fold_many0(attachment, vec![], |mut acc: Vec<_>, item| {
             acc.push(item);
             acc
@@ -64,48 +87,9 @@ pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
     Ok((
         rest,
         SignedEventData {
-            deserialized_event: Some(event),
-            #[cfg(feature = "query")]
-            envelope: None,
+            deserialized_event: event,
             attachments,
         }))
-    }
-
-    #[cfg(feature = "query")]
-    fn get_query_event(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
-        use crate::query::{query::QueryData, reply::ReplyData};
-
-        let (rest, envelope) = match envelope::<QueryData>(s) {
-            Ok((rest, qr)) => (rest, QueryEvent::Qry(qr)),
-            Err(_) => envelope::<ReplyData>(s).map(|(rest, rpy)| (rest, QueryEvent::Rpy(rpy)))?,
-        };
-        let (rest, attachments): (&[u8], Vec<Attachment>) =
-        fold_many0(attachment, vec![], |mut acc: Vec<_>, item| {
-            acc.push(item);
-            acc
-        })(rest)?;
-
-    Ok((
-        rest,
-        SignedEventData {
-            deserialized_event: None,
-            #[cfg(feature = "query")]
-            envelope: Some(envelope),
-            attachments,
-        }))
-    }
-
-    match get_key_event(s) {
-        Ok((rest, ev)) => Ok((rest, ev)),
-        #[cfg(feature = "query")]
-        Err(_e) => {
-            get_query_event(s)
-        },
-        #[cfg(not(feature = "query"))]
-        Err(e) => {
-            Err(e)
-        },
-    } 
 }
 
 pub fn signed_event_stream(s: &[u8]) -> nom::IResult<&[u8], Vec<SignedEventData>> {
@@ -164,42 +148,42 @@ fn test_signed_event() {
 #[test]
 fn test_event() {
     let stream = br#"{"v":"KERI10JSON0000ed_","i":"E7WIS0e4Tx1PcQW5Um5s3Mb8uPSzsyPODhByXzgvmAdQ","s":"0","t":"icp","kt":"1","k":["Dpt7mGZ3y5UmhT1NLExb1IW8vMJ8ylQW3K44LfkTgAqE"],"n":"Erpltchg7BUv21Qz3ZXhOhVu63m7S7YbPb21lSeGYd90","bt":"0","b":[],"c":[],"a":[]}"#;
-    let event = message(stream);
+    let event = event_message(stream);
     assert!(event.is_ok());
     assert_eq!(event.unwrap().1.serialize().unwrap(), stream);
 
     // Inception event.
     let stream = r#"{"v":"KERI10JSON00011c_","i":"EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM","s":"0","t":"icp","kt":"1","k":["DaU6JR2nmwyZ-i0d8JZAoTNZH3ULvYAfSVPzhzS6b5CM"],"n":"EZ-i0d8JZAoTNZH3ULvaU6JR2nmwyYAfSVPzhzS6b5CM","bt":"1","b":["DTNZH3ULvaU6JR2nmwyYAfSVPzhzS6bZ-i0d8JZAo5CM"],"c":["EO"],"a":[]}"#.as_bytes();
-    let event = message(stream);
+    let event = event_message(stream);
     assert!(event.is_ok());
     assert_eq!(event.unwrap().1.serialize().unwrap(), stream);
 
     // Rotation event.
     let stream = r#"{"v":"KERI10JSON00011c_","i":"EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM","s":"1","t":"rot","p":"EULvaU6JR2nmwyZ-i0d8JZAoTNZH3YAfSVPzhzS6b5CM","kt":"1","k":["DaU6JR2nmwyZ-i0d8JZAoTNZH3ULvYAfSVPzhzS6b5CM"],"n":"EYAfSVPzhzZ-i0d8JZAoTNZH3ULvaU6JR2nmwyS6b5CM","bt":"1","br":["DH3ULvaU6JR2nmwyYAfSVPzhzS6bZ-i0d8TNZJZAo5CM"],"ba":["DTNZH3ULvaU6JR2nmwyYAfSVPzhzS6bZ-i0d8JZAo5CM"],"a":[{"i":"EJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8","s":"0","d":"ELvaU6Z-i0d8JJR2nmwyYAZAoTNZH3UfSVPzhzS6b5CM"}]}"#.as_bytes();
-    let event = message(stream);
+    let event = event_message(stream);
     assert!(event.is_ok());
     assert_eq!(event.unwrap().1.serialize().unwrap(), stream);
 
     // Interaction event without seals.
     let stream = r#"{"v":"KERI10JSON0000a3_","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"3","t":"ixn","p":"EHBaMkc2lTj-1qnIgSeD0GmYjw8Zv6EmCgGDVPedn3fI","a":[]}"#.as_bytes();
-    let event = message(stream);
+    let event = event_message(stream);
     assert!(event.is_ok());
     assert_eq!(event.unwrap().1.serialize().unwrap(), stream);
 
     // Interaction event with seal.
     let stream = r#"{"v":"KERI10JSON00011c_","i":"EZAoTNZH3ULvaU6Z-i0d8JJR2nmwyYAfSVPzhzS6b5CM","s":"2","t":"ixn","p":"EULvaU6JR2nmwyZ-i0d8JZAoTNZH3YAfSVPzhzS6b5CM","a":[{"i":"EJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8","s":"1","d":"ELvaU6Z-i0d8JJR2nmwyYAZAoTNZH3UfSVPzhzS6b5CM"}]}"#.as_bytes();
-    let event = message(stream);
+    let event = event_message(stream);
     assert!(event.is_ok());
     assert_eq!(event.unwrap().1.serialize().unwrap(), stream);
 
     // Delegated inception event.
     let stream = r#"{"v":"KERI10JSON000121_","i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"0","t":"dip","kt":"1","k":["DuK1x8ydpucu3480Jpd1XBfjnCwb3dZ3x5b1CJmuUphA"],"n":"EWWkjZkZDXF74O2bOQ4H5hu4nXDlKg2m4CBEBkUxibiU","bt":"0","b":[],"c":[],"a":[],"di":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI"}"#.as_bytes();
-    let event = message(stream);
+    let event = event_message(stream);
     assert_eq!(event.unwrap().1.serialize().unwrap(), stream);
 
     // // Delegated rotation event.
     let stream = r#"{"v":"KERI10JSON000122_","i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"1","t":"drt","p":"E1x1JOub6oEQkxAxTNFu1Pma6y-lrbprNsaILHJHoPmY","kt":"1","k":["DTf6QZWoet154o9wvzeMuNhLQRr8JaAUeiC6wjB_4_08"],"n":"E8kyiXDfkE7idwWnAZQjHbUZMz-kd_yIMH0miptIFFPo","bt":"0","br":[],"ba":[],"a":[]}"#.as_bytes();
-    let event = message(stream);
+    let event = event_message(stream);
     assert!(event.is_ok());
     assert_eq!(event.unwrap().1.serialize().unwrap(), stream);
 }

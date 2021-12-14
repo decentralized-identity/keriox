@@ -29,6 +29,7 @@ use universal_wallet::prelude::{Content, UnlockedWallet};
 
 #[cfg(test)]
 mod test;
+#[cfg(feature = "query")]
 pub mod witness;
 pub struct Keri<K: KeyManager + 'static> {
     prefix: IdentifierPrefix,

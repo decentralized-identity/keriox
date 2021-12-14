@@ -2,6 +2,7 @@ pub mod event_msg_builder;
 pub mod serialization_info;
 pub mod serializer;
 pub mod signed_event_message;
+pub mod signature;
 
 use std::cmp::Ordering;
 

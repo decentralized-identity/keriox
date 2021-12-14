@@ -50,6 +50,7 @@ impl SledEventDatabase {
             duplicitous_events: SledEventTreeVec::new(db.open_tree(b"dels")?),
             #[cfg(feature = "query")]
             accepted_rpy: SledEventTreeVec::new(db.open_tree(b"knes")?),
+            #[cfg(feature = "query")]
             escrowed_replys: SledEventTreeVec::new(db.open_tree(b"knes")?),
         })
     }

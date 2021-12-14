@@ -8,10 +8,10 @@ use crate::{
     prefix::{
         AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
         SelfSigningPrefix,
-    }, state::IdentifierState,
+    }, state::IdentifierState, event_message::signature::Signature,
 };
 
-use super::{key_state_notice::KeyStateNotice, Envelope, QueryError, Route, Signature};
+use super::{key_state_notice::KeyStateNotice, Envelope, QueryError, Route};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct ReplyData {
