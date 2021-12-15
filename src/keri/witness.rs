@@ -62,7 +62,6 @@ impl Witness {
         ))
     }
 
-    #[cfg(feature = "query")]
     pub fn process_signed_query(&self, qr: SignedQuery) -> Result<ReplyType, Error> {
         let signatures = qr.signatures;
         // check signatures

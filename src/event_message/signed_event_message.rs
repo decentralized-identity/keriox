@@ -9,7 +9,7 @@ use super::EventMessage;
 #[cfg(feature = "query")]
 use crate::query::reply::SignedReply;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Message {
     Event(SignedEventMessage),
     // Rct's have an alternative appended signature structure,

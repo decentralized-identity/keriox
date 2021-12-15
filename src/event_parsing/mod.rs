@@ -4,10 +4,12 @@ use serde::Deserialize;
 
 use crate::event::{Event, EventMessage};
 use crate::event::sections::seal::{EventSeal, SourceSeal};
+use crate::event_message::signature::Signature;
 use crate::event_message::signed_event_message::{Message, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt};
 use crate::event_parsing::payload_size::PayloadType;
 use crate::prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix};
 
+use crate::query::reply::SignedReply;
 #[cfg(feature = "query")]
 use crate::query::{query::Query, reply::Reply};
 use crate::{error::Error, event::event_data::EventData};
@@ -196,6 +198,24 @@ impl From<SignedTransferableReceipt> for SignedEventData {
     }
 }
 
+impl From<SignedReply> for SignedEventData {
+    fn from(ev: SignedReply) -> Self {
+        let attachments = vec![
+            match ev.signature.clone() {
+                Signature::Transferable(seal, sig) => 
+                    Attachment::SealSignaturesGroups(vec![(seal, sig)]),
+                Signature::NonTransferable(pref, sig) => 
+                    Attachment::ReceiptCouplets(vec![(pref, sig)]),
+        }]; 
+        
+        SignedEventData { 
+            deserialized_event: EventType::Rpy(ev.reply), 
+            attachments
+        }
+    }
+    
+}
+
 impl TryFrom<SignedEventData> for Message {
     type Error = Error;
 
@@ -212,7 +232,6 @@ impl TryFrom<SignedEventData> for Message {
 
 #[cfg(feature = "query")]
 fn signed_reply(rpy: Reply, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
-    use crate::query::reply::SignedReply;
     match attachments.pop().ok_or_else(|| Error::SemanticError("Missing attachment".into()))? {
         Attachment::ReceiptCouplets(couplets) => {
         let signer = couplets[0].0.clone();

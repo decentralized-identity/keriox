@@ -151,6 +151,8 @@ pub enum QueryError {
     StaleKsn,
     #[error("Got stale reply message")]
     StaleRpy,
+    #[error("No previous reply in database")]
+    NoSavedReply,
     #[error("Key state notice is newer than state in db")]
     ObsoleteKel,
     #[error("No key state notice is db")]

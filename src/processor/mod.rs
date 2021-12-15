@@ -509,8 +509,7 @@ impl EventProcessor {
                             Err(QueryError::StaleRpy.into())
                         }
                     }
-                    // TODO ?
-                    None => Err(Error::MissingEventError),
+                    None => Err(QueryError::NoSavedReply.into()),
                 }
             }
             Signature::NonTransferable(bp, _sig) => {
@@ -522,8 +521,7 @@ impl EventProcessor {
                     })
                 }) {
                     Some(old_rpy) => check_dts(new_rpy.reply.clone(), old_rpy.reply),
-                    // TODO ?
-                    None => Err(Error::MissingEventError),
+                    None => Err(QueryError::NoSavedReply.into()),
                 }
             }
         }
@@ -549,10 +547,14 @@ impl EventProcessor {
             verification_result?;
             rpy.reply.check_digest()?;
             let bada_result = self.bada_logic(&rpy);
-            if let Err(Error::MissingEventError) = bada_result {
-                self.escrow_reply(&rpy)?;
-            }
-            bada_result?;
+            match bada_result {
+                Err(Error::QueryError(QueryError::NoSavedReply)) => {
+                   // no previous rpy event to compare
+                    Ok(())
+                },
+                anything => anything,
+            }?;
+
             // now unpack ksn and check its details
             let ksn = rpy.reply.event.data.data.clone();
             let ksn_checking_result = self.check_ksn(&ksn, aid);
@@ -560,7 +562,7 @@ impl EventProcessor {
                 self.escrow_reply(&rpy)?;
             };
             ksn_checking_result?;
-            self.db.add_accepted_reply(rpy.clone(), &rpy.reply.get_prefix())?;
+            self.db.update_accepted_reply(rpy.clone(), &rpy.reply.get_prefix())?;
             Ok(Some(rpy.reply.get_state()))
         } else {
             Err(Error::SemanticError("wrong route type".into()))
@@ -651,13 +653,13 @@ impl EventProcessor {
         self.db.get_all_escrowed_replys().map(|esc| {
             esc.for_each(|sig_rep| {
                 match self.process_signed_reply(&sig_rep) {
-                    Ok(_) | Err(Error::SignatureVerificationError) => {
+                    Ok(_) | Err(Error::SignatureVerificationError) | Err(Error::QueryError(QueryError::StaleRpy)) => {
                         // remove from escrow
                         self.db
                             .remove_escrowed_reply(&sig_rep.reply.get_prefix(), sig_rep)
                             .unwrap();
                     }
-                    Err(_) => {} // keep in escrow,
+                    Err(_e) => {} // keep in escrow,
                 }
             })
         });

@@ -203,11 +203,11 @@ fn test_qry_rpy() -> Result<(), Error> {
 
 #[cfg(feature = "query")]
 #[test]
-pub fn test_rpy_ksn() -> Result<(), Error> {
+pub fn test_key_state_notice() -> Result<(), Error> {
     use crate::{
         processor::EventProcessor,
         query::{QueryError, reply::SignedReply},
-        signer::CryptoBox, prefix::Prefix, keri::witness::Witness,
+        signer::CryptoBox, keri::witness::Witness,
     };
     use tempfile::Builder;
 
@@ -240,7 +240,6 @@ pub fn test_rpy_ksn() -> Result<(), Error> {
     // bob.rotate().unwrap();
 
     let bob_pref = bob.prefix().clone();
-    println!("bobs pref: {}\n", bob_pref.to_str());
 
     // send bobs icp to witness to have his keys
     witness.processor.process_event(&bob_icp)?;

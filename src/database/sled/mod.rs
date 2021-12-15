@@ -49,7 +49,7 @@ impl SledEventDatabase {
             likely_duplicious_events: SledEventTreeVec::new(db.open_tree(b"ldes")?),
             duplicitous_events: SledEventTreeVec::new(db.open_tree(b"dels")?),
             #[cfg(feature = "query")]
-            accepted_rpy: SledEventTreeVec::new(db.open_tree(b"knes")?),
+            accepted_rpy: SledEventTreeVec::new(db.open_tree(b"knas")?),
             #[cfg(feature = "query")]
             escrowed_replys: SledEventTreeVec::new(db.open_tree(b"knes")?),
         })
@@ -153,12 +153,28 @@ impl SledEventDatabase {
         }
 
     #[cfg(feature = "query")]
-     pub fn add_accepted_reply(&self, rpy: SignedReply, id: &IdentifierPrefix)
-        -> Result<(), Error> {
-
-            self.accepted_rpy
-                .push(self.identifiers.designated_key(id), rpy)
+    pub fn update_accepted_reply(
+        &self,
+        rpy: SignedReply,
+        id: &IdentifierPrefix,
+    ) -> Result<(), Error> {
+        match self
+            .accepted_rpy
+            .iter_values(self.identifiers.designated_key(id))
+        {
+            Some(rpys) => {
+                let filtered = rpys
+                    .filter(|s| s.reply.event.route != rpy.reply.event.route)
+                    .chain(Some(rpy.clone()).into_iter())
+                    .collect();
+                self.accepted_rpy
+                    .put(self.identifiers.designated_key(id), filtered)
+            }
+            None => self
+                .accepted_rpy
+                .push(self.identifiers.designated_key(id), rpy),
         }
+    }
 
     #[cfg(feature = "query")]
     pub fn get_accepted_replys(&self, id: &IdentifierPrefix)
