@@ -269,7 +269,7 @@ impl EventProcessor {
                     .delegator_seal
                     .as_ref()
                     .map(|seal| (seal.sn, seal.digest.clone()))
-                    .ok_or(Error::SemanticError("Missing source seal".into()))?;
+                    .ok_or_else(|| Error::SemanticError("Missing source seal".into()))?;
                 let seal = EventSeal {
                     prefix: dip.delegator,
                     sn: sn,
@@ -280,7 +280,7 @@ impl EventProcessor {
             EventData::Drt(_drt) => {
                 let delegator = self
                     .compute_state(&signed_event.event_message.event.prefix)?
-                    .ok_or(Error::SemanticError(
+                    .ok_or_else(|| Error::SemanticError(
                         "Missing state of delegated identifier".into(),
                     ))?
                     .delegator
@@ -289,7 +289,7 @@ impl EventProcessor {
                     .delegator_seal
                     .as_ref()
                     .map(|seal| (seal.sn, seal.digest.clone()))
-                    .ok_or(Error::SemanticError("Missing source seal".into()))?;
+                    .ok_or_else(|| Error::SemanticError("Missing source seal".into()))?;
                 let seal = EventSeal {
                     prefix: delegator,
                     sn,
@@ -331,7 +331,7 @@ impl EventProcessor {
                             _ => (),
                         };
                         // remove last added event
-                        self.db.remove_kel_finalized_event(id, &signed_event)?;
+                        self.db.remove_kel_finalized_event(id, signed_event)?;
                         Err(e)
                     }
                 }
@@ -402,7 +402,7 @@ impl EventProcessor {
                         .clone()
                         .couplets
                         .into_iter()
-                        .map(|(witness, receipt)| witness.verify(&&serialized_event, &receipt))
+                        .map(|(witness, receipt)| witness.verify(&serialized_event, &receipt))
                         .partition(Result::is_ok);
                     if errors.len() == 0 {
                         self.db.add_receipt_nt(rct, &id)?
@@ -444,12 +444,12 @@ impl EventProcessor {
         match sig {
             Signature::Transferable(seal, sigs) => {
                 let kp = self.get_keys_at_event(&seal.prefix, seal.sn, &seal.event_digest)?;
-                (kp.is_some() && kp.unwrap().verify(&data, &sigs)?)
+                (kp.is_some() && kp.unwrap().verify(data, sigs)?)
                     .then(|| ())
                     .ok_or(Error::SignatureVerificationError)
             }
             Signature::NonTransferable(bp, sign) => bp
-                .verify(data, &sign)?
+                .verify(data, sign)?
                 .then(|| ())
                 .ok_or(Error::SignatureVerificationError),
         }

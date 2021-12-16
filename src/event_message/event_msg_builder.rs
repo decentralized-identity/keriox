@@ -169,7 +169,7 @@ impl EventMsgBuilder {
         let key_config = KeyConfig::new(self.keys, Some(next_key_hash), Some(self.key_threshold));
         let prefix = if self.prefix == IdentifierPrefix::default() {
             if key_config.public_keys.len() == 1 {
-                IdentifierPrefix::Basic(key_config.clone().public_keys[0].clone())
+                IdentifierPrefix::Basic(key_config.public_keys[0].clone())
             } else {
                 let icp_data = InceptionEvent::new(key_config.clone(), None, None)
                     .incept_self_addressing(self.derivation.clone(), self.format)?;
@@ -263,16 +263,18 @@ pub struct ReceiptBuilder {
     receipted_event: EventMessage<Event>,
 }
 
-impl ReceiptBuilder {
-    pub fn new() -> Self {
-        let default_event = EventMessage::default();
+impl Default for ReceiptBuilder {
+     fn default() -> Self {
+         let default_event = EventMsgBuilder::new(EventType::Inception).build().unwrap();
         Self {
             format: SerializationFormats::JSON,
             derivation: SelfAddressing::Blake3_256,
             receipted_event: default_event,
         }
     }
+}
 
+impl ReceiptBuilder {
     pub fn with_format(self, format: SerializationFormats) -> Self {
         Self { format, ..self }
     }

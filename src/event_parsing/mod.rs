@@ -4,14 +4,12 @@ use serde::Deserialize;
 
 use crate::event::{Event, EventMessage};
 use crate::event::sections::seal::{EventSeal, SourceSeal};
-use crate::event_message::signature::Signature;
 use crate::event_message::signed_event_message::{Message, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt};
 use crate::event_parsing::payload_size::PayloadType;
 use crate::prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix};
 
-use crate::query::reply::SignedReply;
 #[cfg(feature = "query")]
-use crate::query::{query::Query, reply::Reply};
+use crate::query::{query::Query, reply::{Reply, SignedReply}};
 use crate::{error::Error, event::event_data::EventData};
 
 pub mod attachment;
@@ -198,8 +196,10 @@ impl From<SignedTransferableReceipt> for SignedEventData {
     }
 }
 
+#[cfg(feature = "query")]
 impl From<SignedReply> for SignedEventData {
     fn from(ev: SignedReply) -> Self {
+        use crate::event_message::signature::Signature;
         let attachments = vec![
             match ev.signature.clone() {
                 Signature::Transferable(seal, sig) => 

@@ -118,7 +118,7 @@ fn test_qry_rpy() -> Result<(), Error> {
     use crate::{
         derivation::self_signing::SelfSigning,
         event::SerializationFormats,
-        prefix::{AttachedSignaturePrefix, Prefix},
+        prefix::AttachedSignaturePrefix,
         query::{
             query::{Query, SignedQuery},
             Route, ReplyType,
@@ -129,25 +129,20 @@ fn test_qry_rpy() -> Result<(), Error> {
 
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
-    std::fs::create_dir_all(root.path()).unwrap();
-    let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+    let alice_db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
-    std::fs::create_dir_all(root.path()).unwrap();
-    let db2 = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+    let bob_db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
     let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
-    let path = witness_root.path();
-    std::fs::create_dir_all(path).unwrap();
-    let witness = Witness::new(path)?;
+    let witness = Witness::new(witness_root.path())?;
 
-    
     let alice_key_manager = Arc::new(Mutex::new({
         use crate::signer::CryptoBox;
         CryptoBox::new()?
     }));
 
     // Init alice.
-    let mut alice = Keri::new(Arc::clone(&db), Arc::clone(&alice_key_manager))?;
+    let mut alice = Keri::new(Arc::clone(&alice_db), Arc::clone(&alice_key_manager))?;
 
     let bob_key_manager = Arc::new(Mutex::new({
         use crate::signer::CryptoBox;
@@ -155,13 +150,12 @@ fn test_qry_rpy() -> Result<(), Error> {
     }));
 
     // Init bob.
-    let mut bob = Keri::new(Arc::clone(&db2), Arc::clone(&bob_key_manager))?;
+    let mut bob = Keri::new(Arc::clone(&bob_db), Arc::clone(&bob_key_manager))?;
 
     let bob_icp = bob.incept(None).unwrap();
     // bob.rotate().unwrap();
 
     let bob_pref = bob.prefix();
-    println!("bobs pref: {}\n", bob_pref.to_str());
 
     let alice_icp = alice.incept(Some(vec![witness.prefix.clone()]))?;
     // send alices icp to witness
@@ -169,7 +163,6 @@ fn test_qry_rpy() -> Result<(), Error> {
     // send bobs icp to witness to have his keys
     let _rcps = witness.processor.process_event(&bob_icp)?;
 
-    // println!("\nrcps: {}\n", String::from_utf8(rcps).unwrap());
     let alice_pref = alice.prefix();
 
     // Bob asks about alices key state
@@ -206,7 +199,7 @@ fn test_qry_rpy() -> Result<(), Error> {
 pub fn test_key_state_notice() -> Result<(), Error> {
     use crate::{
         processor::EventProcessor,
-        query::{QueryError, reply::SignedReply},
+        query::QueryError,
         signer::CryptoBox, keri::witness::Witness,
     };
     use tempfile::Builder;
@@ -249,8 +242,6 @@ pub fn test_key_state_notice() -> Result<(), Error> {
 
     // Process reply message before having any bob's events in db.
     let res = alice.process_signed_reply(&signed_rpy.clone());
-    let escrow = alice.db.get_escrowed_replys(&bob_pref);
-    assert_eq!(escrow.unwrap().collect::<Vec<SignedReply>>().len(), 1);
     assert!(matches!(
         res,
         Err(Error::MissingEventError)
@@ -266,7 +257,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     let res = alice.process_signed_reply(&signed_rpy.clone());
     assert!(matches!(res, Err(Error::QueryError(QueryError::StaleKsn))));
 
-    // now create new reply event by witness, and process it by alice.
+    // now create new reply event by witness and process it by alice.
     let new_reply = witness.get_ksn_for_prefix(&bob_pref)?;
     let res = alice.process_signed_reply(&new_reply);
     assert!(res.is_ok());

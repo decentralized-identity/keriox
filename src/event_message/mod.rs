@@ -20,7 +20,7 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use serialization_info::*;
 
-use self::{event_msg_builder::{EventMsgBuilder, EventType}, signed_event_message::SignedEventMessage};
+use self::signed_event_message::SignedEventMessage;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct EventMessage<D> {
@@ -37,12 +37,6 @@ pub struct EventMessage<D> {
     // TODO: Currently seems to be bugged, it captures and duplicates every element in the event
     // #[serde(flatten)]
     // pub extra: HashMap<String, Value>,
-}
-
-impl Default for EventMessage<Event> {
-    fn default() -> Self {
-        EventMsgBuilder::new(EventType::Inception).build().unwrap()
-    }
 }
 
 #[derive(Serialize, Deserialize, PartialEq)]

@@ -114,7 +114,7 @@ impl<K: KeyManager> Keri<K> {
             .with_prefix(&self.prefix)
             .with_keys(vec![Basic::Ed25519.derive(km.public_key())])
             .with_next_keys(vec![Basic::Ed25519.derive(km.next_public_key())])
-            .with_witness_list(&initial_witness.unwrap_or(vec![]))
+            .with_witness_list(&initial_witness.unwrap_or_default())
             .build()?;
 
         let signed = icp.sign(vec![AttachedSignaturePrefix::new(
@@ -335,7 +335,7 @@ impl<K: KeyManager> Keri<K> {
                                 )
                             }
                         }
-                        let rcp: SignedEventData = self.make_rct(ev.event_message.clone())?.into();
+                        let rcp: SignedEventData = self.make_rct(ev.event_message)?.into();
                         buf.append(&mut rcp.to_cesr().unwrap());
                         Ok(buf)
                     }
