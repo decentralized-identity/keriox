@@ -244,7 +244,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     let res = alice.process_signed_reply(&signed_rpy.clone());
     assert!(matches!(
         res,
-        Err(Error::MissingEventError)
+        Err(Error::QueryError(QueryError::OutOfOrderEventError))
     ));
     alice.process_event(&bob_icp)?;
 
@@ -267,7 +267,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     // Create transferable reply by bob and process it by alice.
     let trans_rpy = witness.get_ksn_for_prefix(&bob_pref)?;
     let res = alice.process_signed_reply(&trans_rpy.clone());
-    assert!(matches!(res, Err(Error::MissingEventError)));
+    assert!(matches!(res, Err(Error::QueryError(QueryError::OutOfOrderEventError))));
 
     // Now update bob's state in alice's db to most recent.
     alice.process_event(&new_bob_rot)?;

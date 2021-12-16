@@ -245,7 +245,7 @@ pub fn verify_identifier_binding(icp_event: &EventMessage<Event>) -> Result<bool
 mod tests {
     mod test_utils;
 
-    use self::{event_msg_builder::EventType, test_utils::test_mock_event_sequence};
+    use self::{test_utils::test_mock_event_sequence};
     use super::*;
     use crate::{
         derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
@@ -255,7 +255,7 @@ mod tests {
             sections::{threshold::SignatureThreshold, InceptionWitnessConfig},
         },
         keys::{PrivateKey, PublicKey},
-        prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix},
+        prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix}, state::KeyEventType,
     };
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
@@ -417,42 +417,42 @@ mod tests {
     #[test]
     fn test_basic_establishment_sequence() -> Result<(), Error> {
         // Sequence should contain Inception Event.
-        let no_inception_seq = vec![EventType::Rotation, EventType::Rotation];
+        let no_inception_seq = vec![KeyEventType::Rot, KeyEventType::Rot];
         assert!(test_mock_event_sequence(no_inception_seq).is_err());
 
         // Sequence can't start with Rotation Event.
-        let rotation_first_seq = vec![EventType::Rotation, EventType::Inception];
+        let rotation_first_seq = vec![KeyEventType::Rot, KeyEventType::Icp];
         assert!(test_mock_event_sequence(rotation_first_seq).is_err());
 
         // Sequence should contain exacly one Inception Event.
         let wrong_seq = vec![
-            EventType::Inception,
-            EventType::Rotation,
-            EventType::Rotation,
-            EventType::Inception,
+            KeyEventType::Icp,
+            KeyEventType::Rot,
+            KeyEventType::Rot,
+            KeyEventType::Icp,
         ];
         assert!(test_mock_event_sequence(wrong_seq).is_err());
 
         let ok_seq = vec![
-            EventType::Inception,
-            EventType::Rotation,
-            EventType::Rotation,
+            KeyEventType::Icp,
+            KeyEventType::Rot,
+            KeyEventType::Rot,
         ];
         assert!(test_mock_event_sequence(ok_seq).is_ok());
 
         // Wrong delegated events sequence.
         let wrong_delegated_sequence = vec![
-            EventType::DelegatedInception,
-            EventType::DelegatedRotation,
-            EventType::Rotation,
+            KeyEventType::Dip,
+            KeyEventType::Drt,
+            KeyEventType::Rot,
         ];
         assert!(test_mock_event_sequence(wrong_delegated_sequence).is_err());
 
         // Delegated events sequence.
         let delegated_sequence = vec![
-            EventType::DelegatedInception,
-            EventType::DelegatedRotation,
-            EventType::Interaction,
+            KeyEventType::Dip,
+            KeyEventType::Drt,
+            KeyEventType::Ixn,
         ];
         assert!(test_mock_event_sequence(delegated_sequence).is_ok());
 
@@ -462,20 +462,20 @@ mod tests {
     #[test]
     fn test_basic_sequence() -> Result<(), Error> {
         let ok_seq = vec![
-            EventType::Inception,
-            EventType::Interaction,
-            EventType::Interaction,
-            EventType::Interaction,
-            EventType::Rotation,
-            EventType::Interaction,
+            KeyEventType::Icp,
+            KeyEventType::Ixn,
+            KeyEventType::Ixn,
+            KeyEventType::Ixn,
+            KeyEventType::Rot,
+            KeyEventType::Ixn,
         ];
         assert!(test_mock_event_sequence(ok_seq).is_ok());
 
         let delegated_sequence = vec![
-            EventType::DelegatedInception,
-            EventType::DelegatedRotation,
-            EventType::Interaction,
-            EventType::DelegatedRotation,
+            KeyEventType::Dip,
+            KeyEventType::Drt,
+            KeyEventType::Ixn,
+            KeyEventType::Drt,
         ];
         assert!(test_mock_event_sequence(delegated_sequence).is_ok());
 

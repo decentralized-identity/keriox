@@ -355,6 +355,8 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
 pub fn test_reply_escrow() -> Result<(), Error> {
     use tempfile::Builder;
 
+    use crate::query::QueryError;
+
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
@@ -379,7 +381,7 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     let deserialized_new_rpy = Message::try_from(parsed).unwrap();
 
     // Try to process out of order reply
-    assert!(matches!(event_processor.process(deserialized_old_rpy.clone()), Err(Error::MissingEventError)));
+    assert!(matches!(event_processor.process(deserialized_old_rpy.clone()), Err(Error::QueryError(QueryError::OutOfOrderEventError))));
     let escrow = event_processor.db.get_escrowed_replys(&identifier);
     assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 1);
 
@@ -399,7 +401,7 @@ pub fn test_reply_escrow() -> Result<(), Error> {
 
     // Try to process new out of order reply
     // reply event should be escrowed, accepted reply shouldn't change
-    assert!(matches!(event_processor.process(deserialized_new_rpy.clone()), Err(Error::MissingEventError)));
+    assert!(matches!(event_processor.process(deserialized_new_rpy.clone()), Err(Error::QueryError(QueryError::OutOfOrderEventError))));
     let mut escrow = event_processor.db.get_escrowed_replys(&identifier).unwrap();
     assert_eq!(Message::KeyStateNotice(escrow.next().unwrap()), deserialized_new_rpy);
     assert!(escrow.next().is_none());

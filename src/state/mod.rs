@@ -31,7 +31,7 @@ pub struct IdentifierState {
     pub last_previous: SelfAddressingPrefix,
     
     #[serde(rename = "et")]
-    pub last_event_type: Option<EventType>,
+    pub last_event_type: Option<KeyEventType>,
     
     #[serde(flatten)] 
     pub current: KeyConfig,
@@ -67,7 +67,7 @@ where
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
-pub enum EventType {
+pub enum KeyEventType {
     Icp,
     Rot,
     Ixn,
@@ -76,15 +76,27 @@ pub enum EventType {
     Rct,
 }
 
-impl From<&EventData> for EventType {
+impl KeyEventType {
+    pub fn is_establishment_event(&self) -> bool {
+        match self {
+            KeyEventType::Icp
+            | KeyEventType::Rot
+            | KeyEventType::Dip
+            | KeyEventType::Drt => true,
+            _ => false,
+        }
+    }
+}
+
+impl From<&EventData> for KeyEventType {
     fn from(ed: &EventData) -> Self {
         match ed {
-            EventData::Icp(_) => EventType::Icp,
-            EventData::Rot(_) => EventType::Rot,
-            EventData::Ixn(_) => EventType::Ixn,
-            EventData::Dip(_) => EventType::Dip,
-            EventData::Drt(_) => EventType::Drt,
-            EventData::Rct(_) => EventType::Rct,
+            EventData::Icp(_) => KeyEventType::Icp,
+            EventData::Rot(_) => KeyEventType::Rot,
+            EventData::Ixn(_) => KeyEventType::Ixn,
+            EventData::Dip(_) => KeyEventType::Dip,
+            EventData::Drt(_) => KeyEventType::Drt,
+            EventData::Rct(_) => KeyEventType::Rct,
         }
     }
 }

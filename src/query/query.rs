@@ -14,11 +14,11 @@ pub struct QueryData {
     pub reply_route: String,
 
     #[serde(rename = "q")]
-    pub data: IdData,
+    pub data: QueryArgs,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct IdData {
+pub struct QueryArgs {
     pub i: IdentifierPrefix,
 }
 
@@ -32,7 +32,7 @@ impl Query {
     ) -> Result<Self, Error> {
         let message = QueryData {
             reply_route: "route".into(),
-            data: IdData { i: id.clone() },
+            data: QueryArgs { i: id.clone() },
         };
 
         Envelope::new(route, message).to_message(serialization_info)

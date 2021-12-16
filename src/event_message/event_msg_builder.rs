@@ -18,13 +18,13 @@ use crate::{
         Event, EventMessage,
     },
     keys::PublicKey,
-    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix}, state::KeyEventType,
 };
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
 
 pub struct EventMsgBuilder {
-    event_type: EventType,
+    event_type: KeyEventType,
     prefix: IdentifierPrefix,
     sn: u64,
     key_threshold: SignatureThreshold,
@@ -42,29 +42,8 @@ pub struct EventMsgBuilder {
     derivation: SelfAddressing,
 }
 
-#[derive(Clone, Debug)]
-pub enum EventType {
-    Inception,
-    Rotation,
-    Interaction,
-    DelegatedInception,
-    DelegatedRotation,
-}
-
-impl EventType {
-    pub fn is_establishment_event(&self) -> bool {
-        match self {
-            EventType::Inception
-            | EventType::Rotation
-            | EventType::DelegatedInception
-            | EventType::DelegatedRotation => true,
-            _ => false,
-        }
-    }
-}
-
 impl EventMsgBuilder {
-    pub fn new(event_type: EventType) -> Self {
+    pub fn new(event_type: KeyEventType) -> Self {
         let mut rng = OsRng {};
         let kp = Keypair::generate(&mut rng);
         let nkp = Keypair::generate(&mut rng);
@@ -151,14 +130,14 @@ impl EventMsgBuilder {
 
     pub fn with_witness_to_add(self, witness_to_add: &[BasicPrefix]) -> Self {
         EventMsgBuilder {
-            witnesses: witness_to_add.to_vec(),
+            witness_to_add: witness_to_add.to_vec(),
             ..self
         }
     }
 
     pub fn with_witness_to_remove(self, witness_to_remove: &[BasicPrefix]) -> Self {
         EventMsgBuilder {
-            witnesses: witness_to_remove.to_vec(),
+            witness_to_remove: witness_to_remove.to_vec(),
             ..self
         }
     }
@@ -180,7 +159,7 @@ impl EventMsgBuilder {
         };
 
         Ok(match self.event_type {
-            EventType::Inception => {
+            KeyEventType::Icp => {
                 let icp_event = InceptionEvent {
                     key_config,
                     witness_config: InceptionWitnessConfig { tally: self.witness_threshold, initial_witnesses: self.witnesses },
@@ -202,7 +181,7 @@ impl EventMsgBuilder {
                 }
             }
 
-            EventType::Rotation => Event {
+            KeyEventType::Rot => Event {
                 prefix,
                 sn: self.sn,
                 event_data: EventData::Rot(RotationEvent {
@@ -217,7 +196,7 @@ impl EventMsgBuilder {
                 }),
             }
             .to_message(self.format)?,
-            EventType::Interaction => Event {
+            KeyEventType::Ixn => Event {
                 prefix,
                 sn: self.sn,
                 event_data: EventData::Ixn(InteractionEvent {
@@ -226,7 +205,7 @@ impl EventMsgBuilder {
                 }),
             }
             .to_message(self.format)?,
-            EventType::DelegatedInception => {
+            KeyEventType::Dip => {
                 let icp_data = InceptionEvent {
                     key_config,
                     witness_config: InceptionWitnessConfig::default(),
@@ -239,7 +218,7 @@ impl EventMsgBuilder {
                 }
                 .incept_self_addressing(self.derivation, self.format)?
             }
-            EventType::DelegatedRotation => {
+            KeyEventType::Drt => {
                 let rotation_data = RotationEvent {
                     previous_event_hash: self.prev_event,
                     key_config,
@@ -253,6 +232,7 @@ impl EventMsgBuilder {
                 }
                 .to_message(self.format)?
             }
+            KeyEventType::Rct => Err(Error::SemanticError("Wrong event type".into()))?,
         })
     }
 }
@@ -265,7 +245,7 @@ pub struct ReceiptBuilder {
 
 impl Default for ReceiptBuilder {
      fn default() -> Self {
-         let default_event = EventMsgBuilder::new(EventType::Inception).build().unwrap();
+         let default_event = EventMsgBuilder::new(KeyEventType::Icp).build().unwrap();
         Self {
             format: SerializationFormats::JSON,
             derivation: SelfAddressing::Blake3_256,
@@ -329,7 +309,7 @@ fn test_multisig_prefix_derivation() {
             .unwrap(),
     ];
 
-    let msg_builder = EventMsgBuilder::new(EventType::Inception)
+    let msg_builder = EventMsgBuilder::new(KeyEventType::Icp)
         .with_keys(keys)
         .with_next_keys(next_keys)
         .with_threshold(&SignatureThreshold::Simple(2))

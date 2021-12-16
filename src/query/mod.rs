@@ -147,16 +147,14 @@ pub enum ReplyType {
 
 #[derive(Error, Debug)]
 pub enum QueryError {
+    #[error("Out of order query event")]
+    OutOfOrderEventError,
     #[error("Got stale key state notice")]
     StaleKsn,
     #[error("Got stale reply message")]
     StaleRpy,
     #[error("No previous reply in database")]
     NoSavedReply,
-    #[error("Key state notice is newer than state in db")]
-    ObsoleteKel,
-    #[error("No key state notice is db")]
-    MissingKsn,
     #[error("Incorrect event digest")]
     IncorrectDigest,
     #[error("Error: {0}")]

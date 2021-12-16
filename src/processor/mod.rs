@@ -174,7 +174,7 @@ impl EventProcessor {
                 Err(Error::SemanticError("Event digests doesn't match".into()))
             }
         } else {
-            Err(Error::MissingEventError)
+            Err(Error::EventOutOfOrderError)
         }
     }
 
@@ -541,7 +541,7 @@ impl EventProcessor {
                 return Err(QueryError::Error("Wrong reply message signer".into()).into());
             };
             let verification_result = self.verify(&rpy.reply.serialize()?, &rpy.signature);
-            if let Err(Error::MissingEventError) = verification_result {
+            if let Err(Error::QueryError(QueryError::OutOfOrderEventError)) = verification_result {
                 self.escrow_reply(&rpy)?;
             }
             verification_result?;
@@ -558,7 +558,7 @@ impl EventProcessor {
             // now unpack ksn and check its details
             let ksn = rpy.reply.event.data.data.clone();
             let ksn_checking_result = self.check_ksn(&ksn, aid);
-            if let Err(Error::MissingEventError) = ksn_checking_result {
+            if let Err(Error::QueryError(QueryError::OutOfOrderEventError)) = ksn_checking_result {
                 self.escrow_reply(&rpy)?;
             };
             ksn_checking_result?;
@@ -581,7 +581,7 @@ impl EventProcessor {
         match self
             .db
             .get_accepted_replys(pref)
-            .ok_or(Error::MissingEventError)?
+            .ok_or(Error::QueryError(QueryError::OutOfOrderEventError))?
             .find(|sr: &SignedReply| sr.reply.event.route == Route::ReplyKsn(aid.clone()))
         {
             Some(old_ksn) => {
@@ -595,7 +595,7 @@ impl EventProcessor {
             None => {
                 // TODO should be ok, if there's no old ksn in db?
                 // Ok(())
-                Err(Error::MissingEventError)
+                Err(QueryError::OutOfOrderEventError.into())
             }
         }
     }
@@ -612,7 +612,7 @@ impl EventProcessor {
         let digest = ksn.event.digest.clone();
         let event_from_db = self
             .get_event_at_sn(&pre, sn)?
-            .ok_or(Error::MissingEventError)?
+            .ok_or(Error::QueryError(QueryError::OutOfOrderEventError))?
             .signed_event_message
             .event_message;
         digest
@@ -622,7 +622,7 @@ impl EventProcessor {
 
         match self.check_timestamp_with_last_ksn(ksn.event.timestamp, &ksn.event.state.prefix, aid)
         {
-            Err(Error::MissingEventError) => {
+            Err(Error::QueryError(QueryError::OutOfOrderEventError)) => {
                 // no previous accepted ksn from that aid in db
                 Ok(())
             }
@@ -632,9 +632,9 @@ impl EventProcessor {
         // check new ksn with actual database state for that prefix
         let state = self
             .compute_state(&ksn.event.state.prefix)?
-            .ok_or::<Error>(QueryError::ObsoleteKel.into())?;
+            .ok_or::<Error>(QueryError::OutOfOrderEventError.into())?;
         if state.sn < ksn.event.state.sn {
-            Err(Error::MissingEventError)
+            Err(QueryError::OutOfOrderEventError.into())
         } else if state.sn == ksn.event.state.sn {
             Ok(Some(state))
         } else {

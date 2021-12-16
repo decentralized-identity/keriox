@@ -228,7 +228,8 @@ fn test_attachement() {
     );
 
     let cesr_attachment = "-VAj-HABE4YPqsEOaPNaZxVIbY-Gx2bJgP-c7AH_K7pEE-YfcI9E-AABAAMX88afPpEfF_HF-E-1uZKyv8b_TdILi2x8vC3Yi7Q7yzHn2fR6Bkl2yn-ZxPqmsTfV3f-H_VQwMgk7jYEukVCA";
-    let (_rest, att) = attachment(cesr_attachment.as_bytes()).unwrap();
+    let (rest, att) = attachment(cesr_attachment.as_bytes()).unwrap();
     assert!(matches!(att, Attachment::Frame(_)));
+    assert!(rest.is_empty());
 
 }
