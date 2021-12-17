@@ -233,6 +233,8 @@ impl EventProcessor {
             Message::TransferableRct(rct) => self.process_validator_receipt(rct),
             #[cfg(feature = "query")]
             Message::KeyStateNotice(ksn_rpy) => self.process_signed_reply(&ksn_rpy),
+            #[cfg(feature = "query")]
+            Message::Query(_qry) => todo!(),
         }
     }
 

@@ -223,7 +223,7 @@ impl TryFrom<SignedEventData> for Message {
         match value.deserialized_event {
             EventType::KeyEvent(ev) => signed_message(ev, value.attachments),
             #[cfg(feature = "query")]
-            EventType::Qry(_) => todo!(),
+            EventType::Qry(qry) => signed_query(qry, value.attachments),
             #[cfg(feature = "query")]
             EventType::Rpy(rpy) => signed_reply(rpy, value.attachments),
         }
@@ -256,6 +256,26 @@ fn signed_reply(rpy: Reply, mut attachments: Vec<Attachment>) -> Result<Message,
         }
     }
 }
+
+#[cfg(feature = "query")]
+fn signed_query(qry: Query, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
+    use crate::query::query::SignedQuery;
+
+    match attachments.pop().ok_or_else(|| Error::SemanticError("Missing attachment".into()))? {
+        Attachment::LastEstSignaturesGroups(groups) => {
+            let (signer, signatures) = groups[0].clone();
+            Ok(Message::Query(SignedQuery { envelope: qry, signer, signatures }))
+        },
+        Attachment::Frame(atts) => {
+            signed_query(qry, atts)
+        },
+        _ => {
+            // Improper payload type
+            Err(Error::SemanticError("Improper attachments for query message".into()))
+        }
+    }
+}
+
 
 fn signed_message(event_message: EventMessage<Event>, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
     match event_message.event.event_data {

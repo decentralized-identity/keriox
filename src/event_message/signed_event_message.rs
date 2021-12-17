@@ -7,7 +7,7 @@ use super::serializer::to_string;
 use super::EventMessage;
 
 #[cfg(feature = "query")]
-use crate::query::reply::SignedReply;
+use crate::query::{reply::SignedReply, query::SignedQuery};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Message {
@@ -18,6 +18,8 @@ pub enum Message {
     TransferableRct(SignedTransferableReceipt),
     #[cfg(feature = "query")]
     KeyStateNotice(SignedReply),
+    #[cfg(feature = "query")]
+    Query(SignedQuery),
 }
 
 // KERI serializer should be used to serialize this

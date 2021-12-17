@@ -424,3 +424,32 @@ pub fn test_reply_escrow() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[cfg(feature = "query")]
+#[test]
+pub fn test_query() -> Result<(), Error> {
+    use tempfile::Builder;
+    use crate::{query::ReplyType, keri::witness::Witness};
+
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    let witness = Witness::new(root.path())?;
+
+    let icp_str = r#"{"v":"KERI10JSON000179_","i":"Ezgv-1LmULy9ghlCP5Wt9mrQY-jJ-tQHcZZ9SteV7Hqo","s":"0","t":"icp","kt":"1","k":["DxH8nLaGIMllBp0mvGdN6JtbNuGRPyHb5i80bTojnP9A"],"n":"EmJ-3Y0pM0ogX8401rEziJhpql567YEdHDlylwfnxNIM","bt":"3","b":["BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo","BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c"],"c":[],"a":[]}-AABAA8f4SUjg8w4ax1bGIR7EctkwlHm2YIta58ikzGE4N2VKBSvJE-c4NBchj3kNeKRB3xQ59pH-BT6L_176aFGsBDw"#; //-BADAAgpH64zY45fbl6BWYQXx43Pq0uJtvPUHRnj5oeCF4tGP1Dz80LdRoA6IG2pSOVtOraJd783mortUXhI1BT-RiCwABWLV4unH4FkLwnLPj4tB0Z57wg8SY8UOeBI0nk7Sv6-HJDFBuGU-WBpR3N_gOx-EOkuZTILp0CwxZpXfGk0WlBQACFApU854wN8FmuIL8Nqspm2EshsAMTsCDd_VXpbezsHovcywErUXp2XzASZX74-wLSEcY8v8mMC8LGfY5nTfrAQ"#;
+    let parsed = signed_message(icp_str.as_bytes()).unwrap().1;
+    let deserialized_icp = Message::try_from(parsed).unwrap();
+    witness.processor.process(deserialized_icp)?;
+
+    let qry_str = r#"{"v":"KERI10JSON000096_","t":"qry","dt":"2021-12-17T12:57:57.505540+00:00","r":"ksn","rr":"","q":{"i":"Ezgv-1LmULy9ghlCP5Wt9mrQY-jJ-tQHcZZ9SteV7Hqo"}}-VAj-HABEzgv-1LmULy9ghlCP5Wt9mrQY-jJ-tQHcZZ9SteV7Hqo-AABAA1FvESpebVoZJ5lvEgJRcq0vS1Bm4qGV7_SMNUH4w8-MeC2gV7uIW571VXmfy0DUHZGEQzBjqxEXPnIYN4YJEAg"#;
+    let parsed = signed_message(qry_str.as_bytes()).unwrap().1;
+    let deserialized_qy = Message::try_from(parsed).unwrap();
+
+    if let Message::Query(qry) = deserialized_qy {
+        let res = witness.process_signed_query(qry)?;
+        assert!(matches!(res, ReplyType::Rep(_)));
+
+    } else {
+        assert!(false)
+    }
+
+    Ok(())
+}
