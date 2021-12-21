@@ -101,6 +101,7 @@ impl EventProcessor {
     pub fn get_last_establishment_event_seal(
         &self,
         id: &IdentifierPrefix,
+        derivation: SelfAddressing,
     ) -> Result<Option<EventSeal>, Error> {
         let mut state = IdentifierState::default();
         let mut last_est = None;
@@ -118,7 +119,8 @@ impl EventProcessor {
             return Ok(None);
         }
         let seal = last_est.and_then(|event| {
-            let event_digest = SelfAddressing::Blake3_256.derive(&event.serialize().unwrap());
+            let event_digest = derivation
+                .derive(&event.event_message.serialize().unwrap());
             Some(EventSeal {
                 prefix: event.event_message.event.get_prefix(),
                 sn: event.event_message.event.get_sn(),
