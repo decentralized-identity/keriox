@@ -349,3 +349,107 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[cfg(feature = "query")]
+#[test]
+pub fn test_reply_escrow() -> Result<(), Error> {
+    use tempfile::Builder;
+
+    use crate::query::QueryError;
+
+    // Create test db and event processor.
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    fs::create_dir_all(root.path()).unwrap();
+    let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+    let event_processor = EventProcessor::new(Arc::clone(&db));
+
+    let identifier: IdentifierPrefix = "DDp7bJnTiKEahNaJidXogL6ntasrkTJ4vxAilMi6nxCE".parse()?;
+    let icp_str = r#"{"v":"KERI10JSON00011b_","i":"DDp7bJnTiKEahNaJidXogL6ntasrkTJ4vxAilMi6nxCE","s":"0","t":"icp","kt":"1","k":["DDp7bJnTiKEahNaJidXogL6ntasrkTJ4vxAilMi6nxCE"],"n":"EY8dNfEnrzdG4RVrF87jc9qyh86DJ3HMOoce62eWWQbg","bt":"0","b":["Dqyfe0SecmOCRo3UtWu71cy-MUCWZH28prZx2HRm5I7M"],"c":[],"a":[]}-AABAA9wOislAprKi_8A6WcFp17TMwB8KHqV5RvYybsosAx8Rj11lwX-hrxgniaR66IreHv4DSSROVm6K62Uo9IhhiBg"#;
+    let parsed = signed_message(icp_str.as_bytes()).unwrap().1;
+    let deserialized_icp = Message::try_from(parsed).unwrap();
+
+    let rot_str = r#"{"v":"KERI10JSON000122_","i":"DDp7bJnTiKEahNaJidXogL6ntasrkTJ4vxAilMi6nxCE","s":"1","t":"rot","p":"Ed5hSLWDtjkWlrDeEoVBjytFHiqeC5aW15D3R_y5fcgs","kt":"1","k":["DDduXoG93VdAiH6tPToKKUj7rsgtW8YtGuJDdRw5H9Vg"],"n":"ElUH-qWtgP7AtcF0Qrjk8NYlCXuZXdW9nrczmBsCHtqM","bt":"0","br":[],"ba":[],"a":[]}-AABAAHD12g1ab3tsL_bOP0jRs53qh2gSGOxjPKo2lOmHC_Bs_lb2rWwJsl98OQ-jUo2xfgd2MeniJUE4D0SMInv-TAw"#;
+    let parsed = signed_message(rot_str.as_bytes()).unwrap().1;
+    let deserialized_rot = Message::try_from(parsed).unwrap();
+
+    let old_rpy = r#"{"v":"KERI10JSON000293_","t":"rpy","d":"EvrNa0bfL94QZZby15DxquDBh-tJYRHRCZnJiUfevKLQ","dt":"2021-12-15T13:44:49.636691+00:00","r":"/ksn/Dqyfe0SecmOCRo3UtWu71cy-MUCWZH28prZx2HRm5I7M","a":{"v":"KERI10JSON0001d8_","i":"DDp7bJnTiKEahNaJidXogL6ntasrkTJ4vxAilMi6nxCE","s":"0","p":"","d":"Ed5hSLWDtjkWlrDeEoVBjytFHiqeC5aW15D3R_y5fcgs","f":"0","dt":"2021-12-15T13:44:49.636511+00:00","et":null,"kt":"1","k":["DDp7bJnTiKEahNaJidXogL6ntasrkTJ4vxAilMi6nxCE"],"n":"EY8dNfEnrzdG4RVrF87jc9qyh86DJ3HMOoce62eWWQbg","bt":"0","b":["Dqyfe0SecmOCRo3UtWu71cy-MUCWZH28prZx2HRm5I7M"],"c":[],"ee":{"s":"0","d":"Ed5hSLWDtjkWlrDeEoVBjytFHiqeC5aW15D3R_y5fcgs","br":[],"ba":[]},"di":""}}-CABDqyfe0SecmOCRo3UtWu71cy-MUCWZH28prZx2HRm5I7M0BZH1Gvky6vRRNd8rKmXv3TmFykM6Iw6cdnJ1zDQwwMjIwGMDpEC6dhnoRfb8KsvXTa_sp_WevL-YDEDnNE9quDQ"#;
+    let parsed = signed_message(old_rpy.as_bytes()).unwrap().1;
+    let deserialized_old_rpy = Message::try_from(parsed).unwrap();
+
+    let new_rpy = r#"{"v":"KERI10JSON000293_","t":"rpy","d":"EGDlNsNtskLi4yj1Wq71CVq-sQkuIZvOs-xrzdOb7_XQ","dt":"2021-12-15T13:44:49.649955+00:00","r":"/ksn/Dqyfe0SecmOCRo3UtWu71cy-MUCWZH28prZx2HRm5I7M","a":{"v":"KERI10JSON0001d8_","i":"DDp7bJnTiKEahNaJidXogL6ntasrkTJ4vxAilMi6nxCE","s":"1","p":"","d":"EZv85DpuM6RjrhYgmhf_mJ1XwBNa2v1A_61MakC6c0MU","f":"0","dt":"2021-12-15T13:44:49.649828+00:00","et":null,"kt":"1","k":["DDduXoG93VdAiH6tPToKKUj7rsgtW8YtGuJDdRw5H9Vg"],"n":"ElUH-qWtgP7AtcF0Qrjk8NYlCXuZXdW9nrczmBsCHtqM","bt":"0","b":["Dqyfe0SecmOCRo3UtWu71cy-MUCWZH28prZx2HRm5I7M"],"c":[],"ee":{"s":"1","d":"Ed5hSLWDtjkWlrDeEoVBjytFHiqeC5aW15D3R_y5fcgs","br":[],"ba":[]},"di":""}}-CABDqyfe0SecmOCRo3UtWu71cy-MUCWZH28prZx2HRm5I7M0BWdegCMivxJBbLPMP3YLhQ9pzSOg6NzAlAxQxzGHphluA6n3VroA7pFN3-bN1jRW1k4ln0H5iR-PaNwR9tW7cBA"#;
+    let parsed = signed_message(new_rpy.as_bytes()).unwrap().1;
+    let deserialized_new_rpy = Message::try_from(parsed).unwrap();
+
+    // Try to process out of order reply
+    assert!(matches!(event_processor.process(deserialized_old_rpy.clone()), Err(Error::QueryError(QueryError::OutOfOrderEventError))));
+    let escrow = event_processor.db.get_escrowed_replys(&identifier);
+    assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 1);
+
+    let accepted_rpys = event_processor.db.get_accepted_replys(&identifier);
+    assert!(accepted_rpys.is_none());
+
+    // process icp event and update escrow
+    // reply event should be unescrowed and save as accepted
+    event_processor.process(deserialized_icp)?;
+    event_processor.process_escrow()?;
+
+    let escrow = event_processor.db.get_escrowed_replys(&identifier);
+    assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 0);
+
+    let accepted_rpys = event_processor.db.get_accepted_replys(&identifier);
+    assert_eq!(accepted_rpys.unwrap().collect::<Vec<_>>().len(), 1);
+
+    // Try to process new out of order reply
+    // reply event should be escrowed, accepted reply shouldn't change
+    assert!(matches!(event_processor.process(deserialized_new_rpy.clone()), Err(Error::QueryError(QueryError::OutOfOrderEventError))));
+    let mut escrow = event_processor.db.get_escrowed_replys(&identifier).unwrap();
+    assert_eq!(Message::KeyStateNotice(escrow.next().unwrap()), deserialized_new_rpy);
+    assert!(escrow.next().is_none());
+
+    let mut accepted_rpys = event_processor.db.get_accepted_replys(&identifier).unwrap();
+    assert_eq!(Message::KeyStateNotice(accepted_rpys.next().unwrap()), deserialized_old_rpy);
+    assert!(accepted_rpys.next().is_none());
+
+    // process rot event and update escrow
+    // reply event should be unescrowed and save as accepted
+    event_processor.process(deserialized_rot)?;
+    event_processor.process_escrow()?;
+
+    let escrow = event_processor.db.get_escrowed_replys(&identifier);
+    assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 0);
+
+    let mut accepted_rpys = event_processor.db.get_accepted_replys(&identifier).unwrap();
+    assert_eq!(Message::KeyStateNotice(accepted_rpys.next().unwrap()), deserialized_new_rpy);
+    assert!(accepted_rpys.next().is_none());
+
+    Ok(())
+}
+
+#[cfg(feature = "query")]
+#[test]
+pub fn test_query() -> Result<(), Error> {
+    use tempfile::Builder;
+    use crate::{query::ReplyType, keri::witness::Witness};
+
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    let witness = Witness::new(root.path())?;
+
+    let icp_str = r#"{"v":"KERI10JSON000179_","i":"Ezgv-1LmULy9ghlCP5Wt9mrQY-jJ-tQHcZZ9SteV7Hqo","s":"0","t":"icp","kt":"1","k":["DxH8nLaGIMllBp0mvGdN6JtbNuGRPyHb5i80bTojnP9A"],"n":"EmJ-3Y0pM0ogX8401rEziJhpql567YEdHDlylwfnxNIM","bt":"3","b":["BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo","BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c"],"c":[],"a":[]}-AABAA8f4SUjg8w4ax1bGIR7EctkwlHm2YIta58ikzGE4N2VKBSvJE-c4NBchj3kNeKRB3xQ59pH-BT6L_176aFGsBDw"#; //-BADAAgpH64zY45fbl6BWYQXx43Pq0uJtvPUHRnj5oeCF4tGP1Dz80LdRoA6IG2pSOVtOraJd783mortUXhI1BT-RiCwABWLV4unH4FkLwnLPj4tB0Z57wg8SY8UOeBI0nk7Sv6-HJDFBuGU-WBpR3N_gOx-EOkuZTILp0CwxZpXfGk0WlBQACFApU854wN8FmuIL8Nqspm2EshsAMTsCDd_VXpbezsHovcywErUXp2XzASZX74-wLSEcY8v8mMC8LGfY5nTfrAQ"#;
+    let parsed = signed_message(icp_str.as_bytes()).unwrap().1;
+    let deserialized_icp = Message::try_from(parsed).unwrap();
+    witness.processor.process(deserialized_icp)?;
+
+    let qry_str = r#"{"v":"KERI10JSON000096_","t":"qry","dt":"2021-12-17T12:57:57.505540+00:00","r":"ksn","rr":"","q":{"i":"Ezgv-1LmULy9ghlCP5Wt9mrQY-jJ-tQHcZZ9SteV7Hqo"}}-VAj-HABEzgv-1LmULy9ghlCP5Wt9mrQY-jJ-tQHcZZ9SteV7Hqo-AABAA1FvESpebVoZJ5lvEgJRcq0vS1Bm4qGV7_SMNUH4w8-MeC2gV7uIW571VXmfy0DUHZGEQzBjqxEXPnIYN4YJEAg"#;
+    let parsed = signed_message(qry_str.as_bytes()).unwrap().1;
+    let deserialized_qy = Message::try_from(parsed).unwrap();
+
+    if let Message::Query(qry) = deserialized_qy {
+        let res = witness.process_signed_query(qry)?;
+        assert!(matches!(res, ReplyType::Rep(_)));
+
+    } else {
+        assert!(false)
+    }
+
+    Ok(())
+}

@@ -99,6 +99,16 @@ where
                 None
             }
         }
+
+        pub fn get_all(&self) -> Option<impl DoubleEndedIterator<Item = T>> {
+            Some(self
+                .tree
+                .into_iter()
+                .flatten()
+                .map(|(_key, values)| serde_cbor::from_slice::<Vec<T>>(&values).unwrap())
+                .flatten()
+            )
+        }
     }
 
 /// Direct singular key-value of T table

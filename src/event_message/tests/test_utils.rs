@@ -1,5 +1,5 @@
-use super::event_msg_builder::{EventMsgBuilder, EventType};
-use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning}, error::Error, event::sections::{key_config::nxt_commitment, threshold::SignatureThreshold}, keys::{PrivateKey, PublicKey}, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix }, state::IdentifierState};
+use super::event_msg_builder::EventMsgBuilder;
+use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning}, error::Error, event::sections::{key_config::nxt_commitment, threshold::SignatureThreshold}, keys::{PrivateKey, PublicKey}, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix }, state::{IdentifierState, KeyEventType}};
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
 
@@ -38,7 +38,7 @@ fn get_initial_test_data() -> Result<TestStateData, Error> {
 /// Construct mock event message from `event_type` and `state_data`, apply it to
 /// `IdentifierState` in `state_data.state` and check if it was updated correctly.
 fn test_update_identifier_state(
-    event_type: EventType,
+    event_type: KeyEventType,
     state_data: TestStateData,
 ) -> Result<TestStateData, Error> {
     // Get current and next key_pairs from argument.
@@ -107,7 +107,7 @@ fn test_update_identifier_state(
     // Check if state is updated correctly.
     assert_eq!(new_state.prefix, prefix.clone());
     assert_eq!(new_state.sn, state_data.sn);
-    assert_eq!(new_state.last, sed);
+    assert_eq!(new_state.last, event_msg.serialize()?);
     assert_eq!(new_state.current.public_keys.len(), 1);
     assert_eq!(new_state.current.public_keys[0], current_key_pref);
     assert_eq!(new_state.current.threshold, SignatureThreshold::Simple(1));
@@ -140,7 +140,7 @@ fn test_update_identifier_state(
 
 /// For given sequence of EventTypes check wheather `IdentifierState` is updated correctly
 /// by applying `test_update_identifier_state` sequentially.
-pub fn test_mock_event_sequence(sequence: Vec<EventType>) -> Result<TestStateData, Error> {
+pub fn test_mock_event_sequence(sequence: Vec<KeyEventType>) -> Result<TestStateData, Error> {
     let mut st = get_initial_test_data();
 
     let step = |event_type, state_data: Result<TestStateData, Error>| {

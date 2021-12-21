@@ -3,7 +3,6 @@ use crate::{
     keys::{PrivateKey, PublicKey},
 };
 use rand::rngs::OsRng;
-use std::ops::{Deref, DerefMut};
 
 #[cfg(feature = "wallet")]
 pub mod wallet;
@@ -19,20 +18,6 @@ pub struct CryptoBox {
     signer: Signer,
     next_priv_key: PrivateKey,
     pub next_pub_key: PublicKey,
-}
-
-impl DerefMut for CryptoBox {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self
-    }
-}
-
-impl Deref for CryptoBox {
-    type Target = CryptoBox;
-
-    fn deref(&self) -> &Self::Target {
-        self
-    }
 }
 
 impl KeyManager for CryptoBox {

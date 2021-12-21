@@ -2,11 +2,14 @@ use std::convert::TryFrom;
 use base64::URL_SAFE_NO_PAD;
 use serde::Deserialize;
 
-use crate::event::EventMessage;
+use crate::event::{Event, EventMessage};
 use crate::event::sections::seal::{EventSeal, SourceSeal};
 use crate::event_message::signed_event_message::{Message, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt};
 use crate::event_parsing::payload_size::PayloadType;
-use crate::prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfSigningPrefix};
+use crate::prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix};
+
+#[cfg(feature = "query")]
+use crate::query::{query::Query, reply::{Reply, SignedReply}};
 use crate::{error::Error, event::event_data::EventData};
 
 pub mod attachment;
@@ -16,10 +19,16 @@ pub mod message;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub enum Attachment {
+    // Count codes
     SealSourceCouplets(Vec<SourceSeal>),
-    AttachedEventSeal(Vec<EventSeal>),
     AttachedSignatures(Vec<AttachedSignaturePrefix>),
     ReceiptCouplets(Vec<(BasicPrefix, SelfSigningPrefix)>),
+    // Group codes
+    SealSignaturesGroups(Vec<(EventSeal, Vec<AttachedSignaturePrefix>)>),
+    // List of signatures made using keys from last establishment event od identifier of prefix 
+    LastEstSignaturesGroups(Vec<(IdentifierPrefix, Vec<AttachedSignaturePrefix>)>),
+    // Frame codes
+    Frame(Vec<Attachment>),
 }
 
 impl Attachment {
@@ -32,17 +41,18 @@ impl Attachment {
 
                 (PayloadType::MG, sources.len(), serialzied_sources)
             }
-            Attachment::AttachedEventSeal(seal) => {
-                let serialized_seals = seal.iter().fold("".into(), |acc, seal| {
+            Attachment::SealSignaturesGroups(seals_signatures) => {
+                let serialized_seals = seals_signatures.iter().fold("".into(), |acc, (seal, sigs)| {
                     [
                         acc,
                         seal.prefix.to_str(),
                         Self::pack_sn(seal.sn),
                         seal.event_digest.to_str(),
+                        Attachment::AttachedSignatures(sigs.to_vec()).to_cesr(),
                     ]
                     .join("")
                 });
-                (PayloadType::MF, seal.len(), serialized_seals)
+                (PayloadType::MF, seals_signatures.len(), serialized_seals)
             }
             Attachment::AttachedSignatures(sigs) => {
                 let serialized_sigs = sigs
@@ -57,6 +67,26 @@ impl Attachment {
 
                 (PayloadType::MC, couplets.len(), packed_couplets)
             }
+            Attachment::LastEstSignaturesGroups(signers) => {
+                let packed_signers = signers
+                    .iter()
+                    .fold("".to_string(), |acc, (signer, sigs)| {
+                        [
+                            acc, 
+                            signer.to_str(), 
+                            Attachment::AttachedSignatures(sigs.clone()).to_cesr()
+                        ].concat()
+                });
+                (PayloadType::MH, signers.len(), packed_signers)
+            },
+            Attachment::Frame(att) => {
+                let packed_attachments = att
+                    .iter()
+                    .fold("".to_string(), |acc, att| 
+                    [acc, att.to_cesr()].concat()
+                );
+                (PayloadType::MV, packed_attachments.len(), packed_attachments)
+            },
         };
         [
             payload_type.adjust_with_num(att_len as u16),
@@ -86,8 +116,29 @@ impl Attachment {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SignedEventData {
-    pub deserialized_event: EventMessage,
+    pub deserialized_event: EventType,
     pub attachments: Vec<Attachment>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum EventType {
+    KeyEvent(EventMessage<Event>),
+    #[cfg(feature = "query")]
+    Qry(Query),
+    #[cfg(feature = "query")]
+    Rpy(Reply),
+}
+
+impl EventType {
+    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
+        match self {
+            EventType::KeyEvent(event) => event.serialize(),
+            #[cfg(feature = "query")]
+            EventType::Qry(qry) => qry.serialize(),
+            #[cfg(feature = "query")]
+            EventType::Rpy(rpy) => rpy.serialize(),
+        }
+    }
 }
 
 impl SignedEventData {
@@ -115,7 +166,10 @@ impl From<&SignedEventMessage> for SignedEventData {
             None => [Attachment::AttachedSignatures(ev.signatures.clone())].into(),
         }; 
         
-        SignedEventData { deserialized_event: ev.event_message.clone(), attachments }
+        SignedEventData { 
+            deserialized_event: EventType::KeyEvent(ev.event_message.clone()), 
+            attachments
+        }
     }
     
 }
@@ -123,68 +177,131 @@ impl From<&SignedEventMessage> for SignedEventData {
 impl From<SignedNontransferableReceipt> for SignedEventData {
     fn from(rcp: SignedNontransferableReceipt) -> SignedEventData {
         let attachments = [Attachment::ReceiptCouplets(rcp.couplets)].into();
-        SignedEventData { deserialized_event: rcp.body, attachments }
+        SignedEventData { 
+            deserialized_event: EventType::KeyEvent(rcp.body), 
+            attachments 
+        }
     }
 }
 
 impl From<SignedTransferableReceipt> for SignedEventData {
     fn from(rcp: SignedTransferableReceipt) -> SignedEventData {
         let attachments = [
-                Attachment::AttachedEventSeal(vec![rcp.validator_seal]), 
-                Attachment::AttachedSignatures(rcp.signatures)
+                Attachment::SealSignaturesGroups(vec![(rcp.validator_seal, rcp.signatures)]), 
             ].into();
-        SignedEventData { deserialized_event: rcp.body, attachments }
+        SignedEventData { 
+            deserialized_event: EventType::KeyEvent(rcp.body), 
+            attachments 
+        }
     }
+}
+
+#[cfg(feature = "query")]
+impl From<SignedReply> for SignedEventData {
+    fn from(ev: SignedReply) -> Self {
+        use crate::event_message::signature::Signature;
+        let attachments = vec![
+            match ev.signature.clone() {
+                Signature::Transferable(seal, sig) => 
+                    Attachment::SealSignaturesGroups(vec![(seal, sig)]),
+                Signature::NonTransferable(pref, sig) => 
+                    Attachment::ReceiptCouplets(vec![(pref, sig)]),
+        }]; 
+        
+        SignedEventData { 
+            deserialized_event: EventType::Rpy(ev.reply), 
+            attachments
+        }
+    }
+    
 }
 
 impl TryFrom<SignedEventData> for Message {
     type Error = Error;
 
     fn try_from(value: SignedEventData) -> Result<Self, Self::Error> {
-        signed_message(value)
+        match value.deserialized_event {
+            EventType::KeyEvent(ev) => signed_message(ev, value.attachments),
+            #[cfg(feature = "query")]
+            EventType::Qry(qry) => signed_query(qry, value.attachments),
+            #[cfg(feature = "query")]
+            EventType::Rpy(rpy) => signed_reply(rpy, value.attachments),
+        }
     }
 }
 
-fn signed_message(mut des: SignedEventData) -> Result<Message, Error> {
-    match des.deserialized_event.event.event_data {
+#[cfg(feature = "query")]
+fn signed_reply(rpy: Reply, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
+    match attachments.pop().ok_or_else(|| Error::SemanticError("Missing attachment".into()))? {
+        Attachment::ReceiptCouplets(couplets) => {
+        let signer = couplets[0].0.clone();
+        let signature = couplets[0].1.clone();
+        Ok(
+            Message::KeyStateNotice(SignedReply::new_nontrans(rpy, signer, signature))
+        )},
+        Attachment::SealSignaturesGroups(data) => {
+            let (seal, sigs) = 
+                // TODO what if more than one?
+                data
+                    .last()
+                    .ok_or_else(|| Error::SemanticError("More than one seal".into()))?
+                    .to_owned();
+            Ok(
+            Message::KeyStateNotice(SignedReply::new_trans(rpy, seal, sigs))
+            ) 
+        }
+        _ => {
+            // Improper payload type
+            Err(Error::SemanticError("Improper payload type".into()))
+        }
+    }
+}
+
+#[cfg(feature = "query")]
+fn signed_query(qry: Query, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
+    use crate::query::query::SignedQuery;
+
+    match attachments.pop().ok_or_else(|| Error::SemanticError("Missing attachment".into()))? {
+        Attachment::LastEstSignaturesGroups(groups) => {
+            let (signer, signatures) = groups[0].clone();
+            Ok(Message::Query(SignedQuery { envelope: qry, signer, signatures }))
+        },
+        Attachment::Frame(atts) => {
+            signed_query(qry, atts)
+        },
+        _ => {
+            // Improper payload type
+            Err(Error::SemanticError("Improper attachments for query message".into()))
+        }
+    }
+}
+
+
+fn signed_message(event_message: EventMessage<Event>, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
+    match event_message.event.event_data {
         EventData::Rct(_) => {
-            let att = des.attachments.pop().ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
+            let att = attachments.pop().ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
             match att {
                 // Should be nontransferable receipt
                 Attachment::ReceiptCouplets(couplets) => 
                 Ok(
                     Message::NontransferableRct(SignedNontransferableReceipt {
-                        body: des.deserialized_event,
+                        body: event_message,
                         couplets,
                     })
                 ),
-                Attachment::AttachedEventSeal(_) | Attachment::AttachedSignatures(_) => {
+                Attachment::SealSignaturesGroups(data) => {
                     // Should be transferable receipt
-                    let second_att = des.attachments.pop().ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
-
-                    let (seals, sigs) = match (att, second_att) {
-                        (
-                            Attachment::AttachedEventSeal(seals),
-                            Attachment::AttachedSignatures(sigs),
-                        ) => Ok((seals, sigs)),
-                        (
-                            Attachment::AttachedSignatures(sigs),
-                            Attachment::AttachedEventSeal(seals),
-                        ) => Ok((seals, sigs)),
-                        _ => {
-                            // improper attachments
-                            Err(Error::SemanticError("Improper attachment".into()))
-                        }
-                    }?;
-
+                    let (seal, sigs) = 
+                        // TODO what if more than one?
+                        data
+                            .last()
+                            .ok_or_else(|| Error::SemanticError("More than one seal".into()))?
+                            .to_owned();
                     Ok(
                         Message::TransferableRct(SignedTransferableReceipt::new(
-                            &des.deserialized_event,
-                            // TODO what if more than one?
-                            seals
-                                .last()
-                                .ok_or_else(|| Error::SemanticError("More than one seal".into()))?
-                                .to_owned(),
+                            &event_message,
+                            seal,
                             sigs,
                         )),
                     )
@@ -197,8 +314,8 @@ fn signed_message(mut des: SignedEventData) -> Result<Message, Error> {
         }
         EventData::Dip(_) | EventData::Drt(_) => {
             let (att1, att2) = (
-                des.attachments.pop().ok_or_else(|| Error::SemanticError("Missing attachment".into()))?, 
-                des.attachments.pop().ok_or_else(|| Error::SemanticError("Missing attachment".into()))?,
+                attachments.pop().ok_or_else(|| Error::SemanticError("Missing attachment".into()))?, 
+                attachments.pop().ok_or_else(|| Error::SemanticError("Missing attachment".into()))?,
             );
 
             let (seals, sigs) = match (att1, att2) {
@@ -221,16 +338,16 @@ fn signed_message(mut des: SignedEventData) -> Result<Message, Error> {
             
             Ok(
                 Message::Event(
-                    SignedEventMessage::new(&des.deserialized_event, sigs, delegator_seal?)
+                    SignedEventMessage::new(&event_message, sigs, delegator_seal?)
                 ),
             )
         }
         _ => {
-            let sigs = des.attachments.first().cloned().ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
+            let sigs = attachments.first().cloned().ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
             if let Attachment::AttachedSignatures(sigs) = sigs {
                 Ok(
                     Message::Event(
-                    SignedEventMessage::new(&des.deserialized_event, sigs.to_vec(), None)
+                    SignedEventMessage::new(&event_message, sigs.to_vec(), None)
                 ))
             } else {
                 // Improper attachment type
@@ -247,7 +364,7 @@ fn test_stream1() {
     let stream = br#"{"v":"KERI10JSON0000ed_","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"0","t":"icp","kt":"1","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"n":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","bt":"0","b":[],"c":[],"a":[]}-AABAAmagesCSY8QhYYHCJXEWpsGD62qoLt2uyT0_Mq5lZPR88JyS5UrwFKFdcjPqyKc_SKaKDJhkGWCk07k_kVkjyCA"#;
 
     let parsed = event_parsing::message::signed_message(stream).unwrap().1;
-    let msg= signed_message(parsed).unwrap();
+    let msg = Message::try_from(parsed).unwrap();
     assert!(matches!(msg, Message::Event(_)));
 
     match msg {
@@ -276,7 +393,7 @@ fn test_stream2() {
     let stream = br#"{"v":"KERI10JSON00014b_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"0","t":"icp","kt":"2","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"E9izzBkXX76sqt0N-tfLzJeRqj0W56p4pDQ_ZqNCDpyw","bt":"0","b":[],"c":[],"a":[]}-AADAAhcaP-l0DkIKlJ87iIVcDx-m0iKPdSArEu63b-2cSEn9wXVGNpWw9nfwxodQ9G8J3q_Pm-AWfDwZGD9fobWuHBAAB6mz7zP0xFNBEBfSKG4mjpPbeOXktaIyX8mfsEa1A3Psf7eKxSrJ5Woj3iUB2AhhLg412-zkk795qxsK2xfdxBAACj5wdW-EyUJNgW0LHePQcSFNxW3ZyPregL4H2FoOrsPxLa3MZx6xYTh6i7YRMGY50ezEjV81hkI1Yce75M_bPCQ"#;
 
     let parsed = event_parsing::message::signed_message(stream).unwrap().1;
-    let msg = signed_message(parsed);
+    let msg = Message::try_from(parsed);
     assert!(msg.is_ok());
     assert!(matches!(msg, Ok(Message::Event(_))));
 

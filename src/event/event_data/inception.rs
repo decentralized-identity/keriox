@@ -8,7 +8,7 @@ use crate::{
     event::{sections::seal::Seal, Event},
     event_message::{serialization_info::SerializationFormats, EventMessage},
     prefix::IdentifierPrefix,
-    state::{EventSemantics, IdentifierState},
+    state::{EventSemantics, IdentifierState, LastEstablishmentData},
 };
 use serde::{Deserialize, Serialize};
 
@@ -53,7 +53,7 @@ impl InceptionEvent {
         self,
         derivation: SelfAddressing,
         format: SerializationFormats,
-    ) -> Result<EventMessage, Error> {
+    ) -> Result<EventMessage<Event>, Error> {
         EventMessage::new(
             Event {
                 prefix: IdentifierPrefix::SelfAddressing(derivation.derive(
@@ -69,10 +69,17 @@ impl InceptionEvent {
 
 impl EventSemantics for InceptionEvent {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
+        let last_est = LastEstablishmentData { 
+            sn: state.sn, 
+            digest: SelfAddressing::Blake3_256.derive(&state.last), 
+            br: vec![], 
+            ba: vec![] 
+        };
         Ok(IdentifierState {
             current: self.key_config.clone(),
             witnesses: self.witness_config.initial_witnesses.clone(),
             tally: self.witness_config.tally,
+            last_est,
             ..state
         })
     }

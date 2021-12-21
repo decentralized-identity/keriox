@@ -15,20 +15,22 @@ use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivat
         },
         sections::seal::EventSeal
     }, event_message::{signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, Message}}, event_message::{
-        event_msg_builder::{EventMsgBuilder, EventType},
+        event_msg_builder::EventMsgBuilder,
     }, event_parsing::{SignedEventData, message::{signed_event_stream, signed_message}}, keys::PublicKey, prefix::AttachedSignaturePrefix, prefix::{
         BasicPrefix,
         IdentifierPrefix,
         SelfSigningPrefix
     }, processor::EventProcessor, signer::KeyManager, state::{
         EventSemantics,
-        IdentifierState
+        IdentifierState, KeyEventType
     }};
 #[cfg(feature = "wallet")]
 use universal_wallet::prelude::{Content, UnlockedWallet};
 
 #[cfg(test)]
 mod test;
+#[cfg(feature = "query")]
+pub mod witness;
 pub struct Keri<K: KeyManager + 'static> {
     prefix: IdentifierPrefix,
     key_manager: Arc<Mutex<K>>,
@@ -106,12 +108,13 @@ impl<K: KeyManager> Keri<K> {
         }
     }
 
-    pub fn incept(&mut self) -> Result<SignedEventMessage, Error> {
+    pub fn incept(&mut self, initial_witness: Option<Vec<BasicPrefix>>) -> Result<SignedEventMessage, Error> {
         let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
-        let icp = EventMsgBuilder::new(EventType::Inception)
+        let icp = EventMsgBuilder::new(KeyEventType::Icp)
             .with_prefix(&self.prefix)
             .with_keys(vec![Basic::Ed25519.derive(km.public_key())])
             .with_next_keys(vec![Basic::Ed25519.derive(km.next_public_key())])
+            .with_witness_list(&initial_witness.unwrap_or_default())
             .build()?;
 
         let signed = icp.sign(vec![AttachedSignaturePrefix::new(
@@ -146,7 +149,7 @@ impl<K: KeyManager> Keri<K> {
             // Signing key must be first
             let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
             keys.insert(0, Basic::Ed25519.derive(km.public_key()));
-            let icp = EventMsgBuilder::new(EventType::Inception)
+            let icp = EventMsgBuilder::new(KeyEventType::Icp)
                 .with_prefix(&self.prefix)
                 .with_keys(keys)
                 .with_next_keys(vec!(Basic::Ed25519.derive(km.next_public_key())))
@@ -231,13 +234,13 @@ impl<K: KeyManager> Keri<K> {
         Ok(rot)
     }
 
-    fn make_rotation(&self) -> Result<EventMessage, Error> {
+    fn make_rotation(&self) -> Result<EventMessage<Event>, Error> {
         let state = self
             .processor
             .compute_state(&self.prefix)?
             .ok_or(Error::SemanticError("There is no state".into()))?;
         match self.key_manager.lock() {
-            Ok(kv) => EventMsgBuilder::new(EventType::Rotation)
+            Ok(kv) => EventMsgBuilder::new(KeyEventType::Rot)
                 .with_prefix(&self.prefix)
                 .with_sn(state.sn + 1)
                 .with_previous_event(&SelfAddressing::Blake3_256.derive(&state.last))
@@ -262,7 +265,7 @@ impl<K: KeyManager> Keri<K> {
             .compute_state(&self.prefix)?
             .ok_or(Error::SemanticError("There is no state".into()))?;
 
-        let ev = EventMsgBuilder::new(EventType::Interaction)
+        let ev = EventMsgBuilder::new(KeyEventType::Ixn)
             .with_prefix(&self.prefix)
             .with_sn(state.sn + 1)
             .with_previous_event(&SelfAddressing::Blake3_256.derive(&state.last))
@@ -332,7 +335,7 @@ impl<K: KeyManager> Keri<K> {
                                 )
                             }
                         }
-                        let rcp: SignedEventData = self.make_rct(ev.event_message.clone())?.into();
+                        let rcp: SignedEventData = self.make_rct(ev.event_message)?.into();
                         buf.append(&mut rcp.to_cesr().unwrap());
                         Ok(buf)
                     }
@@ -346,7 +349,7 @@ impl<K: KeyManager> Keri<K> {
         Ok(response)
     }
 
-    pub fn make_rct(&self, event: EventMessage) -> Result<SignedTransferableReceipt, Error> {
+    pub fn make_rct(&self, event: EventMessage<Event>) -> Result<SignedTransferableReceipt, Error> {
         let ser = event.serialize()?;
         let signature = self
             .key_manager
@@ -387,7 +390,7 @@ impl<K: KeyManager> Keri<K> {
     /// # Parameters
     /// * `message` - `EventMessage` we are to process
     ///
-    pub fn make_ntr(&self, message: EventMessage) -> Result<SignedNontransferableReceipt, Error> {
+    pub fn make_ntr(&self, message: EventMessage<Event>) -> Result<SignedNontransferableReceipt, Error> {
         let our_bp = match &self.prefix {
             IdentifierPrefix::Basic(prefix) => prefix,
             _ => {
@@ -452,7 +455,7 @@ impl<K: KeyManager> Keri<K> {
         self.processor.compute_state_at_sn(&seal.prefix, seal.sn)
     }
 
-    fn generate_ntr(&self, message: EventMessage) -> Result<SignedNontransferableReceipt, Error> {
+    fn generate_ntr(&self, message: EventMessage<Event>) -> Result<SignedNontransferableReceipt, Error> {
         let signature;
         let bp;
         match self.key_manager.lock() {
@@ -477,8 +480,9 @@ impl<K: KeyManager> Keri<K> {
             .add_receipt_nt(ntr.clone(), &message.event.prefix)?;
         Ok(ntr)
     }
-}
 
+
+}
 // Non re-allocating random `String` generator with output length of 10 char string
 #[cfg(feature = "wallet")]
 fn generate_random_string() -> String {

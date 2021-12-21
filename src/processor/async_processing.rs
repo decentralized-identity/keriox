@@ -25,7 +25,7 @@ where
     K: KeyManager + Unpin
 {
         #[pin_project]
-        struct Processor<R, W, K: KeyManager>
+        struct Processor<R, W, K: KeyManager + 'static>
         {
             #[pin]
             reader: R,
@@ -158,4 +158,3 @@ fn slice_to_string(data: &[u8]) -> Result<String> {
     String::from_utf8(data.to_vec())
         .map_err(|e| e.to_string())
 }
-

@@ -2,7 +2,10 @@ mod tables;
 
 use tables::{SledEventTree, SledEventTreeVec};
 use std::path::Path;
-use crate::{error::Error, event::EventMessage, event_message::{TimestampedEventMessage, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedSignedEventMessage}}, prefix::IdentifierPrefix};
+use crate::{error::Error, event::{Event, EventMessage}, event_message::{TimestampedEventMessage, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedSignedEventMessage}}, prefix::IdentifierPrefix};
+
+#[cfg(feature = "query")]
+use crate::query::reply::SignedReply;
 
 pub struct SledEventDatabase {
     // "iids" tree
@@ -22,6 +25,12 @@ pub struct SledEventDatabase {
     receipts_t: SledEventTreeVec<SignedTransferableReceipt>,
     // "vres" tree
     escrowed_receipts_t: SledEventTreeVec<SignedTransferableReceipt>,
+
+    #[cfg(feature = "query")]
+    accepted_rpy: SledEventTreeVec<SignedReply>,
+
+    #[cfg(feature = "query")]
+    escrowed_replys: SledEventTreeVec<SignedReply>,
 }
 
 
@@ -38,7 +47,11 @@ impl SledEventDatabase {
             receipts_nt: SledEventTreeVec::new(db.open_tree(b"rcts")?),
             key_event_logs: SledEventTreeVec::new(db.open_tree(b"kels")?),
             likely_duplicious_events: SledEventTreeVec::new(db.open_tree(b"ldes")?),
-            duplicitous_events: SledEventTreeVec::new(db.open_tree(b"dels")?)
+            duplicitous_events: SledEventTreeVec::new(db.open_tree(b"dels")?),
+            #[cfg(feature = "query")]
+            accepted_rpy: SledEventTreeVec::new(db.open_tree(b"knas")?),
+            #[cfg(feature = "query")]
+            escrowed_replys: SledEventTreeVec::new(db.open_tree(b"knes")?),
         })
     }
 
@@ -121,7 +134,7 @@ impl SledEventDatabase {
             self.escrowed_receipts_nt.remove(self.identifiers.designated_key(id), receipt)
         }
 
-    pub fn add_likely_duplicious_event(&self, event: EventMessage, id: &IdentifierPrefix) -> Result<(), Error> {
+    pub fn add_likely_duplicious_event(&self, event: EventMessage<Event>, id: &IdentifierPrefix) -> Result<(), Error> {
         self.likely_duplicious_events.push(self.identifiers.designated_key(id), event.into())
     }
 
@@ -138,4 +151,67 @@ impl SledEventDatabase {
         -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
             self.duplicitous_events.iter_values(self.identifiers.designated_key(id))
         }
+
+    #[cfg(feature = "query")]
+    pub fn update_accepted_reply(
+        &self,
+        rpy: SignedReply,
+        id: &IdentifierPrefix,
+    ) -> Result<(), Error> {
+        match self
+            .accepted_rpy
+            .iter_values(self.identifiers.designated_key(id))
+        {
+            Some(rpys) => {
+                let filtered = rpys
+                    .filter(|s| s.reply.event.route != rpy.reply.event.route)
+                    .chain(Some(rpy.clone()).into_iter())
+                    .collect();
+                self.accepted_rpy
+                    .put(self.identifiers.designated_key(id), filtered)
+            }
+            None => self
+                .accepted_rpy
+                .push(self.identifiers.designated_key(id), rpy),
+        }
+    }
+
+    #[cfg(feature = "query")]
+    pub fn get_accepted_replys(&self, id: &IdentifierPrefix)
+        -> Option<impl DoubleEndedIterator<Item = SignedReply>> {
+            self.accepted_rpy.iter_values(self.identifiers.designated_key(id))
+        }
+
+    #[cfg(feature = "query")]
+    pub fn remove_accepted_reply(&self, id: &IdentifierPrefix, rpy: SignedReply)
+        -> Result<(), Error> {
+            self.accepted_rpy.remove(self.identifiers.designated_key(id), &rpy)
+        }
+
+     #[cfg(feature = "query")]
+     pub fn add_escrowed_reply(&self, rpy: SignedReply, id: &IdentifierPrefix)
+        -> Result<(), Error> {
+
+            self.escrowed_replys
+                .push(self.identifiers.designated_key(id), rpy)
+        }
+
+    #[cfg(feature = "query")]
+    pub fn get_escrowed_replys(&self, id: &IdentifierPrefix)
+        -> Option<impl DoubleEndedIterator<Item = SignedReply>> {
+            self.escrowed_replys.iter_values(self.identifiers.designated_key(id))
+        }
+
+    #[cfg(feature = "query")]
+    pub fn remove_escrowed_reply(&self, id: &IdentifierPrefix, rpy: SignedReply)
+        -> Result<(), Error> {
+            self.escrowed_replys.remove(self.identifiers.designated_key(id), &rpy)
+        }
+    
+    #[cfg(feature = "query")]
+    pub fn get_all_escrowed_replys(&self)
+        -> Option<impl DoubleEndedIterator<Item = SignedReply>> {
+            self.escrowed_replys.get_all()
+        }
+
 }
