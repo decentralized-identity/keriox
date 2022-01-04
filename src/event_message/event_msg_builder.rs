@@ -173,7 +173,7 @@ impl EventMsgBuilder {
                         sn: 0,
                         event_data: EventData::Icp(icp_event),
                     }
-                    .to_message(self.format)?,
+                    .to_message(self.format, &self.derivation)?,
                     IdentifierPrefix::SelfAddressing(_) => {
                         icp_event.incept_self_addressing(self.derivation, self.format)?
                     }
@@ -195,7 +195,7 @@ impl EventMsgBuilder {
                     data: self.data,
                 }),
             }
-            .to_message(self.format)?,
+            .to_message(self.format, &self.derivation)?,
             KeyEventType::Ixn => Event {
                 prefix,
                 sn: self.sn,
@@ -204,7 +204,7 @@ impl EventMsgBuilder {
                     data: self.data,
                 }),
             }
-            .to_message(self.format)?,
+            .to_message(self.format, &self.derivation)?,
             KeyEventType::Dip => {
                 let icp_data = InceptionEvent {
                     key_config,
@@ -230,7 +230,7 @@ impl EventMsgBuilder {
                     sn: self.sn,
                     event_data: EventData::Drt(rotation_data),
                 }
-                .to_message(self.format)?
+                .to_message(self.format, &self.derivation)?
             }
             KeyEventType::Rct => Err(Error::SemanticError("Wrong event type".into()))?,
         })
@@ -278,7 +278,7 @@ impl ReceiptBuilder {
                 receipted_event_digest: self.derivation.derive(&self.receipted_event.serialize()?),
             }),
         }
-        .to_message(self.format)
+        .to_message(self.format, &self.derivation)
     }
 }
 

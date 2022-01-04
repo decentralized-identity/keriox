@@ -6,7 +6,7 @@ use crate::{
     derivation::self_addressing::SelfAddressing,
     event::{EventMessage, SerializationFormats},
     prefix::SelfAddressingPrefix,
-    state::IdentifierState,
+    state::IdentifierState, event_message::CommonEvent,
 };
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -75,6 +75,12 @@ impl EventMessage<KeyStateNotice> {
             config: vec![],
         };
 
-        EventMessage::new(ksn.clone(), serialization).unwrap()
+        EventMessage::new(ksn.clone(), serialization, &derivation).unwrap()
+    }
+}
+
+impl CommonEvent for KeyStateNotice {
+    fn get_type(&self) -> String {
+        "qry".to_string()
     }
 }

@@ -51,7 +51,7 @@ impl Witness {
             Route::ReplyKsn(IdentifierPrefix::Basic(self.prefix.clone())),
             SelfAddressing::Blake3_256,
             SerializationFormats::JSON,
-        );
+        )?;
 
         let signature =
             SelfSigning::Ed25519Sha512.derive(self.signer.sign(&rpy.serialize()?).unwrap());
@@ -107,7 +107,7 @@ impl Witness {
                     Route::ReplyKsn(IdentifierPrefix::Basic(self.prefix.clone())),
                     SelfAddressing::Blake3_256,
                     SerializationFormats::JSON,
-                );
+                )?;
                 let signature = self.signer.sign(&rpy.serialize()?)?;
                 let rpy = SignedReply::new_nontrans(
                     rpy,

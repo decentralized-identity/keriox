@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     error::Error,
     event::{EventMessage, SerializationFormats},
-    prefix::{AttachedSignaturePrefix, IdentifierPrefix},
+    prefix::{AttachedSignaturePrefix, IdentifierPrefix}, derivation::self_addressing::SelfAddressing, event_message::CommonEvent,
 };
 
 use super::{Envelope, Route};
@@ -29,13 +29,20 @@ impl Query {
         route: Route,
         id: &IdentifierPrefix,
         serialization_info: SerializationFormats,
+        derivation: &SelfAddressing
     ) -> Result<Self, Error> {
         let message = QueryData {
             reply_route: "route".into(),
             data: QueryArgs { i: id.clone() },
         };
 
-        Envelope::new(route, message).to_message(serialization_info)
+        Envelope::new(route, message).to_message(serialization_info, derivation)
+    }
+}
+
+impl CommonEvent for QueryData {
+    fn get_type(&self) -> String {
+        "qry".to_string()
     }
 }
 

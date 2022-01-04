@@ -1,5 +1,6 @@
-use super::{DummyEvent, EventData};
+use super::EventData;
 use super::InceptionEvent;
+use crate::event_message::dummy_event::DummyInceptionEvent;
 use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
@@ -32,7 +33,7 @@ impl DelegatedInceptionEvent {
         EventMessage::new(
             Event {
                 prefix: IdentifierPrefix::SelfAddressing(derivation.derive(
-                    &DummyEvent::derive_delegated_inception_data(
+                    &DummyInceptionEvent::dummy_delegated_inception_data(
                         self.clone(),
                         &derivation,
                         format,
@@ -42,6 +43,7 @@ impl DelegatedInceptionEvent {
                 event_data: EventData::Dip(self),
             },
             format,
+            &derivation
         )
     }
 }

@@ -196,6 +196,7 @@ impl<K: KeyManager> Keri<K> {
                 EventData::Ixn(InteractionEvent::new(pref, vec![seal])),
             ),
             SerializationFormats::JSON,
+            &SelfAddressing::Blake3_256,
         )?;
         let serialized = event.serialize()?;
         let signature = self
@@ -367,7 +368,7 @@ impl<K: KeyManager> Keri<K> {
                 receipted_event_digest: SelfAddressing::Blake3_256.derive(&ser),
             }),
         }
-        .to_message(SerializationFormats::JSON)?;
+        .to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)?;
 
         let signatures = vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
@@ -473,7 +474,7 @@ impl<K: KeyManager> Keri<K> {
                 receipted_event_digest: SelfAddressing::Blake3_256.derive(&message.serialize()?),
             }),
         }
-        .to_message(SerializationFormats::JSON)?;
+        .to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)?;
         let ntr = SignedNontransferableReceipt::new(&rcp, vec![(bp, ssp)]);
         self.processor
             .db

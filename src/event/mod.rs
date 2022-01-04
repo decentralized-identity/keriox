@@ -1,5 +1,6 @@
+use crate::event_message::CommonEvent;
 pub use crate::event_message::{serialization_info::SerializationFormats, EventMessage};
-use crate::prefix::IdentifierPrefix;
+use crate::{prefix::IdentifierPrefix, derivation::self_addressing::SelfAddressing};
 use crate::state::IdentifierState;
 use serde::{Deserialize, Serialize};
 pub mod event_data;
@@ -31,8 +32,21 @@ impl Event {
             }
         }
 
-    pub fn to_message(self, format: SerializationFormats) -> Result<EventMessage<Event>, Error> {
-        EventMessage::new(self, format)
+    pub fn to_message(self, format: SerializationFormats, derivation: &SelfAddressing) -> Result<EventMessage<Event>, Error> {
+        EventMessage::new(self, format, derivation)
+    }
+}
+
+impl CommonEvent for Event {
+    fn get_type(&self) -> String {
+        match self.event_data {
+            EventData::Icp(_) => "icp",
+            EventData::Rot(_) => "rot",
+            EventData::Ixn(_) => "ixn",
+            EventData::Dip(_) => "dip",
+            EventData::Drt(_) => "drt",
+            EventData::Rct(_) => "rct",
+        }.to_string()
     }
 }
 

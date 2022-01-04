@@ -10,7 +10,7 @@ use serde::Deserialize;
 #[cfg(feature = "async")]
 use crate::event_message::serialization_info::SerializationInfo;
 
-use crate::{event::{Event, EventMessage}, event_parsing::{Attachment, SignedEventData, attachment::attachment, EventType}}; 
+use crate::{event::{Event, EventMessage}, event_parsing::{Attachment, SignedEventData, attachment::attachment, EventType}, event_message::CommonEvent}; 
 #[cfg(feature = "query")]
 use serde::Serialize;
 #[cfg(feature = "query")]
@@ -18,7 +18,7 @@ use crate::query::Envelope;
 use rmp_serde as serde_mgpk;
 
 
-fn json_message<'a, D: Deserialize<'a>>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<D>> {
+fn json_message<'a, D: Deserialize<'a> + CommonEvent>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<D>> {
     let mut stream = serde_json::Deserializer::from_slice(s).into_iter::<EventMessage<D>>();
     match stream.next() {
         Some(Ok(event)) => Ok((&s[stream.byte_offset()..], event)),
@@ -26,7 +26,7 @@ fn json_message<'a, D: Deserialize<'a>>(s: &'a [u8]) -> nom::IResult<&[u8], Even
     }
 }
 
-fn cbor_message<'a, D: Deserialize<'a>>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<D>> {
+fn cbor_message<'a, D: Deserialize<'a> +  CommonEvent>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<D>> {
     let mut stream = serde_cbor::Deserializer::from_slice(s).into_iter::<EventMessage<D>>();
     match stream.next() {
         Some(Ok(event)) => Ok((&s[stream.byte_offset()..], event)),
@@ -34,7 +34,7 @@ fn cbor_message<'a, D: Deserialize<'a>>(s: &'a [u8]) -> nom::IResult<&[u8], Even
     }
 }
 
-fn mgpk_message<'a, D: Deserialize<'a>>(s: &[u8]) -> nom::IResult<&[u8], EventMessage<D>> {
+fn mgpk_message<'a, D: Deserialize<'a> + CommonEvent>(s: &[u8]) -> nom::IResult<&[u8], EventMessage<D>> {
     let mut deser = serde_mgpk::Deserializer::new(Cursor::new(s));
     match Deserialize::deserialize(&mut deser) {
         Ok(event) => Ok((&s[deser.get_ref().position() as usize..], event)),
@@ -42,7 +42,7 @@ fn mgpk_message<'a, D: Deserialize<'a>>(s: &[u8]) -> nom::IResult<&[u8], EventMe
     }
 }
 
-pub fn message<'a, D: Deserialize<'a>>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<D>> {
+pub fn message<'a, D: Deserialize<'a> + CommonEvent>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<D>> {
     alt((json_message::<D>, cbor_message::<D>, mgpk_message::<D>))(s)
 
 }
@@ -54,7 +54,7 @@ pub fn event_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
 }
 
 #[cfg(feature = "query")]
-fn envelope<'a, D: Serialize + Deserialize<'a>>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<Envelope<D>>> {
+fn envelope<'a, D: Serialize + Deserialize<'a> + CommonEvent>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<Envelope<D>>> {
     message::<Envelope<D>>(s)
         .map(|d| (d.0, d.1))
 }
@@ -147,9 +147,13 @@ fn test_signed_event() {
 
 #[test]
 fn test_event() {
-    let stream = br#"{"v":"KERI10JSON0000ed_","i":"E7WIS0e4Tx1PcQW5Um5s3Mb8uPSzsyPODhByXzgvmAdQ","s":"0","t":"icp","kt":"1","k":["Dpt7mGZ3y5UmhT1NLExb1IW8vMJ8ylQW3K44LfkTgAqE"],"n":"Erpltchg7BUv21Qz3ZXhOhVu63m7S7YbPb21lSeGYd90","bt":"0","b":[],"c":[],"a":[]}"#;
+    let stream = br#"{"v":"KERI10JSON0000ed_","d":"E7WIS0e4Tx1PcQW5Um5s3Mb8uPSzsyPODhByXzgvmAdQ","i":"E7WIS0e4Tx1PcQW5Um5s3Mb8uPSzsyPODhByXzgvmAdQ","s":"0","t":"icp","kt":"1","k":["Dpt7mGZ3y5UmhT1NLExb1IW8vMJ8ylQW3K44LfkTgAqE"],"n":"Erpltchg7BUv21Qz3ZXhOhVu63m7S7YbPb21lSeGYd90","bt":"0","b":[],"c":[],"a":[]}"#;
+
+    let stream = br#"{"v":"KERI10JSON000120_","t":"icp","d":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"0","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","bt":"0","b":[],"c":[],"a":[]}"#;
+
     let event = event_message(stream);
     assert!(event.is_ok());
+    // println!("event: {}", String::from_utf8(event.unwrap().1.serialize().unwrap()).unwrap());
     assert_eq!(event.unwrap().1.serialize().unwrap(), stream);
 
     // Inception event.
@@ -181,7 +185,7 @@ fn test_event() {
     let event = event_message(stream);
     assert_eq!(event.unwrap().1.serialize().unwrap(), stream);
 
-    // // Delegated rotation event.
+    // Delegated rotation event.
     let stream = r#"{"v":"KERI10JSON000122_","i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"1","t":"drt","p":"E1x1JOub6oEQkxAxTNFu1Pma6y-lrbprNsaILHJHoPmY","kt":"1","k":["DTf6QZWoet154o9wvzeMuNhLQRr8JaAUeiC6wjB_4_08"],"n":"E8kyiXDfkE7idwWnAZQjHbUZMz-kd_yIMH0miptIFFPo","bt":"0","br":[],"ba":[],"a":[]}"#.as_bytes();
     let event = event_message(stream);
     assert!(event.is_ok());

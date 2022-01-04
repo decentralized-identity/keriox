@@ -6,17 +6,15 @@ use crate::{
     error::Error,
     event::{sections::seal::EventSeal, EventMessage, SerializationFormats},
     prefix::{
-        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
+        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, 
         SelfSigningPrefix,
-    }, state::IdentifierState, event_message::signature::Signature,
+    }, state::IdentifierState, event_message::{signature::Signature, dummy_event::DummyEventMessage, CommonEvent},
 };
 
 use super::{key_state_notice::KeyStateNotice, Envelope, QueryError, Route};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct ReplyData {
-    #[serde(rename = "d")]
-    pub digest: Option<SelfAddressingPrefix>,
     #[serde(rename = "a")]
     pub data: EventMessage<KeyStateNotice>,
 }
@@ -29,11 +27,8 @@ impl Reply {
         route: Route,
         self_addressing: SelfAddressing,
         serialization: SerializationFormats,
-    ) -> EventMessage<Envelope<ReplyData>> {
-        // To create reply message we need to use dummy string in digest field,
-        // compute digest and update `d` field.
+    ) -> Result<EventMessage<Envelope<ReplyData>>, Error> {
         let rpy_data = ReplyData {
-            digest: None,
             data: ksn.clone(),
         };
         let env = Envelope {
@@ -41,21 +36,7 @@ impl Reply {
             route: route.clone(),
             data: rpy_data,
         };
-        let ev_msg = EventMessage::new(env.clone(), serialization).unwrap();
-        let dig = self_addressing.derive(&ev_msg.serialize().unwrap());
-        let version = ev_msg.serialization_info;
-        let rpy_data = ReplyData {
-            digest: Some(dig),
-            data: ksn,
-        };
-        let env = Envelope {
-            data: rpy_data,
-            ..env
-        };
-        EventMessage {
-            serialization_info: version,
-            event: env,
-        }
+        EventMessage::new(env.clone(), serialization, &self_addressing)
     }
 
     pub fn get_timestamp(&self) -> DateTime<FixedOffset> {
@@ -71,22 +52,18 @@ impl Reply {
         self.event.data.data.event.state.clone()
     }
 
-    fn with_dummy_digest(&self) -> Vec<u8> {
-        let mut def_dig = self.clone();
-        def_dig.event.data.digest = None;
-        def_dig.serialize().unwrap()
-    }
-
-    fn get_digest(&self) -> Option<SelfAddressingPrefix> {
-        self.event.data.digest.clone()
-    }
-
     pub fn check_digest(&self) -> Result<(), Error> {
-        let digest = self.get_digest().unwrap();
-        digest
-            .verify_binding(&self.with_dummy_digest())
+        let dummy = DummyEventMessage::dummy_event(self.event.clone(), self.serialization_info.kind, &self.digest.derivation)?.serialize()?;
+        self.digest
+            .verify_binding(&dummy)
             .then(|| ())
             .ok_or(QueryError::IncorrectDigest.into())
+    }
+}
+
+impl CommonEvent for ReplyData {
+    fn get_type(&self) -> String {
+        "rpy".to_string()
     }
 }
 

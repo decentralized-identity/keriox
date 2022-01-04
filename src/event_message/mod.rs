@@ -3,40 +3,47 @@ pub mod serialization_info;
 pub mod serializer;
 pub mod signed_event_message;
 pub mod signature;
+pub mod dummy_event;
 
 use std::cmp::Ordering;
 
 use crate::{
     error::Error,
     event::{
-        event_data::{DummyEvent, EventData},
+        event_data::EventData,
         Event,
         sections::seal::SourceSeal,
     },
-    prefix::{AttachedSignaturePrefix, IdentifierPrefix},
-    state::{EventSemantics, IdentifierState},
+    prefix::{AttachedSignaturePrefix, IdentifierPrefix, SelfAddressingPrefix},
+    state::{EventSemantics, IdentifierState}, derivation::{self_addressing::SelfAddressing },
 };
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use serialization_info::*;
 
-use self::signed_event_message::SignedEventMessage;
+use self::{signed_event_message::SignedEventMessage, dummy_event::{DummyInceptionEvent, DummyEventMessage}};
+
+pub trait CommonEvent {
+    fn get_type(&self) -> String;
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct EventMessage<D> {
+pub struct EventMessage<D: CommonEvent> {
     /// Serialization Information
     ///
     /// Encodes the version, size and serialization format of the event
     #[serde(rename = "v")]
     pub serialization_info: SerializationInfo,
 
+    #[serde(rename = "t")]
+    pub event_type: String,
+
+    #[serde(rename = "d")]
+    pub digest: SelfAddressingPrefix,
+
     #[serde(flatten)]
     pub event: D,
-    // Additional Data for forwards compat
-    //
-    // TODO: Currently seems to be bugged, it captures and duplicates every element in the event
-    // #[serde(flatten)]
-    // pub extra: HashMap<String, Value>,
+
 }
 
 #[derive(Serialize, Deserialize, PartialEq)]
@@ -95,22 +102,20 @@ impl From<EventMessage<Event>> for TimestampedEventMessage {
     }
 }
 
-impl<T: Clone + Serialize> EventMessage<T> {
-    pub fn new(event: T, format: SerializationFormats) -> Result<Self, Error> {
+impl<T: Clone + Serialize + CommonEvent> EventMessage<T> {
+    pub fn new(event: T, format: SerializationFormats, derivation: &SelfAddressing) -> Result<Self, Error> {
+        let dummy_event = DummyEventMessage::dummy_event(event.clone(), format, derivation)?;
+        let digest = derivation.derive(&dummy_event.serialize()?);
         Ok(Self {
-            serialization_info: SerializationInfo::new(format, Self::get_size(&event, format)?),
-            event,
+            serialization_info: dummy_event.serialization_info,
+            event: event.clone(),
+            digest,
+            event_type: event.get_type(),
         })
     }
 
-    fn get_size(event: &T, format: SerializationFormats) -> Result<usize, Error> {
-        Ok(Self {
-            serialization_info: SerializationInfo::new(format, 0),
-            event: event.clone(),
-        }
-        .serialize()?
-        .len())
-    }
+
+
 
     pub fn serialization(&self) -> SerializationFormats {
         self.serialization_info.kind
@@ -219,7 +224,7 @@ pub fn verify_identifier_binding(icp_event: &EventMessage<Event>) -> Result<bool
                 && bp == icp.key_config.public_keys.first().unwrap()),
             // TODO update with new inception process
             IdentifierPrefix::SelfAddressing(sap) => {
-                Ok(sap.verify_binding(&DummyEvent::derive_inception_data(
+                Ok(sap.verify_binding(&DummyInceptionEvent::dummy_inception_data(
                     icp.clone(),
                     &sap.derivation,
                     icp_event.serialization(),
@@ -229,7 +234,7 @@ pub fn verify_identifier_binding(icp_event: &EventMessage<Event>) -> Result<bool
         },
         EventData::Dip(dip) => match &icp_event.event.prefix {
             IdentifierPrefix::SelfAddressing(sap) => Ok(sap.verify_binding(
-                &DummyEvent::derive_delegated_inception_data(
+                &DummyInceptionEvent::dummy_delegated_inception_data(
                     dip.clone(),
                     &sap.derivation,
                     icp_event.serialization(),
@@ -297,7 +302,7 @@ mod tests {
             }),
         };
 
-        let icp_m = icp.to_message(SerializationFormats::JSON)?;
+        let icp_m = icp.to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)?;
 
         // serialised message
         let ser = icp_m.serialize()?;

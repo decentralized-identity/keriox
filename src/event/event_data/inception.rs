@@ -1,12 +1,12 @@
 use super::{
     super::sections::{InceptionWitnessConfig, KeyConfig},
-    DummyEvent, EventData,
+    EventData,
 };
 use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
     event::{sections::seal::Seal, Event},
-    event_message::{serialization_info::SerializationFormats, EventMessage},
+    event_message::{serialization_info::SerializationFormats, EventMessage, dummy_event::DummyInceptionEvent},
     prefix::IdentifierPrefix,
     state::{EventSemantics, IdentifierState, LastEstablishmentData},
 };
@@ -57,12 +57,13 @@ impl InceptionEvent {
         EventMessage::new(
             Event {
                 prefix: IdentifierPrefix::SelfAddressing(derivation.derive(
-                    &DummyEvent::derive_inception_data(self.clone(), &derivation, format)?,
+                    &DummyInceptionEvent::dummy_inception_data(self.clone(), &derivation, format)?,
                 )),
                 sn: 0,
                 event_data: EventData::Icp(self),
             },
             format,
+            &derivation,
         )
     }
 }

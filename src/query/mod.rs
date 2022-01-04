@@ -2,9 +2,9 @@ use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
     event::{
-        event_data::DummyEvent, EventMessage, SerializationFormats,
+        EventMessage, SerializationFormats,
     },
-    prefix::{IdentifierPrefix, Prefix},
+    prefix::{IdentifierPrefix, Prefix}, event_message::{dummy_event::{DummyInceptionEvent, DummyEventMessage}, CommonEvent},
 };
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use serde::{de, ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
@@ -22,7 +22,7 @@ pub mod reply;
 
 pub type TimeStamp = DateTime<FixedOffset>;
 
-#[derive(Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Envelope<D: Serialize> {
     #[serde(rename = "dt")]
     pub timestamp: DateTime<FixedOffset>,
@@ -45,59 +45,65 @@ impl<D: Serialize> Envelope<D> {
     }
 }
 
+impl<D: Serialize + CommonEvent> CommonEvent for Envelope<D> {
+    fn get_type(&self) -> String {
+        self.data.get_type()
+    }
+}
+
 impl Envelope<ReplyData> {
-    pub fn to_message(self, format: SerializationFormats) -> Result<EventMessage<Self>, Error> {
-        EventMessage::new(self, format)
+    pub fn to_message(self, format: SerializationFormats, derivation: &SelfAddressing) -> Result<EventMessage<Self>, Error> {
+        EventMessage::new(self, format, derivation)
     }
 }
 
 impl Envelope<QueryData> {
-    pub fn to_message(self, format: SerializationFormats) -> Result<EventMessage<Self>, Error> {
-        EventMessage::new(self, format)
+    pub fn to_message(self, format: SerializationFormats, derivation: &SelfAddressing) -> Result<EventMessage<Self>, Error> {
+        EventMessage::new(self, format, derivation)
     }
 }
 
-impl Serialize for Envelope<ReplyData> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut em = serializer.serialize_struct("Envelope", 5)?;
-        let digest = match self.data.digest {
-            Some(ref sai) => sai.to_str(),
-            // TODO shouldn't be set to Blake3_265
-            None => DummyEvent::dummy_prefix(&SelfAddressing::Blake3_256),
-        };
-        em.serialize_field("t", "rpy")?;
-        em.serialize_field("d", &digest)?;
-        em.serialize_field(
-            "dt",
-            &self.timestamp.to_rfc3339_opts(SecondsFormat::Micros, false),
-        )?;
-        em.serialize_field("r", &self.route)?;
-        em.serialize_field("a", &self.data.data)?;
+// impl Serialize for Envelope<ReplyData> {
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: serde::Serializer,
+//     {
+//         let mut em = serializer.serialize_struct("Envelope", 5)?;
+//         let digest = match self.data.digest {
+//             Some(ref sai) => sai.to_str(),
+//             // TODO shouldn't be set to Blake3_265
+//             None => DummyEventMessage::dummy_prefix(&SelfAddressing::Blake3_256),
+//         };
+//         em.serialize_field("t", "rpy")?;
+//         em.serialize_field("d", &digest)?;
+//         em.serialize_field(
+//             "dt",
+//             &self.timestamp.to_rfc3339_opts(SecondsFormat::Micros, false),
+//         )?;
+//         em.serialize_field("r", &self.route)?;
+//         em.serialize_field("a", &self.data.data)?;
 
-        em.end()
-    }
-}
+//         em.end()
+//     }
+// }
 
-impl Serialize for Envelope<QueryData> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut em = serializer.serialize_struct("Envelope", 5)?;
-        em.serialize_field("t", "qry")?;
-        em.serialize_field(
-            "dt",
-            &self.timestamp.to_rfc3339_opts(SecondsFormat::Micros, false),
-        )?;
-        em.serialize_field("r", &self.route)?;
-        em.serialize_field("rr", &self.data.reply_route)?;
-        em.serialize_field("q", &self.data.data)?;
-        em.end()
-    }
-}
+// impl Serialize for Envelope<QueryData> {
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: serde::Serializer,
+//     {
+//         let mut em = serializer.serialize_struct("Envelope", 5)?;
+//         em.serialize_field("t", "qry")?;
+//         em.serialize_field(
+//             "dt",
+//             &self.timestamp.to_rfc3339_opts(SecondsFormat::Micros, false),
+//         )?;
+//         em.serialize_field("r", &self.route)?;
+//         em.serialize_field("rr", &self.data.reply_route)?;
+//         em.serialize_field("q", &self.data.data)?;
+//         em.end()
+//     }
+// }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Route {
