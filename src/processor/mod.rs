@@ -462,7 +462,7 @@ impl EventProcessor {
         use crate::query::{reply::Reply, Route};
         let accepted_replys = self
             .db
-            .get_accepted_replys(&new_rpy.reply.event.data.data.event.state.prefix);
+            .get_accepted_replys(&new_rpy.reply.event.data.data.state.prefix);
 
         // helper function for reply timestamps checking
         fn check_dts(new_rpy: Reply, old_rpy: Reply) -> Result<(), Error> {
@@ -587,7 +587,7 @@ impl EventProcessor {
             .find(|sr: &SignedReply| sr.reply.event.route == Route::ReplyKsn(aid.clone()))
         {
             Some(old_ksn) => {
-                let old_dt = old_ksn.reply.event.data.data.event.timestamp;
+                let old_dt = old_ksn.reply.event.data.data.timestamp;
                 if old_dt > new_dt {
                     Err(QueryError::StaleKsn.into())
                 } else {
@@ -605,13 +605,13 @@ impl EventProcessor {
     #[cfg(feature = "query")]
     fn check_ksn(
         &self,
-        ksn: &EventMessage<KeyStateNotice>,
+        ksn: &KeyStateNotice,
         aid: &IdentifierPrefix,
     ) -> Result<Option<IdentifierState>, Error> {
         // check ksn digest
-        let sn = ksn.event.state.sn;
-        let pre = ksn.event.state.prefix.clone();
-        let digest = ksn.event.digest.clone();
+        let sn = ksn.state.sn;
+        let pre = ksn.state.prefix.clone();
+        let digest = ksn.digest.clone();
         let event_from_db = self
             .get_event_at_sn(&pre, sn)?
             .ok_or(Error::QueryError(QueryError::OutOfOrderEventError))?
@@ -622,7 +622,7 @@ impl EventProcessor {
             .then(|| ())
             .ok_or::<Error>(QueryError::IncorrectDigest.into())?;
 
-        match self.check_timestamp_with_last_ksn(ksn.event.timestamp, &ksn.event.state.prefix, aid)
+        match self.check_timestamp_with_last_ksn(ksn.timestamp, &ksn.state.prefix, aid)
         {
             Err(Error::QueryError(QueryError::OutOfOrderEventError)) => {
                 // no previous accepted ksn from that aid in db
@@ -633,11 +633,11 @@ impl EventProcessor {
 
         // check new ksn with actual database state for that prefix
         let state = self
-            .compute_state(&ksn.event.state.prefix)?
+            .compute_state(&ksn.state.prefix)?
             .ok_or::<Error>(QueryError::OutOfOrderEventError.into())?;
-        if state.sn < ksn.event.state.sn {
+        if state.sn < ksn.state.sn {
             Err(QueryError::OutOfOrderEventError.into())
-        } else if state.sn == ksn.event.state.sn {
+        } else if state.sn == ksn.state.sn {
             Ok(Some(state))
         } else {
             Err(QueryError::StaleKsn.into())
@@ -646,7 +646,7 @@ impl EventProcessor {
 
     #[cfg(feature = "query")]
     fn escrow_reply(&self, rpy: &SignedReply) -> Result<(), Error> {
-        let id = rpy.reply.event.data.data.event.state.prefix.clone();
+        let id = rpy.reply.event.data.data.state.prefix.clone();
         self.db.add_escrowed_reply(rpy.clone(), &id)
     }
 

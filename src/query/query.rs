@@ -69,8 +69,8 @@ impl SignedQuery {
 
 #[test]
 fn test_query_deserialize() {
-    let input_query = r#"{"v":"KERI10JSON00011c_","t":"qry","dt":"2020-08-22T17:50:12.988921+00:00","r":"ksn","rr":"route","q":{"i":"DQ0NRLhqsdR2KomXD9l8JWI-03OHAKnQHKEJSNj8qwhE"}}"#;
-
+    // taken from keripy keripy/tests/core/test_eventing.py::test_messegize (line 1462)
+    let input_query = r#"{"v":"KERI10JSON0000c9_","t":"qry","d":"E-WvgxrllmjGFhpn0oOiBkAVz3-dEm3bbiV_5qwj81xo","dt":"2021-01-01T00:00:00.000000+00:00","r":"log","rr":"","q":{"i":"DyvCLRr5luWmp7keDvDuLP0kIqcyBYq79b3Dho1QvrjI"}}"#;
     let qr: Result<Query, _> = serde_json::from_str(input_query);
     assert!(qr.is_ok());
 

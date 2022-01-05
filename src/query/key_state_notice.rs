@@ -4,13 +4,16 @@ use serde_hex::{Compact, SerHex};
 
 use crate::{
     derivation::self_addressing::SelfAddressing,
-    event::{EventMessage, SerializationFormats},
+    event::SerializationFormats,
     prefix::SelfAddressingPrefix,
-    state::IdentifierState, event_message::CommonEvent,
+    state::IdentifierState, event_message::serialization_info::SerializationInfo,
 };
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct KeyStateNotice {
+    #[serde(rename = "v")]
+    pub serialization_info: SerializationInfo,
+
     #[serde(flatten)]
     pub state: IdentifierState,
 
@@ -33,6 +36,7 @@ impl Serialize for KeyStateNotice {
         S: Serializer,
     {
         let mut em = serializer.serialize_struct("Envelope", 15)?;
+        em.serialize_field("v", &self.serialization_info)?;
         em.serialize_field("i", &self.state.prefix)?;
         em.serialize_field("s", &self.state.sn.to_string())?;
         em.serialize_field("p", &self.state.last_previous.clone())?;
@@ -58,7 +62,7 @@ impl Serialize for KeyStateNotice {
     }
 }
 
-impl EventMessage<KeyStateNotice> {
+impl KeyStateNotice {
     pub fn new_ksn(
         state: IdentifierState,
         serialization: SerializationFormats,
@@ -68,6 +72,7 @@ impl EventMessage<KeyStateNotice> {
 
         let last_digest = derivation.derive(&state.last);
         let ksn = KeyStateNotice {
+            serialization_info: SerializationInfo::new(serialization, 0),
             timestamp: dt,
             state,
             digest: last_digest,
@@ -75,12 +80,6 @@ impl EventMessage<KeyStateNotice> {
             config: vec![],
         };
 
-        EventMessage::new(ksn.clone(), serialization, &derivation).unwrap()
-    }
-}
-
-impl CommonEvent for KeyStateNotice {
-    fn get_type(&self) -> String {
-        "qry".to_string()
+        ksn.clone()
     }
 }

@@ -18,7 +18,7 @@ use crate::{
     state::{EventSemantics, IdentifierState}, derivation::{self_addressing::SelfAddressing },
 };
 use chrono::{DateTime, Local};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use serialization_info::*;
 
 use self::{signed_event_message::SignedEventMessage, dummy_event::{DummyInceptionEvent, DummyEventMessage}};
@@ -27,7 +27,7 @@ pub trait CommonEvent {
     fn get_type(&self) -> String;
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Debug, Clone, PartialEq)]
 pub struct EventMessage<D: CommonEvent> {
     /// Serialization Information
     ///
@@ -35,15 +35,41 @@ pub struct EventMessage<D: CommonEvent> {
     #[serde(rename = "v")]
     pub serialization_info: SerializationInfo,
 
-    #[serde(rename = "t")]
-    pub event_type: String,
-
     #[serde(rename = "d")]
     pub digest: SelfAddressingPrefix,
 
     #[serde(flatten)]
     pub event: D,
+}
 
+impl<D: CommonEvent + Serialize + Clone> Serialize for EventMessage<D> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer {
+        // Helper struct for adding `t` field to EventMessage serialization
+        #[derive(Serialize)]
+        struct TypedEventMessage<D> {
+            v: SerializationInfo,
+            t: String,
+            d: SelfAddressingPrefix,
+            #[serde(flatten)]
+            event: D
+
+        }
+        impl<D: CommonEvent +  Clone> From<&EventMessage<D>> for TypedEventMessage<D> {
+            fn from(em: &EventMessage<D>) -> Self {
+                TypedEventMessage {
+                    v: em.serialization_info,
+                    t: em.event.get_type(),
+                    d: em.digest.clone(),
+                    event: em.event.clone(),
+                }
+            }
+        }
+
+        let tem: TypedEventMessage<_> = self.into();
+        tem.serialize(serializer)
+    }
 }
 
 #[derive(Serialize, Deserialize, PartialEq)]
@@ -108,14 +134,10 @@ impl<T: Clone + Serialize + CommonEvent> EventMessage<T> {
         let digest = derivation.derive(&dummy_event.serialize()?);
         Ok(Self {
             serialization_info: dummy_event.serialization_info,
-            event: event.clone(),
+            event: event,
             digest,
-            event_type: event.get_type(),
         })
     }
-
-
-
 
     pub fn serialization(&self) -> SerializationFormats {
         self.serialization_info.kind

@@ -16,14 +16,14 @@ use super::{key_state_notice::KeyStateNotice, Envelope, QueryError, Route};
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct ReplyData {
     #[serde(rename = "a")]
-    pub data: EventMessage<KeyStateNotice>,
+    pub data: KeyStateNotice,
 }
 
 pub type Reply = EventMessage<Envelope<ReplyData>>;
 
 impl Reply {
     pub fn new_reply(
-        ksn: EventMessage<KeyStateNotice>,
+        ksn: KeyStateNotice,
         route: Route,
         self_addressing: SelfAddressing,
         serialization: SerializationFormats,
@@ -44,12 +44,12 @@ impl Reply {
     }
 
     pub fn get_prefix(&self) -> IdentifierPrefix {
-        self.event.data.data.event.state.prefix.clone()
+        self.event.data.data.state.prefix.clone()
     }
 
 
     pub fn get_state(&self) -> IdentifierState {
-        self.event.data.data.event.state.clone()
+        self.event.data.data.state.clone()
     }
 
     pub fn check_digest(&self) -> Result<(), Error> {
@@ -101,8 +101,8 @@ impl SignedReply {
 
 #[test]
 fn test_reply_deserialize() {
-    // From keripy
-    let rpy = r#"{"v":"KERI10JSON000294_","t":"rpy","d":"EPeNPAtRcVjY7lLxl_DZ3qFPb0R0n_6wmGAMgO-u8_YU","dt":"2021-01-01T00:00:00.000000+00:00","r":"/ksn/BFUOWBaJz-sB_6b-_u_P9W8hgBQ8Su9mAtN9cY2sVGiY","a":{"v":"KERI10JSON0001d9_","i":"E4BsxCYUtUx3d6UkDVIQ9Ke3CLQfqWBfICSmjIzkS1u4","s":"0","p":"","d":"EYk4PigtRsCd5W2so98c8r8aeRHoixJK7ntv9mTrZPmM","f":"0","dt":"2021-01-01T00:00:00.000000+00:00","et":"icp","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","bt":"1","b":["BFUOWBaJz-sB_6b-_u_P9W8hgBQ8Su9mAtN9cY2sVGiY"],"c":[],"ee":{"s":"0","d":"EYk4PigtRsCd5W2so98c8r8aeRHoixJK7ntv9mTrZPmM","br":[],"ba":[]},"di":""}}"#;
+    // From keripy (keripy/tests/core/test_keystate.py::100)
+    let rpy = r#"{"v":"KERI10JSON000294_","t":"rpy","d":"EzXrBzyJK1ELAGw9VZIbeT-e5JTYQvQAvNIlSEfVgJSk","dt":"2021-01-01T00:00:00.000000+00:00","r":"/ksn/BFUOWBaJz-sB_6b-_u_P9W8hgBQ8Su9mAtN9cY2sVGiY","a":{"v":"KERI10JSON0001d9_","i":"ECJTKtR-GlybCmn1PCiVwIuGBjaOUXI09XWDdXkrJNj0","s":"0","p":"","d":"ECJTKtR-GlybCmn1PCiVwIuGBjaOUXI09XWDdXkrJNj0","f":"0","dt":"2021-01-01T00:00:00.000000+00:00","et":"icp","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","bt":"1","b":["BFUOWBaJz-sB_6b-_u_P9W8hgBQ8Su9mAtN9cY2sVGiY"],"c":[],"ee":{"s":"0","d":"ECJTKtR-GlybCmn1PCiVwIuGBjaOUXI09XWDdXkrJNj0","br":[],"ba":[]},"di":""}}"#;
 
     let qr: Result<Reply, _> = serde_json::from_str(rpy);
     assert!(qr.is_ok());

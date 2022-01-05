@@ -186,7 +186,7 @@ fn test_qry_rpy() -> Result<(), Error> {
    
     match rep {
         ReplyType::Rep(rep) => {
-            assert_eq!(&rep.reply.event.data.data.event.state, &alice.get_state().unwrap().unwrap())
+            assert_eq!(&rep.reply.event.data.data.state, &alice.get_state().unwrap().unwrap())
         },
         ReplyType::Kel(_) => assert!(false),
     }
