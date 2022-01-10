@@ -54,14 +54,13 @@ impl InceptionEvent {
         derivation: SelfAddressing,
         format: SerializationFormats,
     ) -> Result<EventMessage<Event>, Error> {
-        EventMessage::new(
-            Event {
-                prefix: IdentifierPrefix::SelfAddressing(derivation.derive(
+            Event::new(
+                IdentifierPrefix::SelfAddressing(derivation.derive(
                     &DummyInceptionEvent::dummy_inception_data(self.clone(), &derivation, format)?,
                 )),
-                sn: 0,
-                event_data: EventData::Icp(self),
-            },
+                0,
+                EventData::Icp(self),
+            ).to_message(
             format,
             &derivation,
         )

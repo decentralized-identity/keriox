@@ -15,16 +15,17 @@ use crate::{
         sections::seal::SourceSeal,
     },
     prefix::{AttachedSignaturePrefix, IdentifierPrefix, SelfAddressingPrefix},
-    state::{EventSemantics, IdentifierState}, derivation::{self_addressing::SelfAddressing },
+    state::{EventSemantics, IdentifierState},
 };
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize, Serializer};
 use serialization_info::*;
 
-use self::{signed_event_message::SignedEventMessage, dummy_event::{DummyInceptionEvent, DummyEventMessage}};
+use self::{signed_event_message::SignedEventMessage, dummy_event::DummyInceptionEvent};
 
 pub trait CommonEvent {
-    fn get_type(&self) -> String;
+    fn get_type(&self) -> Option<String>;
+    fn get_digest(&self) -> Option<SelfAddressingPrefix>;
 }
 
 #[derive(Deserialize, Debug, Clone, PartialEq)]
@@ -34,9 +35,6 @@ pub struct EventMessage<D: CommonEvent> {
     /// Encodes the version, size and serialization format of the event
     #[serde(rename = "v")]
     pub serialization_info: SerializationInfo,
-
-    #[serde(rename = "d")]
-    pub digest: SelfAddressingPrefix,
 
     #[serde(flatten)]
     pub event: D,
@@ -50,8 +48,12 @@ impl<D: CommonEvent + Serialize + Clone> Serialize for EventMessage<D> {
         #[derive(Serialize)]
         struct TypedEventMessage<D> {
             v: SerializationInfo,
-            t: String,
-            d: SelfAddressingPrefix,
+            #[serde(rename = "t", skip_serializing_if = "Option::is_none")]
+            event_type: Option<String>,
+
+            #[serde(rename = "d", skip_serializing_if = "Option::is_none")]
+            digest: Option<SelfAddressingPrefix>,
+
             #[serde(flatten)]
             event: D
 
@@ -60,8 +62,8 @@ impl<D: CommonEvent + Serialize + Clone> Serialize for EventMessage<D> {
             fn from(em: &EventMessage<D>) -> Self {
                 TypedEventMessage {
                     v: em.serialization_info,
-                    t: em.event.get_type(),
-                    d: em.digest.clone(),
+                    event_type: em.event.get_type(),
+                    digest: em.event.get_digest(),
                     event: em.event.clone(),
                 }
             }
@@ -129,16 +131,6 @@ impl From<EventMessage<Event>> for TimestampedEventMessage {
 }
 
 impl<T: Clone + Serialize + CommonEvent> EventMessage<T> {
-    pub fn new(event: T, format: SerializationFormats, derivation: &SelfAddressing) -> Result<Self, Error> {
-        let dummy_event = DummyEventMessage::dummy_event(event.clone(), format, derivation)?;
-        let digest = derivation.derive(&dummy_event.serialize()?);
-        Ok(Self {
-            serialization_info: dummy_event.serialization_info,
-            event: event,
-            digest,
-        })
-    }
-
     pub fn serialization(&self) -> SerializationFormats {
         self.serialization_info.kind
     }
@@ -232,8 +224,6 @@ impl EventSemantics for EventMessage<Event> {
                     }
                 })
             }
-
-            _ => self.event.apply_to(state),
         }
     }
 }
@@ -309,10 +299,10 @@ mod tests {
         let nxt = SelfAddressing::Blake3_256.derive(pref1.to_str().as_bytes());
 
         // create a simple inception event
-        let icp = Event {
-            prefix: IdentifierPrefix::Basic(pref0.clone()),
-            sn: 0,
-            event_data: EventData::Icp(InceptionEvent {
+        let icp = Event::new(
+            IdentifierPrefix::Basic(pref0.clone()),
+            0,
+            EventData::Icp(InceptionEvent {
                 key_config: KeyConfig::new(
                     vec![pref0.clone()],
                     Some(nxt.clone()),
@@ -322,7 +312,7 @@ mod tests {
                 inception_configuration: vec![],
                 data: vec![],
             }),
-        };
+        );
 
         let icp_m = icp.to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)?;
 

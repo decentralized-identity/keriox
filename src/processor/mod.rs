@@ -350,33 +350,28 @@ impl EventProcessor {
         &self,
         vrc: SignedTransferableReceipt,
     ) -> Result<Option<IdentifierState>, Error> {
-        match &vrc.body.event.event_data {
-            EventData::Rct(_r) => {
-                if let Ok(Some(event)) =
-                    self.get_event_at_sn(&vrc.body.event.prefix, vrc.body.event.sn)
-                {
-                    let kp = self.get_keys_at_event(
-                        &vrc.validator_seal.prefix,
-                        vrc.validator_seal.sn,
-                        &vrc.validator_seal.event_digest,
-                    )?;
-                    if kp.is_some()
-                        && kp.unwrap().verify(
-                            &event.signed_event_message.event_message.serialize()?,
-                            &vrc.signatures,
-                        )?
-                    {
-                        self.db.add_receipt_t(vrc.clone(), &vrc.body.event.prefix)
-                    } else {
-                        Err(Error::SemanticError("Incorrect receipt signatures".into()))
-                    }
-                } else {
-                    self.db
-                        .add_escrow_t_receipt(vrc.clone(), &vrc.body.event.prefix)?;
-                    Err(Error::SemanticError("Receipt escrowed".into()))
-                }
+        if let Ok(Some(event)) =
+            self.get_event_at_sn(&vrc.body.event.prefix, vrc.body.event.sn)
+        {
+            let kp = self.get_keys_at_event(
+                &vrc.validator_seal.prefix,
+                vrc.validator_seal.sn,
+                &vrc.validator_seal.event_digest,
+            )?;
+            if kp.is_some()
+                && kp.unwrap().verify(
+                    &event.signed_event_message.event_message.serialize()?,
+                    &vrc.signatures,
+                )?
+            {
+                self.db.add_receipt_t(vrc.clone(), &vrc.body.event.prefix)
+            } else {
+                Err(Error::SemanticError("Incorrect receipt signatures".into()))
             }
-            _ => Err(Error::SemanticError("incorrect receipt structure".into())),
+        } else {
+            self.db
+                .add_escrow_t_receipt(vrc.clone(), &vrc.body.event.prefix)?;
+            Err(Error::SemanticError("Receipt escrowed".into()))
         }?;
         self.compute_state(&vrc.body.event.prefix)
     }
@@ -391,34 +386,28 @@ impl EventProcessor {
         &self,
         rct: SignedNontransferableReceipt,
     ) -> Result<Option<IdentifierState>, Error> {
-        // check structure is correct
-        match &rct.body.event.event_data {
-            // get event which is being receipted
-            EventData::Rct(_) => {
-                let id = &rct.body.event.prefix.to_owned();
-                if let Ok(Some(event)) =
-                    self.get_event_at_sn(&rct.body.event.prefix, rct.body.event.sn)
-                {
-                    let serialized_event = event.signed_event_message.serialize()?;
-                    let (_, mut errors): (Vec<_>, Vec<Result<bool, Error>>) = rct
-                        .clone()
-                        .couplets
-                        .into_iter()
-                        .map(|(witness, receipt)| witness.verify(&serialized_event, &receipt))
-                        .partition(Result::is_ok);
-                    if errors.len() == 0 {
-                        self.db.add_receipt_nt(rct, &id)?
-                    } else {
-                        let e = errors.pop().unwrap().unwrap_err();
-                        return Err(e);
-                    }
-                } else {
-                    self.db.add_escrow_nt_receipt(rct, &id)?
-                }
-                self.compute_state(&id)
+        // get event wh            e?ipted
+        let id = &rct.body.event.prefix.to_owned();
+        if let Ok(Some(event)) =
+            self.get_event_at_sn(&rct.body.event.prefix, rct.body.event.sn)
+        {
+            let serialized_event = event.signed_event_message.serialize()?;
+            let (_, mut errors): (Vec<_>, Vec<Result<bool, Error>>) = rct
+                .clone()
+                .couplets
+                .into_iter()
+                .map(|(witness, receipt)| witness.verify(&serialized_event, &receipt))
+                .partition(Result::is_ok);
+            if errors.len() == 0 {
+                self.db.add_receipt_nt(rct, &id)?
+            } else {
+                let e = errors.pop().unwrap().unwrap_err();
+                return Err(e);
             }
-            _ => Err(Error::SemanticError("incorrect receipt structure".into())),
+        } else {
+            self.db.add_escrow_nt_receipt(rct, &id)?
         }
+        self.compute_state(&id)
     }
 
     pub fn get_event_at_sn(

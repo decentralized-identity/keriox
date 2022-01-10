@@ -1,7 +1,6 @@
 pub mod delegated;
 pub mod inception;
 pub mod interaction;
-pub mod receipt;
 pub mod rotation;
 
 use crate::{
@@ -15,7 +14,6 @@ pub use self::{
     delegated::DelegatedInceptionEvent,
     inception::InceptionEvent,
     interaction::InteractionEvent,
-    receipt::Receipt,
     rotation::RotationEvent,
 };
 
@@ -30,7 +28,6 @@ pub enum EventData {
     Ixn(InteractionEvent),
     Dip(DelegatedInceptionEvent),
     Drt(RotationEvent),
-    Rct(Receipt),
 }
 
 impl<'de> Deserialize<'de> for EventData {
@@ -52,7 +49,6 @@ impl<'de> Deserialize<'de> for EventData {
             KeyEventType::Ixn => Ok(EventData::Ixn(InteractionEvent::deserialize(&v).map_err(de::Error::custom)?)),
             KeyEventType::Dip => Ok(EventData::Dip(DelegatedInceptionEvent::deserialize(&v).map_err(de::Error::custom)?)),
             KeyEventType::Drt => Ok(EventData::Drt(RotationEvent::deserialize(&v).map_err(de::Error::custom)?)),
-            KeyEventType::Rct => Ok(EventData::Rct(Receipt::deserialize(&v).map_err(de::Error::custom)?)),
         }
     }
 }
@@ -66,7 +62,6 @@ impl EventSemantics for EventData {
             Self::Ixn(e) => e.apply_to(state),
             Self::Dip(e) => e.apply_to(state),
             Self::Drt(e) => e.apply_to(state),
-            Self::Rct(e) => e.apply_to(state),
         }
     }
 }

@@ -73,7 +73,6 @@ pub enum KeyEventType {
     Ixn,
     Dip,
     Drt,
-    Rct,
 }
 
 impl KeyEventType {
@@ -96,7 +95,6 @@ impl From<&EventData> for KeyEventType {
             EventData::Ixn(_) => KeyEventType::Ixn,
             EventData::Dip(_) => KeyEventType::Dip,
             EventData::Drt(_) => KeyEventType::Drt,
-            EventData::Rct(_) => KeyEventType::Rct,
         }
     }
 }

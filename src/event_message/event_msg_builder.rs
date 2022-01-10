@@ -5,7 +5,7 @@ use crate::{
     event::{
         event_data::{
             delegated::DelegatedInceptionEvent, interaction::InteractionEvent,
-            rotation::RotationEvent, Receipt,
+            rotation::RotationEvent,
         },
         sections::{threshold::SignatureThreshold, WitnessConfig},
         SerializationFormats,
@@ -15,7 +15,7 @@ use crate::{
         sections::seal::Seal,
         sections::InceptionWitnessConfig,
         sections::KeyConfig,
-        Event, EventMessage,
+        Event, EventMessage, receipt::Receipt,
     },
     keys::PublicKey,
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix}, state::KeyEventType,
@@ -168,11 +168,11 @@ impl EventMsgBuilder {
                 };
 
                 match prefix {
-                    IdentifierPrefix::Basic(_) => Event {
+                    IdentifierPrefix::Basic(_) => Event::new(
                         prefix,
-                        sn: 0,
-                        event_data: EventData::Icp(icp_event),
-                    }
+                        0,
+                        EventData::Icp(icp_event),
+                    )
                     .to_message(self.format, &self.derivation)?,
                     IdentifierPrefix::SelfAddressing(_) => {
                         icp_event.incept_self_addressing(self.derivation, self.format)?
@@ -181,10 +181,10 @@ impl EventMsgBuilder {
                 }
             }
 
-            KeyEventType::Rot => Event {
+            KeyEventType::Rot => Event::new(
                 prefix,
-                sn: self.sn,
-                event_data: EventData::Rot(RotationEvent {
+                self.sn,
+                EventData::Rot(RotationEvent {
                     previous_event_hash: self.prev_event,
                     key_config,
                     witness_config: WitnessConfig { 
@@ -193,17 +193,17 @@ impl EventMsgBuilder {
                         graft: self.witness_to_add 
                     },
                     data: self.data,
-                }),
-            }
+                    })
+                )
             .to_message(self.format, &self.derivation)?,
-            KeyEventType::Ixn => Event {
+            KeyEventType::Ixn => Event::new(
                 prefix,
-                sn: self.sn,
-                event_data: EventData::Ixn(InteractionEvent {
+                self.sn,
+                EventData::Ixn(InteractionEvent {
                     previous_event_hash: self.prev_event,
                     data: self.data,
                 }),
-            }
+            )
             .to_message(self.format, &self.derivation)?,
             KeyEventType::Dip => {
                 let icp_data = InceptionEvent {
@@ -225,14 +225,13 @@ impl EventMsgBuilder {
                     witness_config: WitnessConfig::default(),
                     data: self.data,
                 };
-                Event {
+                Event::new(
                     prefix,
-                    sn: self.sn,
-                    event_data: EventData::Drt(rotation_data),
-                }
+                    self.sn,
+                    EventData::Drt(rotation_data),
+                )
                 .to_message(self.format, &self.derivation)?
             }
-            KeyEventType::Rct => Err(Error::SemanticError("Wrong event type".into()))?,
         })
     }
 }
@@ -270,15 +269,11 @@ impl ReceiptBuilder {
         }
     }
 
-    pub fn build(&self) -> Result<EventMessage<Event>, Error> {
-        Event {
-            prefix: self.receipted_event.event.prefix.clone(),
-            sn: self.receipted_event.event.sn,
-            event_data: EventData::Rct(Receipt {
-                receipted_event_digest: self.derivation.derive(&self.receipted_event.serialize()?),
-            }),
-        }
-        .to_message(self.format, &self.derivation)
+    pub fn build(&self) -> Result<EventMessage<Receipt>, Error> {
+        let prefix = self.receipted_event.event.prefix.clone();
+        let sn = self.receipted_event.event.sn;
+        let receipted_event_digest = self.derivation.derive(&self.receipted_event.serialize()?);
+        Receipt{ receipted_event_digest, sn, prefix}.to_message(self.format)
     }
 }
 

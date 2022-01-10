@@ -7,10 +7,9 @@ use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivat
         event_data::EventData,
         Event,
         EventMessage,
-        SerializationFormats
+        SerializationFormats, receipt::Receipt
     }, event::{
         event_data::{
-            Receipt,
             InteractionEvent,
         },
         sections::seal::EventSeal
@@ -18,8 +17,7 @@ use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivat
         event_msg_builder::EventMsgBuilder,
     }, event_parsing::{SignedEventData, message::{signed_event_stream, signed_message}}, keys::PublicKey, prefix::AttachedSignaturePrefix, prefix::{
         BasicPrefix,
-        IdentifierPrefix,
-        SelfSigningPrefix
+        IdentifierPrefix, SelfSigningPrefix,
     }, processor::EventProcessor, signer::KeyManager, state::{
         EventSemantics,
         IdentifierState, KeyEventType
@@ -189,12 +187,12 @@ impl<K: KeyManager> Keri<K> {
                 ))
             }
         };
-        let event = EventMessage::new(
+        let event = 
             Event::new(
                 self.prefix.clone(),
                 next_sn,
                 EventData::Ixn(InteractionEvent::new(pref, vec![seal])),
-            ),
+            ).to_message(
             SerializationFormats::JSON,
             &SelfAddressing::Blake3_256,
         )?;
@@ -361,21 +359,19 @@ impl<K: KeyManager> Keri<K> {
             .processor
             .get_last_establishment_event_seal(&self.prefix)?
             .ok_or(Error::SemanticError("No establishment event seal".into()))?;
-        let rcp = Event {
+        let rcp = Receipt {
             prefix: event.event.prefix,
             sn: event.event.sn,
-            event_data: EventData::Rct(Receipt {
-                receipted_event_digest: SelfAddressing::Blake3_256.derive(&ser),
-            }),
+            receipted_event_digest: SelfAddressing::Blake3_256.derive(&ser),
         }
-        .to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)?;
+        .to_message(SerializationFormats::JSON)?;
 
         let signatures = vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
             signature,
             0,
         )];
-        let signed_rcp = SignedTransferableReceipt::new(&rcp, validator_event_seal, signatures);
+        let signed_rcp = SignedTransferableReceipt::new(rcp, validator_event_seal, signatures);
 
         self.processor
             .process(Message::TransferableRct(signed_rcp.clone()))?;
@@ -467,14 +463,12 @@ impl<K: KeyManager> Keri<K> {
             Err(_) => return Err(Error::MutexPoisoned),
         }
         let ssp = SelfSigningPrefix::new(SelfSigning::Ed25519Sha512, signature);
-        let rcp = Event {
+        let rcp = Receipt {
             prefix: message.event.prefix.clone(),
             sn: message.event.sn,
-            event_data: EventData::Rct(Receipt {
-                receipted_event_digest: SelfAddressing::Blake3_256.derive(&message.serialize()?),
-            }),
+            receipted_event_digest: SelfAddressing::Blake3_256.derive(&message.serialize()?),
         }
-        .to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)?;
+        .to_message(SerializationFormats::JSON)?;
         let ntr = SignedNontransferableReceipt::new(&rcp, vec![(bp, ssp)]);
         self.processor
             .db

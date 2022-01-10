@@ -30,18 +30,17 @@ impl DelegatedInceptionEvent {
         derivation: SelfAddressing,
         format: SerializationFormats,
     ) -> Result<EventMessage<Event>, Error> {
-        EventMessage::new(
-            Event {
-                prefix: IdentifierPrefix::SelfAddressing(derivation.derive(
+            Event::new(
+                IdentifierPrefix::SelfAddressing(derivation.derive(
                     &DummyInceptionEvent::dummy_delegated_inception_data(
                         self.clone(),
                         &derivation,
                         format,
                     )?,
                 )),
-                sn: 0,
-                event_data: EventData::Dip(self),
-            },
+                0,
+                EventData::Dip(self),
+            ).to_message(
             format,
             &derivation
         )

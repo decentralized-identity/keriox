@@ -2,7 +2,7 @@ use chrono::{DateTime, Local};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use std::cmp::Ordering;
 
-use crate::{error::Error, event::{Event, sections::seal::{EventSeal, SourceSeal}}, event_parsing::Attachment, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}, state::{EventSemantics, IdentifierState}};
+use crate::{error::Error, event::{Event, sections::seal::{EventSeal, SourceSeal}, receipt::Receipt}, event_parsing::Attachment, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}, state::{EventSemantics, IdentifierState}};
 use super::serializer::to_string;
 use super::EventMessage;
 
@@ -169,14 +169,14 @@ impl EventSemantics for SignedEventMessage {
 /// Mostly intended for use by Validators
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SignedTransferableReceipt {
-    pub body: EventMessage<Event>,
+    pub body: EventMessage<Receipt>,
     pub validator_seal: EventSeal,
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
 
 impl SignedTransferableReceipt {
     pub fn new(
-        message: &EventMessage<Event>,
+        message: EventMessage<Receipt>,
         event_seal: EventSeal,
         sigs: Vec<AttachedSignaturePrefix>,
     ) -> Self {
@@ -196,12 +196,12 @@ impl SignedTransferableReceipt {
 /// signatures
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SignedNontransferableReceipt {
-    pub body: EventMessage<Event>,
+    pub body: EventMessage<Receipt>,
     pub couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
 }
 
 impl SignedNontransferableReceipt {
-    pub fn new(message: &EventMessage<Event>, couplets: Vec<(BasicPrefix, SelfSigningPrefix)>) -> Self {
+    pub fn new(message: &EventMessage<Receipt>, couplets: Vec<(BasicPrefix, SelfSigningPrefix)>) -> Self {
         Self {
             body: message.clone(),
             couplets,

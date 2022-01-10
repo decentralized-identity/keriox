@@ -91,7 +91,7 @@ impl DummyInceptionEvent {
     impl<T: Serialize> DummyEventMessage<T> {
         pub fn dummy_event(event: T, format: SerializationFormats, derivation: &SelfAddressing) -> Result<Self, Error> {
             Ok(Self {
-                serialization_info: SerializationInfo::new(format, Self::get_size(&event, format, derivation)?),
+                serialization_info: Self::get_serialization_info(&event, format, derivation)?,
                 data: event,
                 digest: dummy_prefix(derivation),
             })
@@ -105,6 +105,10 @@ impl DummyInceptionEvent {
             }
             .serialize()?
             .len())
+        }
+
+        pub fn get_serialization_info(event: &T, format: SerializationFormats, derivation: &SelfAddressing) -> Result<SerializationInfo, Error> {
+            Ok(SerializationInfo::new(format, Self::get_size(&event, format, derivation)?))
         }
 
         pub fn serialize(&self) -> Result<Vec<u8>, Error> {

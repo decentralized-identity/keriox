@@ -1,4 +1,4 @@
-use chrono::{DateTime, FixedOffset, Utc};
+use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -31,12 +31,11 @@ impl Reply {
         let rpy_data = ReplyData {
             data: ksn.clone(),
         };
-        let env = Envelope {
-            timestamp: Utc::now().into(),
-            route: route.clone(),
-            data: rpy_data,
-        };
-        EventMessage::new(env.clone(), serialization, &self_addressing)
+        let env = Envelope::new(
+            route.clone(),
+            rpy_data,
+        );
+        env.to_message(serialization, &self_addressing)
     }
 
     pub fn get_timestamp(&self) -> DateTime<FixedOffset> {
@@ -53,8 +52,13 @@ impl Reply {
     }
 
     pub fn check_digest(&self) -> Result<(), Error> {
-        let dummy = DummyEventMessage::dummy_event(self.event.clone(), self.serialization_info.kind, &self.digest.derivation)?.serialize()?;
-        self.digest
+        let dummy = DummyEventMessage::dummy_event(
+            self.event.clone(),
+            self.serialization_info.kind, 
+            &self.event.digest.as_ref().unwrap().derivation
+        )?.serialize()?;
+        self.event.digest.clone()
+            .unwrap_or_default()
             .verify_binding(&dummy)
             .then(|| ())
             .ok_or(QueryError::IncorrectDigest.into())
@@ -62,8 +66,12 @@ impl Reply {
 }
 
 impl CommonEvent for ReplyData {
-    fn get_type(&self) -> String {
-        "rpy".to_string()
+    fn get_type(&self) -> Option<String> {
+        Some("rpy".to_string())
+    }
+
+    fn get_digest(&self) -> Option<crate::prefix::SelfAddressingPrefix> {
+        todo!()
     }
 }
 

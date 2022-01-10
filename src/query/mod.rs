@@ -4,15 +4,12 @@ use crate::{
     event::{
         EventMessage, SerializationFormats,
     },
-    prefix::{IdentifierPrefix, Prefix}, event_message::CommonEvent,
+    prefix::{IdentifierPrefix, Prefix, SelfAddressingPrefix}, event_message::{CommonEvent, dummy_event::DummyEventMessage},
 };
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
-use self::{
-    query::QueryData,
-    reply::{ReplyData, SignedReply},
-};
+use self::reply::SignedReply;
 
 use thiserror::Error;
 
@@ -23,14 +20,17 @@ pub mod reply;
 pub type TimeStamp = DateTime<FixedOffset>;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct Envelope<D: Serialize> {
+pub struct Envelope<D: Serialize + CommonEvent> {
+    #[serde(rename = "d", skip_serializing)]
+    pub digest: Option<SelfAddressingPrefix>,
+
     #[serde(rename = "dt", serialize_with = "serialize_timestamp")]
     pub timestamp: DateTime<FixedOffset>,
 
     #[serde(rename = "r")]
     pub route: Route,
 
-    #[serde(rename = "t", flatten)]
+    #[serde(flatten)]
     pub data: D,
 }
 
@@ -41,34 +41,62 @@ where
     s.serialize_str(&timestamp.to_rfc3339_opts(SecondsFormat::Micros, false))
 }
 
-impl<D: Serialize> Envelope<D> {
+impl<D: Serialize+ CommonEvent + Clone> Envelope<D> {
     pub fn new(route: Route, data: D) -> Self {
         let timestamp: DateTime<FixedOffset> = Utc::now().into();
         Envelope {
+            digest: None,
             timestamp,
             route,
             data,
         }
     }
-}
+
+    fn to_message(self, format: SerializationFormats, derivation: &SelfAddressing) -> Result<EventMessage<Envelope<D>>, Error> {
+        let (version_string, event) = match self.get_digest() {
+            Some(dig) => {
+                (DummyEventMessage::get_serialization_info(&self, format, &dig.derivation)?,
+                    self)
+            },
+            None => {
+                let dummy_event = DummyEventMessage::dummy_event(self.clone(), format, &derivation)?;
+                let digest = Some(derivation.derive(&dummy_event.serialize()?));
+                (dummy_event.serialization_info,
+                   Self { digest, .. self}
+                )
+        }};
+
+        Ok(EventMessage {
+                    serialization_info: version_string,
+                    event: event,
+                })
+    }
+
+    }
+
 
 impl<D: Serialize + CommonEvent> CommonEvent for Envelope<D> {
-    fn get_type(&self) -> String {
+    fn get_type(&self) -> Option<String> {
         self.data.get_type()
     }
+
+    fn get_digest(&self) -> Option<crate::prefix::SelfAddressingPrefix> {
+        self.digest.clone()
+    }
+
 }
 
-impl Envelope<ReplyData> {
-    pub fn to_message(self, format: SerializationFormats, derivation: &SelfAddressing) -> Result<EventMessage<Self>, Error> {
-        EventMessage::new(self, format, derivation)
-    }
-}
+// impl CommonEvent for Envelope<ReplyData> {
+//     fn to_message(self, format: SerializationFormats, derivation: &SelfAddressing) -> Result<EventMessage<Self>, Error> {
+//         EventMessage::new(self, format, derivation)
+//     }
+// }
 
-impl Envelope<QueryData> {
-    pub fn to_message(self, format: SerializationFormats, derivation: &SelfAddressing) -> Result<EventMessage<Self>, Error> {
-        EventMessage::new(self, format, derivation)
-    }
-}
+// impl CommonEvent for Envelope<QueryData> {
+//     fn to_message(self, format: SerializationFormats, derivation: &SelfAddressing) -> Result<EventMessage<Self>, Error> {
+//         EventMessage::new(self, format, derivation)
+//     }
+// }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Route {

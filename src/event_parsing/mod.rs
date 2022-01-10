@@ -2,6 +2,7 @@ use std::convert::TryFrom;
 use base64::URL_SAFE_NO_PAD;
 use serde::Deserialize;
 
+use crate::event::receipt::Receipt;
 use crate::event::{Event, EventMessage};
 use crate::event::sections::seal::{EventSeal, SourceSeal};
 use crate::event_message::signed_event_message::{Message, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt};
@@ -123,6 +124,7 @@ pub struct SignedEventData {
 #[derive(Clone, Debug, PartialEq)]
 pub enum EventType {
     KeyEvent(EventMessage<Event>),
+    Receipt(EventMessage<Receipt>),
     #[cfg(feature = "query")]
     Qry(Query),
     #[cfg(feature = "query")]
@@ -133,6 +135,7 @@ impl EventType {
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         match self {
             EventType::KeyEvent(event) => event.serialize(),
+            EventType::Receipt(rcp) => rcp.serialize(),
             #[cfg(feature = "query")]
             EventType::Qry(qry) => qry.serialize(),
             #[cfg(feature = "query")]
@@ -178,7 +181,7 @@ impl From<SignedNontransferableReceipt> for SignedEventData {
     fn from(rcp: SignedNontransferableReceipt) -> SignedEventData {
         let attachments = [Attachment::ReceiptCouplets(rcp.couplets)].into();
         SignedEventData { 
-            deserialized_event: EventType::KeyEvent(rcp.body), 
+            deserialized_event: EventType::Receipt(rcp.body), 
             attachments 
         }
     }
@@ -190,7 +193,7 @@ impl From<SignedTransferableReceipt> for SignedEventData {
                 Attachment::SealSignaturesGroups(vec![(rcp.validator_seal, rcp.signatures)]), 
             ].into();
         SignedEventData { 
-            deserialized_event: EventType::KeyEvent(rcp.body), 
+            deserialized_event: EventType::Receipt(rcp.body), 
             attachments 
         }
     }
@@ -221,7 +224,8 @@ impl TryFrom<SignedEventData> for Message {
 
     fn try_from(value: SignedEventData) -> Result<Self, Self::Error> {
         match value.deserialized_event {
-            EventType::KeyEvent(ev) => signed_message(ev, value.attachments),
+            EventType::KeyEvent(ev) => signed_key_event(ev, value.attachments),
+            EventType::Receipt(rct) => signed_receipt(rct, value.attachments),
             #[cfg(feature = "query")]
             EventType::Qry(qry) => signed_query(qry, value.attachments),
             #[cfg(feature = "query")]
@@ -277,41 +281,8 @@ fn signed_query(qry: Query, mut attachments: Vec<Attachment>) -> Result<Message,
 }
 
 
-fn signed_message(event_message: EventMessage<Event>, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
+fn signed_key_event(event_message: EventMessage<Event>, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
     match event_message.event.event_data {
-        EventData::Rct(_) => {
-            let att = attachments.pop().ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
-            match att {
-                // Should be nontransferable receipt
-                Attachment::ReceiptCouplets(couplets) => 
-                Ok(
-                    Message::NontransferableRct(SignedNontransferableReceipt {
-                        body: event_message,
-                        couplets,
-                    })
-                ),
-                Attachment::SealSignaturesGroups(data) => {
-                    // Should be transferable receipt
-                    let (seal, sigs) = 
-                        // TODO what if more than one?
-                        data
-                            .last()
-                            .ok_or_else(|| Error::SemanticError("More than one seal".into()))?
-                            .to_owned();
-                    Ok(
-                        Message::TransferableRct(SignedTransferableReceipt::new(
-                            &event_message,
-                            seal,
-                            sigs,
-                        )),
-                    )
-                }
-                _ => {
-                    // Improper payload type
-                    Err(Error::SemanticError("Improper payload type".into()))
-                }
-            }
-        }
         EventData::Dip(_) | EventData::Drt(_) => {
             let (att1, att2) = (
                 attachments.pop().ok_or_else(|| Error::SemanticError("Missing attachment".into()))?, 
@@ -353,6 +324,40 @@ fn signed_message(event_message: EventMessage<Event>, mut attachments: Vec<Attac
                 // Improper attachment type
                 Err(Error::SemanticError("Improper attachment type".into()))
             }
+        }
+    }
+}
+
+fn signed_receipt(event_message: EventMessage<Receipt>, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
+    let att = attachments.pop().ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
+    match att {
+        // Should be nontransferable receipt
+        Attachment::ReceiptCouplets(couplets) => 
+        Ok(
+            Message::NontransferableRct(SignedNontransferableReceipt {
+                body: event_message,
+                couplets,
+            })
+        ),
+        Attachment::SealSignaturesGroups(data) => {
+            // Should be transferable receipt
+            let (seal, sigs) = 
+                // TODO what if more than one?
+                data
+                    .last()
+                    .ok_or_else(|| Error::SemanticError("More than one seal".into()))?
+                    .to_owned();
+            Ok(
+                Message::TransferableRct(SignedTransferableReceipt::new(
+                    event_message,
+                    seal,
+                    sigs,
+                )),
+            )
+        }
+        _ => {
+            // Improper payload type
+            Err(Error::SemanticError("Improper payload type".into()))
         }
     }
 }

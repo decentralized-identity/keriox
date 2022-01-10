@@ -28,7 +28,7 @@ impl Query {
     pub fn new_query(
         route: Route,
         id: &IdentifierPrefix,
-        serialization_info: SerializationFormats,
+        serialization_format: SerializationFormats,
         derivation: &SelfAddressing
     ) -> Result<Self, Error> {
         let message = QueryData {
@@ -36,13 +36,18 @@ impl Query {
             data: QueryArgs { i: id.clone() },
         };
 
-        Envelope::new(route, message).to_message(serialization_info, derivation)
+        let env = Envelope::new(route, message);
+        env.to_message(serialization_format, derivation)
     }
 }
 
 impl CommonEvent for QueryData {
-    fn get_type(&self) -> String {
-        "qry".to_string()
+    fn get_type(&self) -> Option<String> {
+        Some("qry".to_string())
+    }
+
+    fn get_digest(&self) -> Option<crate::prefix::SelfAddressingPrefix> {
+        todo!()
     }
 }
 

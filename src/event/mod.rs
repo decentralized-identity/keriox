@@ -1,10 +1,13 @@
-use crate::event_message::CommonEvent;
+use crate::event_message::{CommonEvent, dummy_event};
+use crate::event_message::dummy_event::DummyEventMessage;
 pub use crate::event_message::{serialization_info::SerializationFormats, EventMessage};
+use crate::prefix::SelfAddressingPrefix;
 use crate::{prefix::IdentifierPrefix, derivation::self_addressing::SelfAddressing};
 use crate::state::IdentifierState;
 use serde::{Deserialize, Serialize};
 pub mod event_data;
 pub mod sections;
+pub mod receipt;
 use self::event_data::EventData;
 use crate::error::Error;
 use crate::state::EventSemantics;
@@ -12,6 +15,9 @@ use serde_hex::{Compact, SerHex};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Event {
+    #[serde(rename = "d", skip_serializing)]
+    pub digest: Option<SelfAddressingPrefix>,
+
     #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
 
@@ -26,6 +32,7 @@ impl Event {
     pub fn new(prefix: IdentifierPrefix, sn: u64, event_data: EventData)
         -> Self {
             Event {
+                digest: None, 
                 prefix,
                 sn,
                 event_data
@@ -33,20 +40,39 @@ impl Event {
         }
 
     pub fn to_message(self, format: SerializationFormats, derivation: &SelfAddressing) -> Result<EventMessage<Event>, Error> {
-        EventMessage::new(self, format, derivation)
+        let (version_string, event) = match self.get_digest() {
+            Some(dig) => {
+                (dummy_event::DummyEventMessage::get_serialization_info(&self, format, &dig.derivation)?,
+                    self)
+            },
+            None => {
+                let dummy_event = DummyEventMessage::dummy_event(self.clone(), format, derivation)?;
+                let digest = Some(derivation.derive(&dummy_event.serialize()?));
+                (dummy_event.serialization_info,
+                   Event { digest, .. self}
+                )
+        }};
+
+        Ok(EventMessage {
+                    serialization_info: version_string,
+                    event,
+                })
     }
 }
 
 impl CommonEvent for Event {
-    fn get_type(&self) -> String {
-        match self.event_data {
+    fn get_type(&self) -> Option<String> {
+        Some(match self.event_data {
             EventData::Icp(_) => "icp",
             EventData::Rot(_) => "rot",
             EventData::Ixn(_) => "ixn",
             EventData::Dip(_) => "dip",
             EventData::Drt(_) => "drt",
-            EventData::Rct(_) => "rct",
-        }.to_string()
+        }.to_string())
+    }
+
+    fn get_digest(&self) -> Option<SelfAddressingPrefix> {
+        self.digest.clone()
     }
 }
 
@@ -60,13 +86,6 @@ impl EventSemantics for Event {
                 }
                 if self.sn != 0 {
                     return Err(Error::SemanticError("SN is not correct".to_string()));
-                }
-            }
-            EventData::Rct(_) => {
-                if self.prefix != state.prefix {
-                    return Err(Error::SemanticError(
-                        "Invalid Identifier Prefix Binding".into(),
-                    ));
                 }
             }
             _ => {
