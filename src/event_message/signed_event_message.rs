@@ -2,8 +2,8 @@ use chrono::{DateTime, Local};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use std::cmp::Ordering;
 
-use crate::{error::Error, event::{Event, sections::seal::{EventSeal, SourceSeal}, receipt::Receipt}, event_parsing::Attachment, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}, state::{EventSemantics, IdentifierState}};
-use super::serializer::to_string;
+use crate::{error::Error, event::{sections::seal::{EventSeal, SourceSeal}, receipt::Receipt}, event_parsing::Attachment, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}, state::{EventSemantics, IdentifierState}};
+use super::{serializer::to_string, KeyEvent};
 use super::EventMessage;
 
 #[cfg(feature = "query")]
@@ -25,7 +25,7 @@ pub enum Message {
 // KERI serializer should be used to serialize this
 #[derive(Debug, Clone, Deserialize)]
 pub struct SignedEventMessage {
-    pub event_message: EventMessage<Event>,
+    pub event_message: EventMessage<KeyEvent>,
     #[serde(skip_serializing)]
     pub signatures: Vec<AttachedSignaturePrefix>,
     #[serde(skip_serializing)]
@@ -102,13 +102,13 @@ impl PartialEq for TimestampedSignedEventMessage {
 impl PartialOrd for TimestampedSignedEventMessage {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(
-            match self.signed_event_message.event_message.event.sn
-                == other.signed_event_message.event_message.event.sn
+            match self.signed_event_message.event_message.event.get_sn()
+                == other.signed_event_message.event_message.event.get_sn()
             {
                 true => Ordering::Equal,
                 false => {
-                    match self.signed_event_message.event_message.event.sn
-                        > other.signed_event_message.event_message.event.sn
+                    match self.signed_event_message.event_message.event.get_sn()
+                        > other.signed_event_message.event_message.event.get_sn()
                     {
                         true => Ordering::Greater,
                         false => Ordering::Less,
@@ -121,12 +121,12 @@ impl PartialOrd for TimestampedSignedEventMessage {
 
 impl Ord for TimestampedSignedEventMessage {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.signed_event_message.event_message.event.sn
-            == other.signed_event_message.event_message.event.sn
+        match self.signed_event_message.event_message.event.get_sn()
+            == other.signed_event_message.event_message.event.get_sn()
         {
             true => Ordering::Equal,
-            false => match self.signed_event_message.event_message.event.sn
-                > other.signed_event_message.event_message.event.sn
+            false => match self.signed_event_message.event_message.event.get_sn()
+                > other.signed_event_message.event_message.event.get_sn()
             {
                 true => Ordering::Greater,
                 false => Ordering::Less,
@@ -139,7 +139,7 @@ impl Eq for TimestampedSignedEventMessage {}
 
 impl SignedEventMessage {
     pub fn new(
-        message: &EventMessage<Event>,
+        message: &EventMessage<KeyEvent>,
         sigs: Vec<AttachedSignaturePrefix>,
         delegator_seal: Option<SourceSeal>,
     ) -> Self {

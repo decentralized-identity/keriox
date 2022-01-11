@@ -13,7 +13,7 @@ use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivat
             InteractionEvent,
         },
         sections::seal::EventSeal
-    }, event_message::{signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, Message}}, event_message::{
+    }, event_message::{signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, Message}, KeyEvent}, event_message::{
         event_msg_builder::EventMsgBuilder,
     }, event_parsing::{SignedEventData, message::{signed_event_stream, signed_message}}, keys::PublicKey, prefix::AttachedSignaturePrefix, prefix::{
         BasicPrefix,
@@ -124,7 +124,7 @@ impl<K: KeyManager> Keri<K> {
         self.processor
             .process(Message::Event(signed.clone()))?;
 
-        self.prefix = icp.event.prefix;
+        self.prefix = icp.event.get_prefix();
 
         Ok(signed)
     }
@@ -161,7 +161,7 @@ impl<K: KeyManager> Keri<K> {
                 )
             ), None);
             self.processor.process(Message::Event(signed.clone()))?;
-            self.prefix = icp.event.prefix;
+            self.prefix = icp.event.get_prefix();
 
             Ok(signed)
     }
@@ -172,7 +172,7 @@ impl<K: KeyManager> Keri<K> {
     pub fn interact(&self, peer: IdentifierPrefix) -> Result<SignedEventMessage, Error> {
         let next_sn = match self.processor.db.get_kel_finalized_events(&self.prefix) {
             Some(mut events) => match events.next_back() {
-                Some(db_event) => db_event.signed_event_message.event_message.event.sn + 1,
+                Some(db_event) => db_event.signed_event_message.event_message.event.get_sn() + 1,
                 None => return Err(Error::InvalidIdentifierStat),
             },
             None => return Err(Error::InvalidIdentifierStat),
@@ -233,7 +233,7 @@ impl<K: KeyManager> Keri<K> {
         Ok(rot)
     }
 
-    fn make_rotation(&self) -> Result<EventMessage<Event>, Error> {
+    fn make_rotation(&self) -> Result<EventMessage<KeyEvent>, Error> {
         let state = self
             .processor
             .compute_state(&self.prefix)?
@@ -320,11 +320,11 @@ impl<K: KeyManager> Keri<K> {
                 match des_event {
                     Message::Event(ev) => {
                         let mut buf = vec![];
-                        if let EventData::Icp(_) = ev.event_message.event.event_data {
+                        if let EventData::Icp(_) = ev.event_message.event.get_event_data() {
                             if !self.processor.has_receipt(
                                 &self.prefix,
                                 0,
-                                &ev.event_message.event.prefix,
+                                &ev.event_message.event.get_prefix(),
                             )? {
                                 buf.append(
                                     &mut self
@@ -348,7 +348,7 @@ impl<K: KeyManager> Keri<K> {
         Ok(response)
     }
 
-    pub fn make_rct(&self, event: EventMessage<Event>) -> Result<SignedTransferableReceipt, Error> {
+    pub fn make_rct(&self, event: EventMessage<KeyEvent>) -> Result<SignedTransferableReceipt, Error> {
         let ser = event.serialize()?;
         let signature = self
             .key_manager
@@ -360,8 +360,8 @@ impl<K: KeyManager> Keri<K> {
             .get_last_establishment_event_seal(&self.prefix)?
             .ok_or(Error::SemanticError("No establishment event seal".into()))?;
         let rcp = Receipt {
-            prefix: event.event.prefix,
-            sn: event.event.sn,
+            prefix: event.event.get_prefix(),
+            sn: event.event.get_sn(),
             receipted_event_digest: SelfAddressing::Blake3_256.derive(&ser),
         }
         .to_message(SerializationFormats::JSON)?;
@@ -387,7 +387,7 @@ impl<K: KeyManager> Keri<K> {
     /// # Parameters
     /// * `message` - `EventMessage` we are to process
     ///
-    pub fn make_ntr(&self, message: EventMessage<Event>) -> Result<SignedNontransferableReceipt, Error> {
+    pub fn make_ntr(&self, message: EventMessage<KeyEvent>) -> Result<SignedNontransferableReceipt, Error> {
         let our_bp = match &self.prefix {
             IdentifierPrefix::Basic(prefix) => prefix,
             _ => {
@@ -396,7 +396,7 @@ impl<K: KeyManager> Keri<K> {
                 ))
             }
         };
-        match &message.event.event_data {
+        match &message.event.get_event_data() {
             // ICP requires check if we are in initial witnesses only
             EventData::Icp(evt) => {
                 if !evt.witness_config.initial_witnesses.contains(&our_bp) {
@@ -417,7 +417,7 @@ impl<K: KeyManager> Keri<K> {
                 } else if evt.witness_config.prune.contains(&our_bp) {
                     self.processor
                         .db
-                        .remove_receipts_nt(&message.event.prefix)?;
+                        .remove_receipts_nt(&message.event.get_prefix())?;
                     Err(Error::SemanticError(
                         "we were removed. no receipt to generate".into(),
                     ))
@@ -452,7 +452,7 @@ impl<K: KeyManager> Keri<K> {
         self.processor.compute_state_at_sn(&seal.prefix, seal.sn)
     }
 
-    fn generate_ntr(&self, message: EventMessage<Event>) -> Result<SignedNontransferableReceipt, Error> {
+    fn generate_ntr(&self, message: EventMessage<KeyEvent>) -> Result<SignedNontransferableReceipt, Error> {
         let signature;
         let bp;
         match self.key_manager.lock() {
@@ -464,15 +464,15 @@ impl<K: KeyManager> Keri<K> {
         }
         let ssp = SelfSigningPrefix::new(SelfSigning::Ed25519Sha512, signature);
         let rcp = Receipt {
-            prefix: message.event.prefix.clone(),
-            sn: message.event.sn,
+            prefix: message.event.get_prefix(),
+            sn: message.event.get_sn(),
             receipted_event_digest: SelfAddressing::Blake3_256.derive(&message.serialize()?),
         }
         .to_message(SerializationFormats::JSON)?;
         let ntr = SignedNontransferableReceipt::new(&rcp, vec![(bp, ssp)]);
         self.processor
             .db
-            .add_receipt_nt(ntr.clone(), &message.event.prefix)?;
+            .add_receipt_nt(ntr.clone(), &message.event.get_prefix())?;
         Ok(ntr)
     }
 

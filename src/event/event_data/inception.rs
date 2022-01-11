@@ -5,7 +5,7 @@ use super::{
 use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
-    event::{sections::seal::Seal, Event},
+    event::{sections::seal::Seal, Event, KeyEvent},
     event_message::{serialization_info::SerializationFormats, EventMessage, dummy_event::DummyInceptionEvent},
     prefix::IdentifierPrefix,
     state::{EventSemantics, IdentifierState, LastEstablishmentData},
@@ -53,7 +53,7 @@ impl InceptionEvent {
         self,
         derivation: SelfAddressing,
         format: SerializationFormats,
-    ) -> Result<EventMessage<Event>, Error> {
+    ) -> Result<EventMessage<KeyEvent>, Error> {
             Event::new(
                 IdentifierPrefix::SelfAddressing(derivation.derive(
                     &DummyInceptionEvent::dummy_inception_data(self.clone(), &derivation, format)?,

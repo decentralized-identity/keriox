@@ -29,7 +29,7 @@ fn test_process() -> Result<(), Error> {
     let deserialized_icp = Message::try_from(parsed).unwrap();
 
     let id = match &deserialized_icp {
-        Message::Event(e) => e.event_message.event.prefix.clone(),
+        Message::Event(e) => e.event_message.event.get_prefix(),
         _ => Err(Error::SemanticError("bad deser".into()))?,
     };
 

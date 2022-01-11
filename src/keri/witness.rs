@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::query::reply::{Reply, SignedReply};
+use crate::query::reply::{SignedReply, ReplyEvent};
 use crate::query::{
     query::{QueryData, SignedQuery},
     ReplyType,
@@ -46,7 +46,7 @@ impl Witness {
             SerializationFormats::JSON,
             SelfAddressing::Blake3_256,
         );
-        let rpy = Reply::new_reply(
+        let rpy = ReplyEvent::new_reply(
             ksn,
             Route::ReplyKsn(IdentifierPrefix::Basic(self.prefix.clone())),
             SelfAddressing::Blake3_256,
@@ -74,8 +74,8 @@ impl Witness {
         if kc.verify(&qr.envelope.serialize().unwrap(), &signatures)? {
             // TODO check timestamps
             // unpack and check what's inside
-            let route = qr.envelope.event.route;
-            self.process_query(route, qr.envelope.event.data)
+            let route = qr.envelope.event.get_route();
+            self.process_query(route, qr.envelope.event.get_query_data())
         } else {
             Err(Error::SignatureVerificationError)
         }
@@ -102,7 +102,7 @@ impl Witness {
                     SerializationFormats::JSON,
                     SelfAddressing::Blake3_256,
                 );
-                let rpy = Reply::new_reply(
+                let rpy = ReplyEvent::new_reply(
                     ksn,
                     Route::ReplyKsn(IdentifierPrefix::Basic(self.prefix.clone())),
                     SelfAddressing::Blake3_256,

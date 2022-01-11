@@ -1,5 +1,6 @@
 use crate::error::Error;
-use crate::event_message::CommonEvent;
+use crate::event_message::Digestible;
+use crate::event_message::Typeable;
 use crate::event_message::serialization_info::SerializationInfo;
 use crate::prefix::IdentifierPrefix;
 use crate::prefix::SelfAddressingPrefix;
@@ -49,45 +50,14 @@ impl Receipt {
         })
     }
 }
-//     pub fn new(serialization: SerializationFormats, receipted_event_digest: SelfAddressingPrefix, sn: u64, prefix: IdentifierPrefix) -> Self {
-//         let msg_len = Self { 
-//                 serialization_info: SerializationInfo::new(serialization, 0), 
-//                 event_type: "rct".to_string(), 
-//                 receipted_event_digest: receipted_event_digest.clone(), 
-//                 prefix:prefix.clone(), 
-//                 sn 
-//             }
-//             .serialize().unwrap()
-//             .len();
-//         Self { serialization_info: SerializationInfo::new(serialization, msg_len), event_type: "rct".to_string(), receipted_event_digest, prefix, sn }
-//     }
 
-//     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-//         self.serialization_info.kind.encode(self)
-//     }
-// }
-
-// impl Serialize for Receipt {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: Serializer {
-//         // Helper struct for adding `t` field to EventMessage serialization
-//         let mut em = serializer.serialize_struct("Receipt", 4)?;
-//         em.serialize_field("v", &self.serialization_info)?;
-//         em.serialize_field("t", "rct")?;
-//         em.serialize_field("d", &self.digest)?;
-//         em.serialize_field("i", &self.prefix)?;
-//         em.serialize_field("s", &self.sn)?;
-//         em.end()
-//     }
-// }
-
-// impl EventSemantics for Receipt {}
-impl CommonEvent for Receipt {
+impl Typeable for Receipt {
     fn get_type(&self) -> Option<String> {
         Some("rct".to_string())
     }
+}
 
+impl Digestible for Receipt {
     fn get_digest(&self) -> Option<SelfAddressingPrefix> {
         Some(self.receipted_event_digest.clone())
     }

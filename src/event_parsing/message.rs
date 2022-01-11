@@ -10,15 +10,16 @@ use serde::Deserialize;
 #[cfg(feature = "async")]
 use crate::event_message::serialization_info::SerializationInfo;
 
-use crate::{event::{Event, EventMessage, receipt::Receipt}, event_parsing::{Attachment, SignedEventData, attachment::attachment, EventType}, event_message::CommonEvent}; 
+use crate::{event::{EventMessage, receipt::Receipt}, event_parsing::{Attachment, SignedEventData, attachment::attachment, EventType}, event_message::{Digestible, SaidEvent, KeyEvent}}; 
 #[cfg(feature = "query")]
 use serde::Serialize;
 #[cfg(feature = "query")]
 use crate::query::Envelope;
 use rmp_serde as serde_mgpk;
+use crate::event_message::Typeable;
 
 
-fn json_message<'a, D: Deserialize<'a> + CommonEvent>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<D>> {
+fn json_message<'a, D: Deserialize<'a> + Digestible>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<D>> {
     let mut stream = serde_json::Deserializer::from_slice(s).into_iter::<EventMessage<D>>();
     match stream.next() {
         Some(Ok(event)) => Ok((&s[stream.byte_offset()..], event)),
@@ -26,7 +27,7 @@ fn json_message<'a, D: Deserialize<'a> + CommonEvent>(s: &'a [u8]) -> nom::IResu
     }
 }
 
-fn cbor_message<'a, D: Deserialize<'a> +  CommonEvent>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<D>> {
+fn cbor_message<'a, D: Deserialize<'a>>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<D>> {
     let mut stream = serde_cbor::Deserializer::from_slice(s).into_iter::<EventMessage<D>>();
     match stream.next() {
         Some(Ok(event)) => Ok((&s[stream.byte_offset()..], event)),
@@ -34,7 +35,7 @@ fn cbor_message<'a, D: Deserialize<'a> +  CommonEvent>(s: &'a [u8]) -> nom::IRes
     }
 }
 
-fn mgpk_message<'a, D: Deserialize<'a> + CommonEvent>(s: &[u8]) -> nom::IResult<&[u8], EventMessage<D>> {
+fn mgpk_message<'a, D: Deserialize<'a>>(s: &[u8]) -> nom::IResult<&[u8], EventMessage<D>> {
     let mut deser = serde_mgpk::Deserializer::new(Cursor::new(s));
     match Deserialize::deserialize(&mut deser) {
         Ok(event) => Ok((&s[deser.get_ref().position() as usize..], event)),
@@ -42,13 +43,13 @@ fn mgpk_message<'a, D: Deserialize<'a> + CommonEvent>(s: &[u8]) -> nom::IResult<
     }
 }
 
-pub fn message<'a, D: Deserialize<'a> + CommonEvent>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<D>> {
+pub fn message<'a, D: Deserialize<'a> + Digestible>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<D>> {
     alt((json_message::<D>, cbor_message::<D>, mgpk_message::<D>))(s)
 
 }
 
 pub fn key_event_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
-    message::<Event>(s)
+    message::<KeyEvent>(s)
         .map(|d| (d.0, EventType::KeyEvent(d.1)))
 
 }
@@ -60,8 +61,9 @@ pub fn receipt_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
 }
 
 #[cfg(feature = "query")]
-fn envelope<'a, D: Serialize + Deserialize<'a> + CommonEvent>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<Envelope<D>>> {
-    message::<Envelope<D>>(s)
+fn envelope<'a, D: Serialize + Deserialize<'a> + Typeable>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<SaidEvent<Envelope<D>>>> {
+
+    message::<SaidEvent<Envelope<D>>>(s)
         .map(|d| (d.0, d.1))
 }
 
@@ -201,13 +203,13 @@ fn test_receipt_parsing() {
 #[cfg(feature = "query")]
 #[test]
 fn test_qry() {
-    use crate::query::query::QueryData;
+    use crate::query::query::QueryEvent;
     // taken from keripy keripy/tests/core/test_eventing.py::test_messegize (line 1462)
     let qry_event = r#"{"v":"KERI10JSON0000c9_","t":"qry","d":"E-WvgxrllmjGFhpn0oOiBkAVz3-dEm3bbiV_5qwj81xo","dt":"2021-01-01T00:00:00.000000+00:00","r":"log","rr":"","q":{"i":"DyvCLRr5luWmp7keDvDuLP0kIqcyBYq79b3Dho1QvrjI"}}"#;
     let rest = "something more";
     let stream = [qry_event, rest].join("");
 
-    let (extra, event): (_, EventMessage<Envelope<QueryData>>) = envelope(stream.as_bytes()).unwrap();
+    let (extra, event): (_, EventMessage<QueryEvent>) = envelope(stream.as_bytes()).unwrap();
 
     assert_eq!(serde_json::to_string(&event).unwrap(), qry_event);
     assert_eq!(rest.as_bytes(), extra);

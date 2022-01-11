@@ -276,7 +276,7 @@ fn test_verify() -> Result<(), Error> {
     let signed_msg = Message::try_from(parsed).unwrap();
     match signed_msg {
         Message::Event(ref e) => {
-            if let EventData::Icp(icp) = e.to_owned().event_message.event.event_data {
+            if let EventData::Icp(icp) = e.to_owned().event_message.event.get_event_data() {
                 let kc = icp.key_config;
                 let msg = e.event_message.serialize()?;
                 assert!(kc.verify(&msg, &e.signatures)?);
@@ -290,7 +290,7 @@ fn test_verify() -> Result<(), Error> {
     let signed_msg = Message::try_from(parsed).unwrap();
     match signed_msg {
         Message::Event(ref e) => {
-            if let EventData::Icp(icp) = e.to_owned().event_message.event.event_data {
+            if let EventData::Icp(icp) = e.to_owned().event_message.event.get_event_data() {
                 let kc = icp.key_config;
                 let msg = e.event_message.serialize()?;
                 assert!(kc.verify(&msg, &e.signatures)?);

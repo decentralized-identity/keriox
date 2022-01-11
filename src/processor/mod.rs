@@ -14,12 +14,12 @@ use crate::{
             seal::{EventSeal, Seal},
             KeyConfig,
         },    
-        Event, EventMessage,
+        EventMessage,
     },    
     event_message::{signed_event_message::{
         Message, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         TimestampedSignedEventMessage,
-    }, signature::Signature},    
+    }, signature::Signature, KeyEvent},    
     prefix::{IdentifierPrefix, SelfAddressingPrefix},
     state::{EventSemantics, IdentifierState},
 };    
@@ -84,7 +84,7 @@ impl EventProcessor {
             sorted_events.sort();
             for event in sorted_events
                 .iter()
-                .filter(|e| e.signed_event_message.event_message.event.sn <= sn)
+                .filter(|e| e.signed_event_message.event_message.event.get_sn() <= sn)
             {
                 state = state.apply(&event.signed_event_message.event_message)?;
             }
@@ -108,7 +108,7 @@ impl EventProcessor {
             for event in events {
                 state = state.apply(&event.signed_event_message.event_message.event)?;
                 // TODO: is this event.event.event stuff too ugly? =)
-                last_est = match event.signed_event_message.event_message.event.event_data {
+                last_est = match event.signed_event_message.event_message.event.get_event_data() {
                     EventData::Icp(_) => Some(event.signed_event_message),
                     EventData::Rot(_) => Some(event.signed_event_message),
                     _ => last_est,
@@ -120,8 +120,8 @@ impl EventProcessor {
         let seal = last_est.and_then(|event| {
             let event_digest = SelfAddressing::Blake3_256.derive(&event.serialize().unwrap());
             Some(EventSeal {
-                prefix: event.event_message.event.prefix,
-                sn: event.event_message.event.sn,
+                prefix: event.event_message.event.get_prefix(),
+                sn: event.event_message.event.get_sn(),
                 event_digest,
             })
         });
@@ -161,7 +161,7 @@ impl EventProcessor {
             if event_digest.verify_binding(&event.signed_event_message.event_message.serialize()?) {
                 // return the config or error if it's not an establishment event
                 Ok(Some(
-                    match event.signed_event_message.event_message.event.event_data {
+                    match event.signed_event_message.event_message.event.get_event_data() {
                         EventData::Icp(icp) => icp.key_config,
                         EventData::Rot(rot) => rot.key_config,
                         EventData::Dip(dip) => dip.inception_data.key_config,
@@ -186,7 +186,7 @@ impl EventProcessor {
         // Check if event of seal's prefix and sn is in db.
         if let Ok(Some(event)) = self.get_event_at_sn(&seal.prefix, seal.sn) {
             // Extract prior_digest and data field from delegating event.
-            let data = match event.signed_event_message.event_message.event.event_data {
+            let data = match event.signed_event_message.event_message.event.get_event_data() {
                 EventData::Rot(rot) => rot.data,
                 EventData::Ixn(ixn) => ixn.data,
                 EventData::Drt(drt) => drt.data,
@@ -262,10 +262,10 @@ impl EventProcessor {
     ) -> Result<Option<IdentifierState>, Error> {
         // Log event.
 
-        let id = &signed_event.event_message.event.prefix;
+        let id = &signed_event.event_message.event.get_prefix();
 
         // If delegated event, check its delegator seal.
-        match signed_event.event_message.event.event_data.clone() {
+        match signed_event.event_message.event.get_event_data() {
             EventData::Dip(dip) => {
                 let (sn, dig) = signed_event
                     .delegator_seal
@@ -281,7 +281,7 @@ impl EventProcessor {
             }
             EventData::Drt(_drt) => {
                 let delegator = self
-                    .compute_state(&signed_event.event_message.event.prefix)?
+                    .compute_state(&signed_event.event_message.event.get_prefix())?
                     .ok_or_else(|| Error::SemanticError(
                         "Missing state of delegated identifier".into(),
                     ))?
@@ -301,7 +301,7 @@ impl EventProcessor {
             }
             _ => Ok(()),
         }?;
-        self.apply_to_state(signed_event.event_message.clone())
+        self.apply_to_state(&signed_event.event_message)
             .and_then(|new_state| {
                 // add event from the get go and clean it up on failure later
                 self.db.add_kel_finalized_event(signed_event.clone(), id)?;
@@ -416,15 +416,15 @@ impl EventProcessor {
         sn: u64,
     ) -> Result<Option<TimestampedSignedEventMessage>, Error> {
         if let Some(mut events) = self.db.get_kel_finalized_events(id) {
-            Ok(events.find(|event| event.signed_event_message.event_message.event.sn == sn))
+            Ok(events.find(|event| event.signed_event_message.event_message.event.get_sn() == sn))
         } else {
             Ok(None)
         }
     }
 
-    fn apply_to_state(&self, event: EventMessage<Event>) -> Result<IdentifierState, Error> {
+    fn apply_to_state(&self, event: &EventMessage<KeyEvent>) -> Result<IdentifierState, Error> {
         // get state for id (TODO cache?)
-        self.compute_state(&event.event.prefix)
+        self.compute_state(&event.event.get_prefix())
             // get empty state if there is no state yet
             .and_then(|opt| Ok(opt.map_or_else(|| IdentifierState::default(), |s| s)))
             // process the event update
@@ -448,13 +448,13 @@ impl EventProcessor {
 
     #[cfg(feature = "query")]
     fn bada_logic(&self, new_rpy: &SignedReply) -> Result<(), Error> {
-        use crate::query::{reply::Reply, Route};
+        use crate::query::{reply::ReplyEvent, Route};
         let accepted_replys = self
             .db
-            .get_accepted_replys(&new_rpy.reply.event.data.data.state.prefix);
+            .get_accepted_replys(&new_rpy.reply.event.get_prefix());
 
         // helper function for reply timestamps checking
-        fn check_dts(new_rpy: Reply, old_rpy: Reply) -> Result<(), Error> {
+        fn check_dts(new_rpy: &ReplyEvent, old_rpy: &ReplyEvent) -> Result<(), Error> {
             let new_dt = new_rpy.get_timestamp();
             let old_dt = old_rpy.get_timestamp();
             if new_dt >= old_dt {
@@ -477,7 +477,7 @@ impl EventProcessor {
                 // get last reply for prefix with route with sender_prefix
                 match accepted_replys.and_then(|mut o| {
                     o.find(|r: &SignedReply| {
-                        r.reply.event.route.clone() == Route::ReplyKsn(seal.prefix.clone())
+                        r.reply.event.get_route() == Route::ReplyKsn(seal.prefix.clone())
                     })
                 }) {
                     Some(old_rpy) => {
@@ -495,7 +495,7 @@ impl EventProcessor {
                         if old_sn < new_sn {
                             Ok(())
                         } else if old_sn == new_sn {
-                            check_dts(new_rpy.reply.clone(), old_rpy.reply)
+                            check_dts(&new_rpy.reply.event, &old_rpy.reply.event)
                         } else {
                             Err(QueryError::StaleRpy.into())
                         }
@@ -507,11 +507,11 @@ impl EventProcessor {
                 //  If date-time-stamp of new is greater than old
                 match accepted_replys.and_then(|mut o| {
                     o.find(|r| {
-                        r.reply.event.route.clone()
+                        r.reply.event.get_route()
                             == Route::ReplyKsn(IdentifierPrefix::Basic(bp.clone()))
                     })
                 }) {
-                    Some(old_rpy) => check_dts(new_rpy.reply.clone(), old_rpy.reply),
+                    Some(old_rpy) => check_dts(&new_rpy.reply.event, &old_rpy.reply.event),
                     None => Err(QueryError::NoSavedReply.into()),
                 }
             }
@@ -525,7 +525,7 @@ impl EventProcessor {
     ) -> Result<Option<IdentifierState>, Error> {
         use crate::query::Route;
 
-        let route = rpy.reply.event.route.clone();
+        let route = rpy.reply.event.get_route();
         // check if signature was made by ksn creator
         if let Route::ReplyKsn(ref aid) = route {
             if &rpy.signature.get_signer() != aid {
@@ -547,14 +547,14 @@ impl EventProcessor {
             }?;
 
             // now unpack ksn and check its details
-            let ksn = rpy.reply.event.data.data.clone();
+            let ksn = rpy.reply.event.get_reply_data();
             let ksn_checking_result = self.check_ksn(&ksn, aid);
             if let Err(Error::QueryError(QueryError::OutOfOrderEventError)) = ksn_checking_result {
                 self.escrow_reply(&rpy)?;
             };
             ksn_checking_result?;
-            self.db.update_accepted_reply(rpy.clone(), &rpy.reply.get_prefix())?;
-            Ok(Some(rpy.reply.get_state()))
+            self.db.update_accepted_reply(rpy.clone(), &rpy.reply.event.get_prefix())?;
+            Ok(Some(rpy.reply.event.get_state()))
         } else {
             Err(Error::SemanticError("wrong route type".into()))
         }
@@ -573,10 +573,10 @@ impl EventProcessor {
             .db
             .get_accepted_replys(pref)
             .ok_or(Error::QueryError(QueryError::OutOfOrderEventError))?
-            .find(|sr: &SignedReply| sr.reply.event.route == Route::ReplyKsn(aid.clone()))
+            .find(|sr: &SignedReply| sr.reply.event.get_route() == Route::ReplyKsn(aid.clone()))
         {
             Some(old_ksn) => {
-                let old_dt = old_ksn.reply.event.data.data.timestamp;
+                let old_dt = old_ksn.reply.event.get_timestamp();
                 if old_dt > new_dt {
                     Err(QueryError::StaleKsn.into())
                 } else {
@@ -635,7 +635,7 @@ impl EventProcessor {
 
     #[cfg(feature = "query")]
     fn escrow_reply(&self, rpy: &SignedReply) -> Result<(), Error> {
-        let id = rpy.reply.event.data.data.state.prefix.clone();
+        let id = rpy.reply.event.get_prefix();
         self.db.add_escrowed_reply(rpy.clone(), &id)
     }
 
@@ -647,7 +647,7 @@ impl EventProcessor {
                     Ok(_) | Err(Error::SignatureVerificationError) | Err(Error::QueryError(QueryError::StaleRpy)) => {
                         // remove from escrow
                         self.db
-                            .remove_escrowed_reply(&sig_rep.reply.get_prefix(), sig_rep)
+                            .remove_escrowed_reply(&sig_rep.reply.event.get_prefix(), sig_rep)
                             .unwrap();
                     }
                     Err(_e) => {} // keep in escrow,

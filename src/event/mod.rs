@@ -1,7 +1,5 @@
-use crate::event_message::{CommonEvent, dummy_event};
-use crate::event_message::dummy_event::DummyEventMessage;
+use crate::event_message::{Typeable, SaidEvent, KeyEvent};
 pub use crate::event_message::{serialization_info::SerializationFormats, EventMessage};
-use crate::prefix::SelfAddressingPrefix;
 use crate::{prefix::IdentifierPrefix, derivation::self_addressing::SelfAddressing};
 use crate::state::IdentifierState;
 use serde::{Deserialize, Serialize};
@@ -15,9 +13,6 @@ use serde_hex::{Compact, SerHex};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Event {
-    #[serde(rename = "d", skip_serializing)]
-    pub digest: Option<SelfAddressingPrefix>,
-
     #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
 
@@ -32,35 +27,18 @@ impl Event {
     pub fn new(prefix: IdentifierPrefix, sn: u64, event_data: EventData)
         -> Self {
             Event {
-                digest: None, 
                 prefix,
                 sn,
                 event_data
             }
         }
 
-    pub fn to_message(self, format: SerializationFormats, derivation: &SelfAddressing) -> Result<EventMessage<Event>, Error> {
-        let (version_string, event) = match self.get_digest() {
-            Some(dig) => {
-                (dummy_event::DummyEventMessage::get_serialization_info(&self, format, &dig.derivation)?,
-                    self)
-            },
-            None => {
-                let dummy_event = DummyEventMessage::dummy_event(self.clone(), format, derivation)?;
-                let digest = Some(derivation.derive(&dummy_event.serialize()?));
-                (dummy_event.serialization_info,
-                   Event { digest, .. self}
-                )
-        }};
-
-        Ok(EventMessage {
-                    serialization_info: version_string,
-                    event,
-                })
+    pub fn to_message(self, format: SerializationFormats, derivation: &SelfAddressing) -> Result<EventMessage<KeyEvent>, Error> {
+        SaidEvent::<Event>::to_message(self, format, derivation)
     }
 }
 
-impl CommonEvent for Event {
+impl Typeable for Event {
     fn get_type(&self) -> Option<String> {
         Some(match self.event_data {
             EventData::Icp(_) => "icp",
@@ -69,10 +47,6 @@ impl CommonEvent for Event {
             EventData::Dip(_) => "dip",
             EventData::Drt(_) => "drt",
         }.to_string())
-    }
-
-    fn get_digest(&self) -> Option<SelfAddressingPrefix> {
-        self.digest.clone()
     }
 }
 

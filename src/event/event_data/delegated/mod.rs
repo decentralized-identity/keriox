@@ -1,5 +1,6 @@
 use super::EventData;
 use super::InceptionEvent;
+use crate::event_message::KeyEvent;
 use crate::event_message::dummy_event::DummyInceptionEvent;
 use crate::{
     derivation::self_addressing::SelfAddressing,
@@ -29,7 +30,7 @@ impl DelegatedInceptionEvent {
         self,
         derivation: SelfAddressing,
         format: SerializationFormats,
-    ) -> Result<EventMessage<Event>, Error> {
+    ) -> Result<EventMessage<KeyEvent>, Error> {
             Event::new(
                 IdentifierPrefix::SelfAddressing(derivation.derive(
                     &DummyInceptionEvent::dummy_delegated_inception_data(

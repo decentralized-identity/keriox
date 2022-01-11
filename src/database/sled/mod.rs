@@ -2,7 +2,7 @@ mod tables;
 
 use tables::{SledEventTree, SledEventTreeVec};
 use std::path::Path;
-use crate::{error::Error, event::{Event, EventMessage}, event_message::{TimestampedEventMessage, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedSignedEventMessage}}, prefix::IdentifierPrefix};
+use crate::{error::Error, event::EventMessage, event_message::{TimestampedEventMessage, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedSignedEventMessage}, KeyEvent}, prefix::IdentifierPrefix};
 
 #[cfg(feature = "query")]
 use crate::query::reply::SignedReply;
@@ -134,7 +134,7 @@ impl SledEventDatabase {
             self.escrowed_receipts_nt.remove(self.identifiers.designated_key(id), receipt)
         }
 
-    pub fn add_likely_duplicious_event(&self, event: EventMessage<Event>, id: &IdentifierPrefix) -> Result<(), Error> {
+    pub fn add_likely_duplicious_event(&self, event: EventMessage<KeyEvent>, id: &IdentifierPrefix) -> Result<(), Error> {
         self.likely_duplicious_events.push(self.identifiers.designated_key(id), event.into())
     }
 
@@ -164,7 +164,7 @@ impl SledEventDatabase {
         {
             Some(rpys) => {
                 let filtered = rpys
-                    .filter(|s| s.reply.event.route != rpy.reply.event.route)
+                    .filter(|s| s.reply.event.get_route() != rpy.reply.event.get_route())
                     .chain(Some(rpy.clone()).into_iter())
                     .collect();
                 self.accepted_rpy

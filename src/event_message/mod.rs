@@ -15,21 +15,83 @@ use crate::{
         sections::seal::SourceSeal,
     },
     prefix::{AttachedSignaturePrefix, IdentifierPrefix, SelfAddressingPrefix},
-    state::{EventSemantics, IdentifierState},
+    state::{EventSemantics, IdentifierState}, derivation::self_addressing::SelfAddressing,
 };
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize, Serializer};
 use serialization_info::*;
 
-use self::{signed_event_message::SignedEventMessage, dummy_event::DummyInceptionEvent};
+use self::{signed_event_message::SignedEventMessage, dummy_event::{DummyInceptionEvent, DummyEventMessage}};
 
-pub trait CommonEvent {
+pub trait Typeable {
     fn get_type(&self) -> Option<String>;
+}
+pub trait Digestible {
     fn get_digest(&self) -> Option<SelfAddressingPrefix>;
 }
 
+pub type KeyEvent = SaidEvent<Event>;
+
+impl KeyEvent {
+    pub fn get_sn(&self) -> u64 {
+        self.content.sn
+    }
+    pub fn get_prefix(&self) -> IdentifierPrefix {
+        self.content.prefix.clone()
+    }
+    pub fn get_event_data(&self) -> EventData {
+        self.content.event_data.clone()
+    }
+}
+
+impl EventSemantics for KeyEvent {
+    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
+        // TODO check sai
+        self.content.apply_to(state)
+    }
+
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct SaidEvent<D> {
+    #[serde(rename = "d", skip_serializing)]
+    digest: Option<SelfAddressingPrefix>,
+
+    #[serde(flatten)]
+    pub content: D,
+}
+
+impl<D: Serialize + Clone> SaidEvent<D> {
+    pub(crate) fn to_message(event: D, format: SerializationFormats, derivation: &SelfAddressing) -> Result<EventMessage<SaidEvent<D>>, Error> {
+        let (version_string, event) = 
+        {
+            let dummy_event = DummyEventMessage::dummy_event(event.clone(), format, &derivation)?;
+            let digest = Some(derivation.derive(&dummy_event.serialize()?));
+            (dummy_event.serialization_info, Self { digest, content: event})
+        };
+
+        Ok(EventMessage {
+                serialization_info: version_string,
+                event: event,
+            })
+    }
+}
+
+impl<D> Digestible for SaidEvent<D> {
+    fn get_digest(&self) -> Option<SelfAddressingPrefix> {
+        self.digest.clone()
+    }
+}
+
+
+impl<D: Typeable> Typeable for SaidEvent<D> {
+    fn get_type(&self) -> Option<String> {
+       self.content.get_type() 
+    }
+}
+
 #[derive(Deserialize, Debug, Clone, PartialEq)]
-pub struct EventMessage<D: CommonEvent> {
+pub struct EventMessage<D> {
     /// Serialization Information
     ///
     /// Encodes the version, size and serialization format of the event
@@ -40,7 +102,7 @@ pub struct EventMessage<D: CommonEvent> {
     pub event: D,
 }
 
-impl<D: CommonEvent + Serialize + Clone> Serialize for EventMessage<D> {
+impl<D: Digestible + Typeable + Serialize + Clone> Serialize for EventMessage<D> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer {
@@ -58,7 +120,7 @@ impl<D: CommonEvent + Serialize + Clone> Serialize for EventMessage<D> {
             event: D
 
         }
-        impl<D: CommonEvent +  Clone> From<&EventMessage<D>> for TypedEventMessage<D> {
+        impl<D: Digestible + Typeable +  Clone> From<&EventMessage<D>> for TypedEventMessage<D> {
             fn from(em: &EventMessage<D>) -> Self {
                 TypedEventMessage {
                     v: em.serialization_info,
@@ -77,11 +139,11 @@ impl<D: CommonEvent + Serialize + Clone> Serialize for EventMessage<D> {
 #[derive(Serialize, Deserialize, PartialEq)]
 pub struct TimestampedEventMessage {
     pub timestamp: DateTime<Local>,
-    pub event_message: EventMessage<Event>,
+    pub event_message: EventMessage<KeyEvent>,
 }
 
 impl TimestampedEventMessage {
-    pub fn new(event: EventMessage<Event>) -> Self {
+    pub fn new(event: EventMessage<KeyEvent>) -> Self {
         Self {
             timestamp: Local::now(),
             event_message: event,
@@ -92,9 +154,9 @@ impl TimestampedEventMessage {
 impl PartialOrd for TimestampedEventMessage {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(
-            match self.event_message.event.sn == other.event_message.event.sn {
+            match self.event_message.event.get_sn() == other.event_message.event.get_sn() {
                 true => Ordering::Equal,
-                false => match self.event_message.event.sn > other.event_message.event.sn {
+                false => match self.event_message.event.get_sn() > other.event_message.event.get_sn() {
                     true => Ordering::Greater,
                     false => Ordering::Less,
                 },
@@ -105,9 +167,9 @@ impl PartialOrd for TimestampedEventMessage {
 
 impl Ord for TimestampedEventMessage {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.event_message.event.sn == other.event_message.event.sn {
+        match self.event_message.event.get_sn() == other.event_message.event.get_sn() {
             true => Ordering::Equal,
-            false => match self.event_message.event.sn > other.event_message.event.sn {
+            false => match self.event_message.event.get_sn() > other.event_message.event.get_sn() {
                 true => Ordering::Greater,
                 false => Ordering::Less,
             },
@@ -117,20 +179,20 @@ impl Ord for TimestampedEventMessage {
 
 impl Eq for TimestampedEventMessage {}
 
-impl From<TimestampedEventMessage> for EventMessage<Event> {
-    fn from(event: TimestampedEventMessage) -> EventMessage<Event> {
+impl From<TimestampedEventMessage> for EventMessage<KeyEvent> {
+    fn from(event: TimestampedEventMessage) -> EventMessage<KeyEvent> {
         event.event_message
     }
 }
 
 /// WARNING: timestamp will change on conversion to current time
-impl From<EventMessage<Event>> for TimestampedEventMessage {
-    fn from(event: EventMessage<Event>) -> TimestampedEventMessage {
+impl From<EventMessage<KeyEvent>> for TimestampedEventMessage {
+    fn from(event: EventMessage<KeyEvent>) -> TimestampedEventMessage {
         TimestampedEventMessage::new(event)
     }
 }
 
-impl<T: Clone + Serialize + CommonEvent> EventMessage<T> {
+impl<T: Clone + Serialize + Digestible + Typeable> EventMessage<T> {
     pub fn serialization(&self) -> SerializationFormats {
         self.serialization_info.kind
     }
@@ -144,7 +206,7 @@ impl<T: Clone + Serialize + CommonEvent> EventMessage<T> {
     }
 }
 
-impl EventMessage<Event> {
+impl EventMessage<KeyEvent> {
     pub fn sign(
         &self,
         sigs: Vec<AttachedSignaturePrefix>,
@@ -154,10 +216,10 @@ impl EventMessage<Event> {
     }
 }
 
-impl EventSemantics for EventMessage<Event> {
+impl EventSemantics for EventMessage<KeyEvent> {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         // Update state.last with serialized current event message.
-        match self.event.event_data {
+        match self.event.get_event_data() {
             EventData::Icp(_) | EventData::Dip(_) => {
                 if verify_identifier_binding(self)? {
                     self.event.apply_to(IdentifierState {
@@ -228,10 +290,10 @@ impl EventSemantics for EventMessage<Event> {
     }
 }
 
-pub fn verify_identifier_binding(icp_event: &EventMessage<Event>) -> Result<bool, Error> {
-    let event_data = &icp_event.event.event_data;
+pub fn verify_identifier_binding(icp_event: &EventMessage<KeyEvent>) -> Result<bool, Error> {
+    let event_data = &icp_event.event.get_event_data();
     match event_data {
-        EventData::Icp(icp) => match &icp_event.event.prefix {
+        EventData::Icp(icp) => match &icp_event.event.get_prefix() {
             IdentifierPrefix::Basic(bp) => Ok(icp.key_config.public_keys.len() == 1
                 && bp == icp.key_config.public_keys.first().unwrap()),
             // TODO update with new inception process
@@ -244,7 +306,7 @@ pub fn verify_identifier_binding(icp_event: &EventMessage<Event>) -> Result<bool
             }
             IdentifierPrefix::SelfSigning(_ssp) => todo!(),
         },
-        EventData::Dip(dip) => match &icp_event.event.prefix {
+        EventData::Dip(dip) => match &icp_event.event.get_prefix() {
             IdentifierPrefix::SelfAddressing(sap) => Ok(sap.verify_binding(
                 &DummyInceptionEvent::dummy_delegated_inception_data(
                     dip.clone(),
@@ -416,7 +478,7 @@ mod tests {
 
         assert!(s0.current.verify(&serialized, &signed_event.signatures)?);
 
-        assert_eq!(s0.prefix, icp.event.prefix);
+        assert_eq!(s0.prefix, icp.event.get_prefix());
         assert_eq!(s0.sn, 0);
         assert_eq!(s0.last, icp.serialize()?);
         assert_eq!(s0.current.public_keys.len(), 2);

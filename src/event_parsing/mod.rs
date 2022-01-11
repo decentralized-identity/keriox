@@ -5,12 +5,13 @@ use serde::Deserialize;
 use crate::event::receipt::Receipt;
 use crate::event::{Event, EventMessage};
 use crate::event::sections::seal::{EventSeal, SourceSeal};
+use crate::event_message::{SaidEvent, KeyEvent};
 use crate::event_message::signed_event_message::{Message, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt};
 use crate::event_parsing::payload_size::PayloadType;
 use crate::prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix};
 
 #[cfg(feature = "query")]
-use crate::query::{query::Query, reply::{Reply, SignedReply}};
+use crate::query::{query::QueryEvent, reply::{ReplyEvent, SignedReply}};
 use crate::{error::Error, event::event_data::EventData};
 
 pub mod attachment;
@@ -123,12 +124,12 @@ pub struct SignedEventData {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum EventType {
-    KeyEvent(EventMessage<Event>),
+    KeyEvent(EventMessage<KeyEvent>),
     Receipt(EventMessage<Receipt>),
     #[cfg(feature = "query")]
-    Qry(Query),
+    Qry(EventMessage<QueryEvent>),
     #[cfg(feature = "query")]
-    Rpy(Reply),
+    Rpy(EventMessage<ReplyEvent>),
 }
 
 impl EventType {
@@ -235,7 +236,7 @@ impl TryFrom<SignedEventData> for Message {
 }
 
 #[cfg(feature = "query")]
-fn signed_reply(rpy: Reply, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
+fn signed_reply(rpy: EventMessage<ReplyEvent>, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
     match attachments.pop().ok_or_else(|| Error::SemanticError("Missing attachment".into()))? {
         Attachment::ReceiptCouplets(couplets) => {
         let signer = couplets[0].0.clone();
@@ -262,7 +263,7 @@ fn signed_reply(rpy: Reply, mut attachments: Vec<Attachment>) -> Result<Message,
 }
 
 #[cfg(feature = "query")]
-fn signed_query(qry: Query, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
+fn signed_query(qry: EventMessage<QueryEvent>, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
     use crate::query::query::SignedQuery;
 
     match attachments.pop().ok_or_else(|| Error::SemanticError("Missing attachment".into()))? {
@@ -281,8 +282,8 @@ fn signed_query(qry: Query, mut attachments: Vec<Attachment>) -> Result<Message,
 }
 
 
-fn signed_key_event(event_message: EventMessage<Event>, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
-    match event_message.event.event_data {
+fn signed_key_event(event_message: EventMessage<KeyEvent>, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
+    match event_message.event.get_event_data() {
         EventData::Dip(_) | EventData::Drt(_) => {
             let (att1, att2) = (
                 attachments.pop().ok_or_else(|| Error::SemanticError("Missing attachment".into()))?, 

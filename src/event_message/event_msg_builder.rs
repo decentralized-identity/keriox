@@ -23,6 +23,8 @@ use crate::{
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
 
+use super::KeyEvent;
+
 pub struct EventMsgBuilder {
     event_type: KeyEventType,
     prefix: IdentifierPrefix,
@@ -142,7 +144,7 @@ impl EventMsgBuilder {
         }
     }
 
-    pub fn build(self) -> Result<EventMessage<Event>, Error> {
+    pub fn build(self) -> Result<EventMessage<KeyEvent>, Error> {
         let next_key_hash =
             nxt_commitment(&self.next_key_threshold, &self.next_keys, &self.derivation);
         let key_config = KeyConfig::new(self.keys, Some(next_key_hash), Some(self.key_threshold));
@@ -152,7 +154,7 @@ impl EventMsgBuilder {
             } else {
                 let icp_data = InceptionEvent::new(key_config.clone(), None, None)
                     .incept_self_addressing(self.derivation.clone(), self.format)?;
-                icp_data.event.prefix
+                icp_data.event.get_prefix()
             }
         } else {
             self.prefix
@@ -239,7 +241,7 @@ impl EventMsgBuilder {
 pub struct ReceiptBuilder {
     format: SerializationFormats,
     derivation: SelfAddressing,
-    receipted_event: EventMessage<Event>,
+    receipted_event: EventMessage<KeyEvent>,
 }
 
 impl Default for ReceiptBuilder {
@@ -262,7 +264,7 @@ impl ReceiptBuilder {
         Self { derivation, ..self }
     }
 
-    pub fn with_receipted_event(self, receipted_event: EventMessage<Event>) -> Self {
+    pub fn with_receipted_event(self, receipted_event: EventMessage<KeyEvent>) -> Self {
         Self {
             receipted_event,
             ..self
@@ -270,8 +272,8 @@ impl ReceiptBuilder {
     }
 
     pub fn build(&self) -> Result<EventMessage<Receipt>, Error> {
-        let prefix = self.receipted_event.event.prefix.clone();
-        let sn = self.receipted_event.event.sn;
+        let prefix = self.receipted_event.event.get_prefix();
+        let sn = self.receipted_event.event.get_sn();
         let receipted_event_digest = self.derivation.derive(&self.receipted_event.serialize()?);
         Receipt{ receipted_event_digest, sn, prefix}.to_message(self.format)
     }
