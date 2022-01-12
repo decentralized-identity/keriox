@@ -10,13 +10,14 @@ use serde::Deserialize;
 #[cfg(feature = "async")]
 use crate::event_message::serialization_info::SerializationInfo;
 
-use crate::{event::{EventMessage, receipt::Receipt}, event_parsing::{Attachment, SignedEventData, attachment::attachment, EventType}, event_message::{Digestible, SaidEvent, KeyEvent}}; 
+use crate::{event::{EventMessage, receipt::Receipt}, event_parsing::{Attachment, SignedEventData, attachment::attachment, EventType}, event_message::{Digestible, KeyEvent}}; 
 #[cfg(feature = "query")]
 use serde::Serialize;
 #[cfg(feature = "query")]
 use crate::query::Envelope;
+#[cfg(feature = "query")]
+use crate::event_message::{SaidEvent, Typeable};
 use rmp_serde as serde_mgpk;
-use crate::event_message::Typeable;
 
 
 fn json_message<'a, D: Deserialize<'a> + Digestible>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<D>> {
@@ -62,7 +63,6 @@ pub fn receipt_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
 
 #[cfg(feature = "query")]
 fn envelope<'a, D: Serialize + Deserialize<'a> + Typeable>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<SaidEvent<Envelope<D>>>> {
-
     message::<SaidEvent<Envelope<D>>>(s)
         .map(|d| (d.0, d.1))
 }

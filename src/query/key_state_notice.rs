@@ -3,10 +3,9 @@ use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use serde_hex::{Compact, SerHex};
 
 use crate::{
-    derivation::self_addressing::SelfAddressing,
-    event::SerializationFormats,
-    prefix::SelfAddressingPrefix,
-    state::IdentifierState, event_message::serialization_info::SerializationInfo,
+    derivation::self_addressing::SelfAddressing, event::SerializationFormats,
+    event_message::serialization_info::SerializationInfo, prefix::SelfAddressingPrefix,
+    state::IdentifierState,
 };
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]

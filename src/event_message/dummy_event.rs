@@ -1,9 +1,15 @@
-use crate::{derivation::{self_addressing::SelfAddressing, DerivationCode}, error::Error, event::{event_data::{InceptionEvent, EventData, DelegatedInceptionEvent}, SerializationFormats}};
+use crate::{
+    derivation::{self_addressing::SelfAddressing, DerivationCode},
+    error::Error,
+    event::{
+        event_data::{DelegatedInceptionEvent, EventData, InceptionEvent},
+        SerializationFormats,
+    },
+};
 
 use super::serialization_info::SerializationInfo;
 use serde::Serialize;
 use serde_hex::{Compact, SerHex};
-
 
 fn dummy_prefix(derivation: &SelfAddressing) -> String {
     std::iter::repeat("#")
@@ -29,7 +35,6 @@ pub(crate) struct DummyInceptionEvent {
 }
 
 impl DummyInceptionEvent {
-
     pub fn dummy_inception_data(
         icp: InceptionEvent,
         derivation: &SelfAddressing,
@@ -45,7 +50,7 @@ impl DummyInceptionEvent {
     ) -> Result<Vec<u8>, Error> {
         DummyInceptionEvent::derive_data(EventData::Dip(dip), derivation, format)
     }
-        
+
     fn derive_data(
         data: EventData,
         derivation: &SelfAddressing,
@@ -75,44 +80,57 @@ impl DummyInceptionEvent {
     fn serialize(&self) -> Result<Vec<u8>, Error> {
         self.serialization_info.kind.encode(&self)
     }
-
 }
 
-    #[derive(Serialize, Debug, Clone)]
-    pub(crate) struct DummyEventMessage<T: Serialize> {
-        #[serde(rename = "v")]
-        pub serialization_info: SerializationInfo,
-        #[serde(rename = "d")]
-        digest: String,
-        #[serde(flatten)]
-        data: T,
+#[derive(Serialize, Debug, Clone)]
+pub(crate) struct DummyEventMessage<T: Serialize> {
+    #[serde(rename = "v")]
+    pub serialization_info: SerializationInfo,
+    #[serde(rename = "d")]
+    digest: String,
+    #[serde(flatten)]
+    data: T,
+}
+
+impl<T: Serialize> DummyEventMessage<T> {
+    pub fn dummy_event(
+        event: T,
+        format: SerializationFormats,
+        derivation: &SelfAddressing,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            serialization_info: Self::get_serialization_info(&event, format, derivation)?,
+            data: event,
+            digest: dummy_prefix(derivation),
+        })
     }
 
-    impl<T: Serialize> DummyEventMessage<T> {
-        pub fn dummy_event(event: T, format: SerializationFormats, derivation: &SelfAddressing) -> Result<Self, Error> {
-            Ok(Self {
-                serialization_info: Self::get_serialization_info(&event, format, derivation)?,
-                data: event,
-                digest: dummy_prefix(derivation),
-            })
+    fn get_size(
+        event: &T,
+        format: SerializationFormats,
+        derivation: &SelfAddressing,
+    ) -> Result<usize, Error> {
+        Ok(DummyEventMessage {
+            serialization_info: SerializationInfo::new(format, 0),
+            data: event.clone(),
+            digest: dummy_prefix(derivation),
         }
-
-        fn get_size(event: &T, format: SerializationFormats, derivation: &SelfAddressing) -> Result<usize, Error> {
-            Ok(DummyEventMessage {
-                serialization_info: SerializationInfo::new(format, 0),
-                data: event.clone(),
-                digest: dummy_prefix(derivation),
-            }
-            .serialize()?
-            .len())
-        }
-
-        pub fn get_serialization_info(event: &T, format: SerializationFormats, derivation: &SelfAddressing) -> Result<SerializationInfo, Error> {
-            Ok(SerializationInfo::new(format, Self::get_size(&event, format, derivation)?))
-        }
-
-        pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-            self.serialization_info.kind.encode(&self)
-        }
+        .serialize()?
+        .len())
     }
 
+    pub fn get_serialization_info(
+        event: &T,
+        format: SerializationFormats,
+        derivation: &SelfAddressing,
+    ) -> Result<SerializationInfo, Error> {
+        Ok(SerializationInfo::new(
+            format,
+            Self::get_size(&event, format, derivation)?,
+        ))
+    }
+
+    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
+        self.serialization_info.kind.encode(&self)
+    }
+}

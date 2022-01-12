@@ -5,10 +5,11 @@ use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
     event::{sections::seal::EventSeal, EventMessage, SerializationFormats},
-    prefix::{
-        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, 
-        SelfSigningPrefix,
-    }, state::IdentifierState, event_message::{signature::Signature, dummy_event::DummyEventMessage, Typeable, SaidEvent, Digestible},
+    event_message::{
+        dummy_event::DummyEventMessage, signature::Signature, Digestible, SaidEvent, Typeable,
+    },
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    state::IdentifierState,
 };
 
 use super::{key_state_notice::KeyStateNotice, Envelope, QueryError, Route};
@@ -29,13 +30,8 @@ impl ReplyEvent {
         self_addressing: SelfAddressing,
         serialization: SerializationFormats,
     ) -> Result<EventMessage<ReplyEvent>, Error> {
-        let rpy_data = ReplyData {
-            data: ksn.clone(),
-        };
-        let env = Envelope::new(
-            route.clone(),
-            rpy_data,
-        );
+        let rpy_data = ReplyData { data: ksn.clone() };
+        let env = Envelope::new(route.clone(), rpy_data);
         env.to_message(serialization, &self_addressing)
     }
 
@@ -46,7 +42,6 @@ impl ReplyEvent {
     pub fn get_prefix(&self) -> IdentifierPrefix {
         self.content.data.data.state.prefix.clone()
     }
-
 
     pub fn get_state(&self) -> IdentifierState {
         self.content.data.data.state.clone()
@@ -65,10 +60,12 @@ impl EventMessage<ReplyEvent> {
     pub fn check_digest(&self) -> Result<(), Error> {
         let dummy = DummyEventMessage::dummy_event(
             self.event.clone(),
-            self.serialization_info.kind, 
-            &self.event.get_digest().unwrap().derivation
-        )?.serialize()?;
-        self.event.get_digest()
+            self.serialization_info.kind,
+            &self.event.get_digest().unwrap().derivation,
+        )?
+        .serialize()?;
+        self.event
+            .get_digest()
             .unwrap_or_default()
             .verify_binding(&dummy)
             .then(|| ())

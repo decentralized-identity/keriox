@@ -1,9 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    derivation::self_addressing::SelfAddressing,
     error::Error,
     event::{EventMessage, SerializationFormats},
-    prefix::{AttachedSignaturePrefix, IdentifierPrefix}, derivation::self_addressing::SelfAddressing, event_message::{Typeable, Digestible, SaidEvent},
+    event_message::{SaidEvent, Typeable},
+    prefix::{AttachedSignaturePrefix, IdentifierPrefix},
 };
 
 use super::{Envelope, Route};
@@ -29,7 +31,7 @@ impl QueryEvent {
         route: Route,
         id: &IdentifierPrefix,
         serialization_format: SerializationFormats,
-        derivation: &SelfAddressing
+        derivation: &SelfAddressing,
     ) -> Result<EventMessage<Self>, Error> {
         let message = QueryData {
             reply_route: "route".into(),
@@ -39,7 +41,7 @@ impl QueryEvent {
         let env = Envelope::new(route, message);
         env.to_message(serialization_format, derivation)
     }
-    
+
     pub fn get_route(&self) -> Route {
         self.content.route.clone()
     }

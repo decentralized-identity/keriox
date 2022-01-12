@@ -12,13 +12,15 @@ use crate::{
     },
     event::{
         event_data::{inception::InceptionEvent, EventData},
+        receipt::Receipt,
         sections::seal::Seal,
         sections::InceptionWitnessConfig,
         sections::KeyConfig,
-        Event, EventMessage, receipt::Receipt,
+        Event, EventMessage,
     },
     keys::PublicKey,
-    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix}, state::KeyEventType,
+    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
+    state::KeyEventType,
 };
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
@@ -164,18 +166,17 @@ impl EventMsgBuilder {
             KeyEventType::Icp => {
                 let icp_event = InceptionEvent {
                     key_config,
-                    witness_config: InceptionWitnessConfig { tally: self.witness_threshold, initial_witnesses: self.witnesses },
+                    witness_config: InceptionWitnessConfig {
+                        tally: self.witness_threshold,
+                        initial_witnesses: self.witnesses,
+                    },
                     inception_configuration: vec![],
                     data: vec![],
                 };
 
                 match prefix {
-                    IdentifierPrefix::Basic(_) => Event::new(
-                        prefix,
-                        0,
-                        EventData::Icp(icp_event),
-                    )
-                    .to_message(self.format, &self.derivation)?,
+                    IdentifierPrefix::Basic(_) => Event::new(prefix, 0, EventData::Icp(icp_event))
+                        .to_message(self.format, &self.derivation)?,
                     IdentifierPrefix::SelfAddressing(_) => {
                         icp_event.incept_self_addressing(self.derivation, self.format)?
                     }
@@ -189,14 +190,14 @@ impl EventMsgBuilder {
                 EventData::Rot(RotationEvent {
                     previous_event_hash: self.prev_event,
                     key_config,
-                    witness_config: WitnessConfig { 
-                        tally: self.witness_threshold, 
-                        prune: self.witness_to_remove, 
-                        graft: self.witness_to_add 
+                    witness_config: WitnessConfig {
+                        tally: self.witness_threshold,
+                        prune: self.witness_to_remove,
+                        graft: self.witness_to_add,
                     },
                     data: self.data,
-                    })
-                )
+                }),
+            )
             .to_message(self.format, &self.derivation)?,
             KeyEventType::Ixn => Event::new(
                 prefix,
@@ -227,12 +228,8 @@ impl EventMsgBuilder {
                     witness_config: WitnessConfig::default(),
                     data: self.data,
                 };
-                Event::new(
-                    prefix,
-                    self.sn,
-                    EventData::Drt(rotation_data),
-                )
-                .to_message(self.format, &self.derivation)?
+                Event::new(prefix, self.sn, EventData::Drt(rotation_data))
+                    .to_message(self.format, &self.derivation)?
             }
         })
     }
@@ -245,8 +242,8 @@ pub struct ReceiptBuilder {
 }
 
 impl Default for ReceiptBuilder {
-     fn default() -> Self {
-         let default_event = EventMsgBuilder::new(KeyEventType::Icp).build().unwrap();
+    fn default() -> Self {
+        let default_event = EventMsgBuilder::new(KeyEventType::Icp).build().unwrap();
         Self {
             format: SerializationFormats::JSON,
             derivation: SelfAddressing::Blake3_256,
@@ -275,14 +272,19 @@ impl ReceiptBuilder {
         let prefix = self.receipted_event.event.get_prefix();
         let sn = self.receipted_event.event.get_sn();
         let receipted_event_digest = self.derivation.derive(&self.receipted_event.serialize()?);
-        Receipt{ receipted_event_digest, sn, prefix}.to_message(self.format)
+        Receipt {
+            receipted_event_digest,
+            sn,
+            prefix,
+        }
+        .to_message(self.format)
     }
 }
 
 #[test]
 fn test_multisig_prefix_derivation() {
-    // Keys taken from keripy: keripy/tests/core/test_eventing.py::2405-2406
-    let expected_event = br#"{"v":"KERI10JSON00014b_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"0","t":"icp","kt":"2","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"E9izzBkXX76sqt0N-tfLzJeRqj0W56p4pDQ_ZqNCDpyw","bt":"0","b":[],"c":[],"a":[]}"#;
+    // Keys taken from keripy: keripy/tests/core/test_eventing.py::test_multisig_digprefix (line 2255)
+    let expected_event = br#"{"v":"KERI10JSON00017e_","t":"icp","d":"ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk","i":"ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk","s":"0","kt":"2","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"E9izzBkXX76sqt0N-tfLzJeRqj0W56p4pDQ_ZqNCDpyw","bt":"0","b":[],"c":[],"a":[]}"#;//-AADAA39j08U7pcU66OPKsaPExhBuHsL5rO1Pjq5zMgt_X6jRbezevis6YBUg074ZNKAGdUwHLqvPX_kse4buuuSUpAQABphobpuQEZ6EhKLhBuwgJmIQu80ZUV1GhBL0Ht47Hsl1rJiMwE2yW7-yi8k3idw2ahlpgdd9ka9QOP9yQmMWGAQACM7yfK1b86p1H62gonh1C7MECDCFBkoH0NZRjHKAEHebvd2_LLz6cpCaqKWDhbM2Rq01f9pgyDTFNLJMxkC-fAQ"#;
     let keys: Vec<BasicPrefix> = vec![
         "DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"
             .parse()
@@ -313,5 +315,7 @@ fn test_multisig_prefix_derivation() {
         .with_next_threshold(&SignatureThreshold::Simple(2));
     let msg = msg_builder.build().unwrap();
 
+    println!("{}", String::from_utf8(expected_event.to_vec()).unwrap());
+    println!("{}", String::from_utf8(msg.serialize().unwrap()).unwrap());
     assert_eq!(expected_event.to_vec(), msg.serialize().unwrap());
 }

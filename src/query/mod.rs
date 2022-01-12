@@ -1,10 +1,9 @@
 use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
-    event::{
-        EventMessage, SerializationFormats,
-    },
-    prefix::{IdentifierPrefix, Prefix}, event_message::{SaidEvent, Typeable},
+    event::{EventMessage, SerializationFormats},
+    event_message::{SaidEvent, Typeable},
+    prefix::{IdentifierPrefix, Prefix},
 };
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
@@ -38,7 +37,7 @@ where
     s.serialize_str(&timestamp.to_rfc3339_opts(SecondsFormat::Micros, false))
 }
 
-impl<D: Serialize+ Typeable + Clone> Envelope<D> {
+impl<D: Serialize + Typeable + Clone> Envelope<D> {
     pub fn new(route: Route, data: D) -> Self {
         let timestamp: DateTime<FixedOffset> = Utc::now().into();
         Envelope {
@@ -48,11 +47,14 @@ impl<D: Serialize+ Typeable + Clone> Envelope<D> {
         }
     }
 
-    fn to_message(self, format: SerializationFormats, derivation: &SelfAddressing) -> Result<EventMessage<SaidEvent<Envelope<D>>>, Error> {
-       SaidEvent::<Self>::to_message(self, format, derivation) 
+    fn to_message(
+        self,
+        format: SerializationFormats,
+        derivation: &SelfAddressing,
+    ) -> Result<EventMessage<SaidEvent<Envelope<D>>>, Error> {
+        SaidEvent::<Self>::to_message(self, format, derivation)
     }
 }
-
 
 impl<D: Serialize + Typeable> Typeable for Envelope<D> {
     fn get_type(&self) -> Option<String> {
@@ -104,7 +106,6 @@ pub enum ReplyType {
     Rep(SignedReply),
     Kel(Vec<u8>),
 }
-
 
 #[derive(Error, Debug)]
 pub enum QueryError {
