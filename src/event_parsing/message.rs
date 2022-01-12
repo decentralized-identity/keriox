@@ -203,16 +203,26 @@ fn test_receipt_parsing() {
 #[cfg(feature = "query")]
 #[test]
 fn test_qry() {
-    use crate::query::query::QueryEvent;
     // taken from keripy keripy/tests/core/test_eventing.py::test_messegize (line 1462)
     let qry_event = r#"{"v":"KERI10JSON0000c9_","t":"qry","d":"E-WvgxrllmjGFhpn0oOiBkAVz3-dEm3bbiV_5qwj81xo","dt":"2021-01-01T00:00:00.000000+00:00","r":"log","rr":"","q":{"i":"DyvCLRr5luWmp7keDvDuLP0kIqcyBYq79b3Dho1QvrjI"}}"#;
     let rest = "something more";
     let stream = [qry_event, rest].join("");
 
-    let (extra, event): (_, EventMessage<QueryEvent>) = envelope(stream.as_bytes()).unwrap();
+    let (_extra, event) = query_message(stream.as_bytes()).unwrap();
+    assert!(matches!(event, EventType::Qry(_)));
+    assert_eq!(event.serialize().unwrap(), qry_event.as_bytes());
+}
 
-    assert_eq!(serde_json::to_string(&event).unwrap(), qry_event);
-    assert_eq!(rest.as_bytes(), extra);
+#[cfg(feature = "query")]
+#[test]
+fn test_reply() {
+    // From keripy (keripy/tests/core/test_keystate.py::100)
+    let rpy = r#"{"v":"KERI10JSON000294_","t":"rpy","d":"EzXrBzyJK1ELAGw9VZIbeT-e5JTYQvQAvNIlSEfVgJSk","dt":"2021-01-01T00:00:00.000000+00:00","r":"/ksn/BFUOWBaJz-sB_6b-_u_P9W8hgBQ8Su9mAtN9cY2sVGiY","a":{"v":"KERI10JSON0001d9_","i":"ECJTKtR-GlybCmn1PCiVwIuGBjaOUXI09XWDdXkrJNj0","s":"0","p":"","d":"ECJTKtR-GlybCmn1PCiVwIuGBjaOUXI09XWDdXkrJNj0","f":"0","dt":"2021-01-01T00:00:00.000000+00:00","et":"icp","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","bt":"1","b":["BFUOWBaJz-sB_6b-_u_P9W8hgBQ8Su9mAtN9cY2sVGiY"],"c":[],"ee":{"s":"0","d":"ECJTKtR-GlybCmn1PCiVwIuGBjaOUXI09XWDdXkrJNj0","br":[],"ba":[]}}}"#;
+    let rest = "something more";
+    let stream = [rpy, rest].join("");
+
+    let (_extra, event) = reply_message(stream.as_bytes()).unwrap();
+    assert!(matches!(event, EventType::Rpy(_)));
 }
 
 #[cfg(feature = "query")]

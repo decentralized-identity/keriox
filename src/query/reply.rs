@@ -110,15 +110,3 @@ impl SignedReply {
         }
     }
 }
-
-#[test]
-fn test_reply_deserialize() {
-    // From keripy (keripy/tests/core/test_keystate.py::100)
-    let rpy = r#"{"v":"KERI10JSON000294_","t":"rpy","d":"EzXrBzyJK1ELAGw9VZIbeT-e5JTYQvQAvNIlSEfVgJSk","dt":"2021-01-01T00:00:00.000000+00:00","r":"/ksn/BFUOWBaJz-sB_6b-_u_P9W8hgBQ8Su9mAtN9cY2sVGiY","a":{"v":"KERI10JSON0001d9_","i":"ECJTKtR-GlybCmn1PCiVwIuGBjaOUXI09XWDdXkrJNj0","s":"0","p":"","d":"ECJTKtR-GlybCmn1PCiVwIuGBjaOUXI09XWDdXkrJNj0","f":"0","dt":"2021-01-01T00:00:00.000000+00:00","et":"icp","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","bt":"1","b":["BFUOWBaJz-sB_6b-_u_P9W8hgBQ8Su9mAtN9cY2sVGiY"],"c":[],"ee":{"s":"0","d":"ECJTKtR-GlybCmn1PCiVwIuGBjaOUXI09XWDdXkrJNj0","br":[],"ba":[]},"di":""}}"#;
-
-    let qr: Result<EventMessage<ReplyEvent>, _> = serde_json::from_str(rpy);
-    assert!(qr.is_ok());
-    let qr = qr.unwrap();
-
-    assert_eq!(serde_json::to_string(&qr).unwrap(), rpy);
-}

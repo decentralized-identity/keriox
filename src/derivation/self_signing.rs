@@ -47,7 +47,7 @@ impl FromStr for SelfSigning {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match &s[..1] {
+        match s.get(..1).ok_or(Error::DeserializeError("Empty prefix".into()))? {
             "0" => match &s[1..2] {
                 "B" => Ok(Self::Ed25519Sha512),
                 "C" => Ok(Self::ECDSAsecp256k1Sha256),

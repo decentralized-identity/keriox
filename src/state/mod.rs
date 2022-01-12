@@ -45,7 +45,7 @@ pub struct IdentifierState {
     #[serde(rename = "b")] 
     pub witnesses: Vec<BasicPrefix>,
     
-    #[serde(rename = "di", serialize_with = "serialize_default", deserialize_with = "deserialize_default")] 
+    #[serde(rename = "di")] 
     pub delegator: Option<IdentifierPrefix>,
 	
     #[serde(rename = "ee")]
@@ -99,25 +99,6 @@ impl From<&EventData> for KeyEventType {
     }
 }
 
-fn serialize_default<S>(x: &Option<IdentifierPrefix>, s: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    s.serialize_str(&(x.clone().unwrap_or_default()).to_str())
-}
-
-// TODO do we want to have empty delegator field in serialized event?
-fn deserialize_default<'de, D>(deserializer: D) -> Result<Option<IdentifierPrefix>, D::Error>
-where
-    D: de::Deserializer<'de>,
-{
-    let s: &str = de::Deserialize::deserialize(deserializer)?;
-    if s.is_empty() {
-        Ok(None)
-    } else {
-        serde_json::from_str(s).map_err(de::Error::custom)
-    }
-}
 
 impl IdentifierState {
     /// Apply
