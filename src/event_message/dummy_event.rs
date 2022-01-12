@@ -7,7 +7,7 @@ use crate::{
     },
 };
 
-use super::serialization_info::SerializationInfo;
+use super::{serialization_info::SerializationInfo, Typeable};
 use serde::Serialize;
 use serde_hex::{Compact, SerHex};
 
@@ -23,7 +23,9 @@ fn dummy_prefix(derivation: &SelfAddressing) -> String {
 #[derive(Serialize, Debug, Clone)]
 pub(crate) struct DummyInceptionEvent {
     #[serde(rename = "v")]
-    serialization_info: SerializationInfo,
+    pub serialization_info: SerializationInfo,
+    #[serde(rename = "t")]
+    event_type: String,
     #[serde(rename = "d")]
     digest: String,
     #[serde(rename = "i")]
@@ -39,7 +41,7 @@ impl DummyInceptionEvent {
         icp: InceptionEvent,
         derivation: &SelfAddressing,
         format: SerializationFormats,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Self, Error> {
         DummyInceptionEvent::derive_data(EventData::Icp(icp), derivation, format)
     }
 
@@ -47,7 +49,7 @@ impl DummyInceptionEvent {
         dip: DelegatedInceptionEvent,
         derivation: &SelfAddressing,
         format: SerializationFormats,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Self, Error> {
         DummyInceptionEvent::derive_data(EventData::Dip(dip), derivation, format)
     }
 
@@ -55,12 +57,13 @@ impl DummyInceptionEvent {
         data: EventData,
         derivation: &SelfAddressing,
         format: SerializationFormats,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Self, Error> {
         Ok(Self {
             serialization_info: SerializationInfo::new(
                 format,
                 Self {
                     serialization_info: SerializationInfo::new(format, 0),
+                    event_type: data.get_type().unwrap(),
                     prefix: dummy_prefix(derivation),
                     digest: dummy_prefix(derivation),
                     sn: 0,
@@ -69,15 +72,16 @@ impl DummyInceptionEvent {
                 .serialize()?
                 .len(),
             ),
+            event_type: data.get_type().unwrap(),
             digest: dummy_prefix(derivation),
             prefix: dummy_prefix(derivation),
             sn: 0,
             data: data,
         }
-        .serialize()?)
+        )
     }
 
-    fn serialize(&self) -> Result<Vec<u8>, Error> {
+    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         self.serialization_info.kind.encode(&self)
     }
 }
@@ -86,47 +90,53 @@ impl DummyInceptionEvent {
 pub(crate) struct DummyEventMessage<T: Serialize> {
     #[serde(rename = "v")]
     pub serialization_info: SerializationInfo,
+    #[serde(rename = "t")]
+    event_type: String,
     #[serde(rename = "d")]
     digest: String,
     #[serde(flatten)]
     data: T,
 }
 
-impl<T: Serialize> DummyEventMessage<T> {
+impl<T: Serialize + Typeable + Clone> DummyEventMessage<T> {
     pub fn dummy_event(
         event: T,
         format: SerializationFormats,
         derivation: &SelfAddressing,
     ) -> Result<Self, Error> {
         Ok(Self {
-            serialization_info: Self::get_serialization_info(&event, format, derivation)?,
+            serialization_info: Self::get_serialization_info(event.clone(), format, derivation)?,
+            event_type: event.get_type().unwrap(),
             data: event,
             digest: dummy_prefix(derivation),
         })
     }
 
     fn get_size(
-        event: &T,
+        event: T,
         format: SerializationFormats,
         derivation: &SelfAddressing,
     ) -> Result<usize, Error> {
-        Ok(DummyEventMessage {
+        Ok(
+        Self {
             serialization_info: SerializationInfo::new(format, 0),
-            data: event.clone(),
+            event_type: event.get_type().unwrap(),
+            data: event,
             digest: dummy_prefix(derivation),
         }
         .serialize()?
-        .len())
+        .len()
+        )
     }
 
     pub fn get_serialization_info(
-        event: &T,
+        event: T,
         format: SerializationFormats,
         derivation: &SelfAddressing,
     ) -> Result<SerializationInfo, Error> {
         Ok(SerializationInfo::new(
             format,
-            Self::get_size(&event, format, derivation)?,
+            Self::get_size(event, format, derivation)?,
         ))
     }
 

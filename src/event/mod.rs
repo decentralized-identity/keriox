@@ -34,19 +34,21 @@ impl Event {
         }
 
     pub fn to_message(self, format: SerializationFormats, derivation: &SelfAddressing) -> Result<EventMessage<KeyEvent>, Error> {
-        SaidEvent::<Event>::to_message(self, format, derivation)
+        match (&self.prefix, self.event_data.clone()) {
+            (IdentifierPrefix::SelfAddressing(_), EventData::Icp(icp)) => {
+               icp.incept_self_addressing(derivation.clone(), format) 
+            },
+            (IdentifierPrefix::SelfAddressing(_), EventData::Dip(dip)) => {
+               dip.incept_self_addressing(derivation.clone(), format) 
+            },
+            _ => SaidEvent::<Event>::to_message(self, format, derivation),
+        }
     }
 }
 
 impl Typeable for Event {
     fn get_type(&self) -> Option<String> {
-        Some(match self.event_data {
-            EventData::Icp(_) => "icp",
-            EventData::Rot(_) => "rot",
-            EventData::Ixn(_) => "ixn",
-            EventData::Dip(_) => "dip",
-            EventData::Drt(_) => "drt",
-        }.to_string())
+        self.event_data.get_type()
     }
 }
 

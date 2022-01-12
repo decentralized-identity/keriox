@@ -315,7 +315,5 @@ fn test_multisig_prefix_derivation() {
         .with_next_threshold(&SignatureThreshold::Simple(2));
     let msg = msg_builder.build().unwrap();
 
-    println!("{}", String::from_utf8(expected_event.to_vec()).unwrap());
-    println!("{}", String::from_utf8(msg.serialize().unwrap()).unwrap());
     assert_eq!(expected_event.to_vec(), msg.serialize().unwrap());
 }

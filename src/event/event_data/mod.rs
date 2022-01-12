@@ -5,7 +5,7 @@ pub mod rotation;
 
 use crate::{
     error::Error,
-    state::{EventSemantics, IdentifierState, KeyEventType},
+    state::{EventSemantics, IdentifierState, KeyEventType}, event_message::Typeable,
 };
 use serde::{Deserialize, Serialize, Deserializer, de};
 use serde_json::Value;
@@ -66,3 +66,14 @@ impl EventSemantics for EventData {
     }
 }
 
+impl Typeable for EventData {
+    fn get_type(&self) -> Option<String> {
+        Some(match self {
+            EventData::Icp(_) => "icp",
+            EventData::Rot(_) => "rot",
+            EventData::Ixn(_) => "ixn",
+            EventData::Dip(_) => "dip",
+            EventData::Drt(_) => "drt",
+        }.to_string())
+    }
+}

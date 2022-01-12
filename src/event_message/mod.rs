@@ -61,18 +61,17 @@ pub struct SaidEvent<D> {
     pub content: D,
 }
 
-impl<D: Serialize + Clone> SaidEvent<D> {
+impl<D: Serialize + Clone + Typeable> SaidEvent<D> {
+    pub fn new(digest: SelfAddressingPrefix, content: D) -> Self {
+        Self {digest: Some(digest), content}
+    }
     pub(crate) fn to_message(event: D, format: SerializationFormats, derivation: &SelfAddressing) -> Result<EventMessage<SaidEvent<D>>, Error> {
-        let (version_string, event) = 
-        {
-            let dummy_event = DummyEventMessage::dummy_event(event.clone(), format, &derivation)?;
-            let digest = Some(derivation.derive(&dummy_event.serialize()?));
-            (dummy_event.serialization_info, Self { digest, content: event})
-        };
+        let dummy_event = DummyEventMessage::dummy_event(event.clone(), format, &derivation)?;
+        let digest = Some(derivation.derive(&dummy_event.serialize()?));
 
         Ok(EventMessage {
-                serialization_info: version_string,
-                event: event,
+                serialization_info: dummy_event.serialization_info,
+                event: Self { digest, content: event},
             })
     }
 }
@@ -302,7 +301,7 @@ pub fn verify_identifier_binding(icp_event: &EventMessage<KeyEvent>) -> Result<b
                     icp.clone(),
                     &sap.derivation,
                     icp_event.serialization(),
-                )?))
+                )?.serialize()?))
             }
             IdentifierPrefix::SelfSigning(_ssp) => todo!(),
         },
@@ -312,7 +311,7 @@ pub fn verify_identifier_binding(icp_event: &EventMessage<KeyEvent>) -> Result<b
                     dip.clone(),
                     &sap.derivation,
                     icp_event.serialization(),
-                )?,
+                )?.serialize()?,
             )),
             _ => todo!(),
         },
