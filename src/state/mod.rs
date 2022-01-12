@@ -1,5 +1,5 @@
-use crate::{error::Error, event::{sections::KeyConfig, event_data::EventData}, prefix::{BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix}};
-use serde::{Deserialize, Serialize, Serializer, de};
+use crate::{error::Error, event::{sections::KeyConfig, event_data::EventData}, prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix}};
+use serde::{Deserialize, Serialize, de};
 use serde_hex::{Compact, SerHex};
 
 

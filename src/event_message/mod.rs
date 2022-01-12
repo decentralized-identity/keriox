@@ -21,7 +21,7 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize, Serializer};
 use serialization_info::*;
 
-use self::{signed_event_message::SignedEventMessage, dummy_event::{DummyInceptionEvent, DummyEventMessage}};
+use self::{signed_event_message::SignedEventMessage, dummy_event::{DummyInceptionEvent, DummyEventMessage, dummy_prefix}};
 
 pub trait Typeable {
     fn get_type(&self) -> Option<String>;
@@ -205,6 +205,17 @@ impl<T: Clone + Serialize + Digestible + Typeable> EventMessage<T> {
     }
 }
 
+impl Into<DummyEventMessage<Event>> for EventMessage<KeyEvent> {
+    fn into(self) -> DummyEventMessage<Event> {
+        DummyEventMessage { 
+            serialization_info: self.serialization_info, 
+            event_type: self.event.get_type().unwrap(), 
+            digest: dummy_prefix(&self.event.digest.clone().unwrap().derivation), 
+            data: self.event.content,
+        }
+    }
+}
+
 impl EventMessage<KeyEvent> {
     pub fn sign(
         &self,
@@ -212,6 +223,26 @@ impl EventMessage<KeyEvent> {
         delegator_seal: Option<SourceSeal>,
     ) -> SignedEventMessage {
         SignedEventMessage::new(self, sigs, delegator_seal)
+    }
+
+    fn dummy(&self) -> Result<Vec<u8>, Error> {
+        DummyEventMessage { 
+            serialization_info: self.serialization_info, 
+            event_type: self.event.get_type().unwrap(), 
+            digest: dummy_prefix(&self.event.digest.clone().unwrap().derivation), 
+            data: self.event.content.clone(),
+        }.serialize()
+    }
+
+    pub fn check_digest(&self, sai: SelfAddressingPrefix) -> Result<bool, Error> {
+        let self_dig = self.event.get_digest().unwrap();
+        if self_dig.derivation == sai.derivation {
+            Ok(self_dig == sai)
+        } else {
+            let dummy_event: DummyEventMessage<_> = self.clone().into();
+            Ok(sai.verify_binding(&dummy_event.serialize()?))
+        }
+
     }
 }
 

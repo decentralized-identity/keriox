@@ -11,7 +11,7 @@ use super::{serialization_info::SerializationInfo, Typeable};
 use serde::Serialize;
 use serde_hex::{Compact, SerHex};
 
-fn dummy_prefix(derivation: &SelfAddressing) -> String {
+pub fn dummy_prefix(derivation: &SelfAddressing) -> String {
     std::iter::repeat("#")
         .take(derivation.code_len() + derivation.derivative_b64_len())
         .collect::<String>()
@@ -91,11 +91,11 @@ pub(crate) struct DummyEventMessage<T: Serialize> {
     #[serde(rename = "v")]
     pub serialization_info: SerializationInfo,
     #[serde(rename = "t")]
-    event_type: String,
+    pub event_type: String,
     #[serde(rename = "d")]
-    digest: String,
+    pub digest: String,
     #[serde(flatten)]
-    data: T,
+    pub data: T,
 }
 
 impl<T: Serialize + Typeable + Clone> DummyEventMessage<T> {

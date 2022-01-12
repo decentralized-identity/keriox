@@ -158,7 +158,7 @@ impl EventProcessor {
     ) -> Result<Option<KeyConfig>, Error> {
         if let Ok(Some(event)) = self.get_event_at_sn(id, sn) {
             // if it's the event we're looking for
-            if event_digest.verify_binding(&event.signed_event_message.event_message.serialize()?) {
+            if event.signed_event_message.event_message.check_digest(event_digest.clone())? {
                 // return the config or error if it's not an establishment event
                 Ok(Some(
                     match event.signed_event_message.event_message.event.get_event_data() {
