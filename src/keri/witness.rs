@@ -44,7 +44,6 @@ impl Witness {
         let ksn = KeyStateNotice::new_ksn(
             state,
             SerializationFormats::JSON,
-            SelfAddressing::Blake3_256,
         );
         let rpy = ReplyEvent::new_reply(
             ksn,
@@ -100,7 +99,6 @@ impl Witness {
                 let ksn = KeyStateNotice::new_ksn(
                     state,
                     SerializationFormats::JSON,
-                    SelfAddressing::Blake3_256,
                 );
                 let rpy = ReplyEvent::new_reply(
                     ksn,

@@ -3,7 +3,7 @@ use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use serde_hex::{Compact, SerHex};
 
 use crate::{
-    derivation::self_addressing::SelfAddressing, event::SerializationFormats,
+    event::SerializationFormats,
     event_message::{serialization_info::SerializationInfo, Digestible}, prefix::SelfAddressingPrefix,
     state::IdentifierState, error::Error,
 };
@@ -65,7 +65,6 @@ impl KeyStateNotice {
     pub fn new_ksn(
         state: IdentifierState,
         serialization: SerializationFormats,
-        derivation: SelfAddressing,
     ) -> Self {
         let dt: DateTime<FixedOffset> = DateTime::from(Utc::now());
 

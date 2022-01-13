@@ -27,9 +27,8 @@ pub struct IdentifierState {
     #[serde(skip)]
     pub last: Option<EventMessage<KeyEvent>>,
 
-    // #[serde(rename = "p", deserialize_with = "deserialize_said_default")]
     #[serde(rename = "p")]
-    pub last_previous: SelfAddressingPrefix,
+    pub last_previous: Option<SelfAddressingPrefix>,
     
     #[serde(rename = "et")]
     pub last_event_type: Option<KeyEventType>,
