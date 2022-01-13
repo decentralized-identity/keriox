@@ -4,8 +4,8 @@ use serde_hex::{Compact, SerHex};
 
 use crate::{
     derivation::self_addressing::SelfAddressing, event::SerializationFormats,
-    event_message::serialization_info::SerializationInfo, prefix::SelfAddressingPrefix,
-    state::IdentifierState,
+    event_message::{serialization_info::SerializationInfo, Digestible}, prefix::SelfAddressingPrefix,
+    state::IdentifierState, error::Error,
 };
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -69,7 +69,14 @@ impl KeyStateNotice {
     ) -> Self {
         let dt: DateTime<FixedOffset> = DateTime::from(Utc::now());
 
-        let last_digest = derivation.derive(&state.last);
+        let last_digest = 
+            state
+                .last
+                .clone()
+                .ok_or(Error::SemanticError("Missing last event in the state".into()))
+                .unwrap()
+                .event
+                .get_digest().unwrap();
         let ksn = KeyStateNotice {
             serialization_info: SerializationInfo::new(serialization, 0),
             timestamp: dt,

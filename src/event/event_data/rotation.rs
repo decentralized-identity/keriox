@@ -1,5 +1,5 @@
 use super::super::sections::{seal::*, KeyConfig, WitnessConfig};
-use crate::{error::Error, prefix::{BasicPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState, LastEstablishmentData}, derivation::self_addressing::SelfAddressing};
+use crate::{error::Error, prefix::{BasicPrefix, SelfAddressingPrefix}, state::{EventSemantics, IdentifierState, LastEstablishmentData}};
 use serde::{Deserialize, Serialize};
 
 /// Rotation Event
@@ -34,11 +34,15 @@ impl EventSemantics for RotationEvent {
                         .append(&mut self.witness_config.graft.clone());
                     prunned
                 } else { state.witnesses.clone() };
-
+            let rotation_digest = state
+                .last
+                .as_ref()
+                .map(|ev| ev.get_digest())
+                // should never happend because `last` should be set in previous applying rotation step.
+                .ok_or(Error::SemanticError("Missing last event in state".into()))?;
             let last_est = LastEstablishmentData { 
                 sn: state.sn, 
-                // TODO shouldn't be set to Blake3
-                digest: SelfAddressing::Blake3_256.derive(&state.last), 
+                digest: rotation_digest, 
                 br: self.witness_config.graft.clone(), 
                 ba: self.witness_config.prune.clone(), 
             };

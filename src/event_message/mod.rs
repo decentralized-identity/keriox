@@ -21,7 +21,7 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize, Serializer};
 use serialization_info::*;
 
-use self::{signed_event_message::SignedEventMessage, dummy_event::{DummyInceptionEvent, DummyEventMessage, dummy_prefix}};
+use self::{signed_event_message::SignedEventMessage, dummy_event::{DummyEventMessage, dummy_prefix}};
 
 pub trait Typeable {
     fn get_type(&self) -> Option<String>;
@@ -89,7 +89,7 @@ impl<D: Typeable> Typeable for SaidEvent<D> {
     }
 }
 
-#[derive(Deserialize, Debug, Clone, PartialEq)]
+#[derive(Default, Deserialize, Debug, Clone, PartialEq)]
 pub struct EventMessage<D> {
     /// Serialization Information
     ///
@@ -99,6 +99,12 @@ pub struct EventMessage<D> {
 
     #[serde(flatten)]
     pub event: D,
+}
+
+impl<D: Digestible> EventMessage<D> {
+    pub fn get_digest(&self) -> SelfAddressingPrefix {
+        self.event.get_digest().unwrap()
+    }
 }
 
 impl<D: Digestible + Typeable + Serialize + Clone> Serialize for EventMessage<D> {
@@ -225,19 +231,10 @@ impl EventMessage<KeyEvent> {
         SignedEventMessage::new(self, sigs, delegator_seal)
     }
 
-    fn dummy(&self) -> Result<Vec<u8>, Error> {
-        DummyEventMessage { 
-            serialization_info: self.serialization_info, 
-            event_type: self.event.get_type().unwrap(), 
-            digest: dummy_prefix(&self.event.digest.clone().unwrap().derivation), 
-            data: self.event.content.clone(),
-        }.serialize()
-    }
-
-    pub fn check_digest(&self, sai: SelfAddressingPrefix) -> Result<bool, Error> {
+    pub fn check_digest(&self, sai: &SelfAddressingPrefix) -> Result<bool, Error> {
         let self_dig = self.event.get_digest().unwrap();
         if self_dig.derivation == sai.derivation {
-            Ok(self_dig == sai)
+            Ok(&self_dig == sai)
         } else {
             let dummy_event: DummyEventMessage<_> = self.clone().into();
             Ok(sai.verify_binding(&dummy_event.serialize()?))
@@ -253,7 +250,7 @@ impl EventSemantics for EventMessage<KeyEvent> {
             EventData::Icp(_) | EventData::Dip(_) => {
                 if verify_identifier_binding(self)? {
                     self.event.apply_to(IdentifierState {
-                        last: self.serialize()?,
+                        last: Some(self.clone()),
                         ..state
                     })
                 } else {
@@ -273,9 +270,9 @@ impl EventSemantics for EventMessage<KeyEvent> {
                     // to the state. It will return EventOutOfOrderError or
                     // EventDuplicateError in that cases.
                     self.event.apply_to(state.clone()).and_then(|next_state| {
-                        if rot.previous_event_hash.verify_binding(&state.last) {
+                        if state.last.ok_or(Error::SemanticError("No last event in state".into()))?.check_digest(&rot.previous_event_hash)? {
                             Ok(IdentifierState {
-                                last: self.serialize()?,
+                                last: Some(self.clone()),
                                 ..next_state
                             })
                         } else {
@@ -291,9 +288,10 @@ impl EventSemantics for EventMessage<KeyEvent> {
                     Err(Error::SemanticError(
                         "Applying delegated rotation to non-delegated state.".into(),
                     ))
-                } else if drt.previous_event_hash.verify_binding(&state.last) {
+
+                } else if state.last.ok_or(Error::SemanticError("No last event in state".into()))?.check_digest(&drt.previous_event_hash)? {
                     Ok(IdentifierState {
-                        last: self.serialize()?,
+                        last: Some(self.clone()),
                         ..next_state
                     })
                 } else {
@@ -304,9 +302,9 @@ impl EventSemantics for EventMessage<KeyEvent> {
             }),
             EventData::Ixn(ref inter) => {
                 self.event.apply_to(state.clone()).and_then(|next_state| {
-                    if inter.previous_event_hash.verify_binding(&state.last) {
+                    if state.last.ok_or(Error::SemanticError("No last event in state".into()))?.check_digest(&inter.previous_event_hash)? {
                         Ok(IdentifierState {
-                            last: self.serialize()?,
+                            last: Some(self.clone()),
                             ..next_state
                         })
                     } else {
@@ -326,24 +324,13 @@ pub fn verify_identifier_binding(icp_event: &EventMessage<KeyEvent>) -> Result<b
         EventData::Icp(icp) => match &icp_event.event.get_prefix() {
             IdentifierPrefix::Basic(bp) => Ok(icp.key_config.public_keys.len() == 1
                 && bp == icp.key_config.public_keys.first().unwrap()),
-            // TODO update with new inception process
             IdentifierPrefix::SelfAddressing(sap) => {
-                Ok(sap.verify_binding(&DummyInceptionEvent::dummy_inception_data(
-                    icp.clone(),
-                    &sap.derivation,
-                    icp_event.serialization(),
-                )?.serialize()?))
+                icp_event.check_digest(sap)
             }
             IdentifierPrefix::SelfSigning(_ssp) => todo!(),
         },
-        EventData::Dip(dip) => match &icp_event.event.get_prefix() {
-            IdentifierPrefix::SelfAddressing(sap) => Ok(sap.verify_binding(
-                &DummyInceptionEvent::dummy_delegated_inception_data(
-                    dip.clone(),
-                    &sap.derivation,
-                    icp_event.serialization(),
-                )?.serialize()?,
-            )),
+        EventData::Dip(_dip) => match &icp_event.event.get_prefix() {
+            IdentifierPrefix::SelfAddressing(sap) => icp_event.check_digest(sap),
             _ => todo!(),
         },
         _ => Err(Error::SemanticError("Not an ICP or DIP event".into())),
@@ -427,7 +414,7 @@ mod tests {
 
         assert_eq!(s0.prefix, IdentifierPrefix::Basic(pref0.clone()));
         assert_eq!(s0.sn, 0);
-        assert_eq!(s0.last, icp_m.serialize()?);
+        assert_eq!(s0.last, Some(icp_m));
         assert_eq!(s0.current.public_keys.len(), 1);
         assert_eq!(s0.current.public_keys[0], pref0);
         assert_eq!(s0.current.threshold, SignatureThreshold::Simple(1));
@@ -510,7 +497,7 @@ mod tests {
 
         assert_eq!(s0.prefix, icp.event.get_prefix());
         assert_eq!(s0.sn, 0);
-        assert_eq!(s0.last, icp.serialize()?);
+        assert_eq!(s0.last, Some(icp));
         assert_eq!(s0.current.public_keys.len(), 2);
         assert_eq!(s0.current.public_keys[0], sig_pref_0);
         assert_eq!(s0.current.public_keys[1], enc_pref_0);

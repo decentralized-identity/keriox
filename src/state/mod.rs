@@ -1,4 +1,4 @@
-use crate::{error::Error, event::{sections::KeyConfig, event_data::EventData}, prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix}};
+use crate::{error::Error, event::{sections::KeyConfig, event_data::EventData, EventMessage}, prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix}, event_message::KeyEvent};
 use serde::{Deserialize, Serialize, de};
 use serde_hex::{Compact, SerHex};
 
@@ -25,7 +25,7 @@ pub struct IdentifierState {
     pub sn: u64,
     
     #[serde(skip)]
-    pub last: Vec<u8>,
+    pub last: Option<EventMessage<KeyEvent>>,
 
     #[serde(rename = "p", deserialize_with = "deserialize_said_default")]
     pub last_previous: SelfAddressingPrefix,

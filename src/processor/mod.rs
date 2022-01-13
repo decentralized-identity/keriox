@@ -158,7 +158,7 @@ impl EventProcessor {
     ) -> Result<Option<KeyConfig>, Error> {
         if let Ok(Some(event)) = self.get_event_at_sn(id, sn) {
             // if it's the event we're looking for
-            if event.signed_event_message.event_message.check_digest(event_digest.clone())? {
+            if event.signed_event_message.event_message.check_digest(&event_digest)? {
                 // return the config or error if it's not an establishment event
                 Ok(Some(
                     match event.signed_event_message.event_message.event.get_event_data() {
@@ -181,8 +181,8 @@ impl EventProcessor {
     /// Validate delegating event seal.
     ///
     /// Validates binding between delegated and delegating events. The validation
-    /// is based on delegating location seal and delegated event.
-    fn validate_seal(&self, seal: EventSeal, delegated_event: &[u8]) -> Result<(), Error> {
+    /// is based on delegating event seal and delegated event.
+    fn validate_seal(&self, seal: EventSeal, delegated_event: &EventMessage<KeyEvent>) -> Result<(), Error> {
         // Check if event of seal's prefix and sn is in db.
         if let Ok(Some(event)) = self.get_event_at_sn(&seal.prefix, seal.sn) {
             // Extract prior_digest and data field from delegating event.
@@ -195,7 +195,7 @@ impl EventProcessor {
 
             // Check if event seal list contains delegating event seal.
             if !data.iter().any(|s| match s {
-                Seal::Event(es) => es.event_digest.verify_binding(delegated_event),
+                Seal::Event(es) => delegated_event.check_digest(&es.event_digest).unwrap(), // es.event_digest.verify_binding(delegated_event),
                 _ => false,
             }) {
                 return Err(Error::SemanticError(
@@ -277,7 +277,7 @@ impl EventProcessor {
                     sn: sn,
                     event_digest: dig,
                 };
-                self.validate_seal(seal, &signed_event.event_message.serialize()?)
+                self.validate_seal(seal, &signed_event.event_message)
             }
             EventData::Drt(_drt) => {
                 let delegator = self
@@ -297,7 +297,7 @@ impl EventProcessor {
                     sn,
                     event_digest: dig,
                 };
-                self.validate_seal(seal, &signed_event.event_message.serialize()?)
+                self.validate_seal(seal, &signed_event.event_message)
             }
             _ => Ok(()),
         }?;

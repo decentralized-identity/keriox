@@ -242,7 +242,10 @@ impl<K: KeyManager> Keri<K> {
             Ok(kv) => EventMsgBuilder::new(KeyEventType::Rot)
                 .with_prefix(&self.prefix)
                 .with_sn(state.sn + 1)
-                .with_previous_event(&SelfAddressing::Blake3_256.derive(&state.last))
+                .with_previous_event(&state
+                    .last
+                    .map(|ev| ev.get_digest())
+                    .ok_or(Error::SemanticError("Missing last event".into()))?)
                 .with_keys(vec![Basic::Ed25519.derive(kv.public_key())])
                 .with_next_keys(vec![Basic::Ed25519.derive(kv.next_public_key())])
                 .build(),
@@ -267,7 +270,10 @@ impl<K: KeyManager> Keri<K> {
         let ev = EventMsgBuilder::new(KeyEventType::Ixn)
             .with_prefix(&self.prefix)
             .with_sn(state.sn + 1)
-            .with_previous_event(&SelfAddressing::Blake3_256.derive(&state.last))
+            .with_previous_event(&state
+                    .last
+                    .map(|ev| ev.get_digest())
+                    .ok_or(Error::SemanticError("Missing last event".into()))?)
             .with_seal(seal_list)
             .build()?;
 
