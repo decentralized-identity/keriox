@@ -254,7 +254,10 @@ fn signed_reply(rpy: EventMessage<ReplyEvent>, mut attachments: Vec<Attachment>)
             Ok(
             Message::KeyStateNotice(SignedReply::new_trans(rpy, seal, sigs))
             ) 
-        }
+        },
+        Attachment::Frame(atts) => {
+            signed_reply(rpy, atts)
+        },
         _ => {
             // Improper payload type
             Err(Error::SemanticError("Improper payload type".into()))
@@ -355,7 +358,10 @@ fn signed_receipt(event_message: EventMessage<Receipt>, mut attachments: Vec<Att
                     sigs,
                 )),
             )
-        }
+        },
+        Attachment::Frame(atts) => {
+            signed_receipt(event_message, atts)
+        },
         _ => {
             // Improper payload type
             Err(Error::SemanticError("Improper payload type".into()))

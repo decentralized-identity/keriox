@@ -1,5 +1,5 @@
 use crate::{error::Error, event::{sections::KeyConfig, event_data::EventData, EventMessage}, prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix}, event_message::KeyEvent};
-use serde::{Deserialize, Serialize, de};
+use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
 
 
@@ -27,7 +27,8 @@ pub struct IdentifierState {
     #[serde(skip)]
     pub last: Option<EventMessage<KeyEvent>>,
 
-    #[serde(rename = "p", deserialize_with = "deserialize_said_default")]
+    // #[serde(rename = "p", deserialize_with = "deserialize_said_default")]
+    #[serde(rename = "p")]
     pub last_previous: SelfAddressingPrefix,
     
     #[serde(rename = "et")]
@@ -50,19 +51,6 @@ pub struct IdentifierState {
 	
     #[serde(rename = "ee")]
     pub last_est: LastEstablishmentData,
-}
-
-// TODO do we want to have empty 'p' file in serialized event?
-fn deserialize_said_default<'de, D>(deserializer: D) -> Result<SelfAddressingPrefix, D::Error>
-where
-    D: de::Deserializer<'de>,
-{
-    let s: &str = de::Deserialize::deserialize(deserializer)?;
-    if s.is_empty() {
-        Ok(SelfAddressingPrefix::default())
-    } else {
-        serde_json::from_str(s).map_err(de::Error::custom)
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

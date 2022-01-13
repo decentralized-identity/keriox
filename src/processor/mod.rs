@@ -532,20 +532,20 @@ impl EventProcessor {
                 return Err(QueryError::Error("Wrong reply message signer".into()).into());
             };
             let verification_result = self.verify(&rpy.reply.serialize()?, &rpy.signature);
-            if let Err(Error::QueryError(QueryError::OutOfOrderEventError)) = verification_result {
+            if let Err(Error::EventOutOfOrderError) = verification_result {
                 self.escrow_reply(&rpy)?;
+                return Err(Error::QueryError(QueryError::OutOfOrderEventError))
             }
             verification_result?;
             rpy.reply.check_digest()?;
             let bada_result = self.bada_logic(&rpy);
             match bada_result {
                 Err(Error::QueryError(QueryError::NoSavedReply)) => {
-                   // no previous rpy event to compare
+                    // no previous rpy event to compare
                     Ok(())
                 },
                 anything => anything,
             }?;
-
             // now unpack ksn and check its details
             let ksn = rpy.reply.event.get_reply_data();
             let ksn_checking_result = self.check_ksn(&ksn, aid);
@@ -606,8 +606,7 @@ impl EventProcessor {
             .ok_or(Error::QueryError(QueryError::OutOfOrderEventError))?
             .signed_event_message
             .event_message;
-        digest
-            .verify_binding(&event_from_db.serialize()?)
+        event_from_db.check_digest(&digest)?
             .then(|| ())
             .ok_or::<Error>(QueryError::IncorrectDigest.into())?;
 
