@@ -20,15 +20,14 @@ use crate::{
     },
     keys::PublicKey,
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
-    state::KeyEventType,
 };
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
 
-use super::KeyEvent;
+use super::{KeyEvent, EventTypeTag};
 
 pub struct EventMsgBuilder {
-    event_type: KeyEventType,
+    event_type: EventTypeTag,
     prefix: IdentifierPrefix,
     sn: u64,
     key_threshold: SignatureThreshold,
@@ -47,7 +46,7 @@ pub struct EventMsgBuilder {
 }
 
 impl EventMsgBuilder {
-    pub fn new(event_type: KeyEventType) -> Self {
+    pub fn new(event_type: EventTypeTag) -> Self {
         let mut rng = OsRng {};
         let kp = Keypair::generate(&mut rng);
         let nkp = Keypair::generate(&mut rng);
@@ -163,7 +162,7 @@ impl EventMsgBuilder {
         };
 
         Ok(match self.event_type {
-            KeyEventType::Icp => {
+            EventTypeTag::Icp => {
                 let icp_event = InceptionEvent {
                     key_config,
                     witness_config: InceptionWitnessConfig {
@@ -184,7 +183,7 @@ impl EventMsgBuilder {
                 }
             }
 
-            KeyEventType::Rot => Event::new(
+            EventTypeTag::Rot => Event::new(
                 prefix,
                 self.sn,
                 EventData::Rot(RotationEvent {
@@ -199,7 +198,7 @@ impl EventMsgBuilder {
                 }),
             )
             .to_message(self.format, &self.derivation)?,
-            KeyEventType::Ixn => Event::new(
+            EventTypeTag::Ixn => Event::new(
                 prefix,
                 self.sn,
                 EventData::Ixn(InteractionEvent {
@@ -208,7 +207,7 @@ impl EventMsgBuilder {
                 }),
             )
             .to_message(self.format, &self.derivation)?,
-            KeyEventType::Dip => {
+            EventTypeTag::Dip => {
                 let icp_data = InceptionEvent {
                     key_config,
                     witness_config: InceptionWitnessConfig::default(),
@@ -221,7 +220,7 @@ impl EventMsgBuilder {
                 }
                 .incept_self_addressing(self.derivation, self.format)?
             }
-            KeyEventType::Drt => {
+            EventTypeTag::Drt => {
                 let rotation_data = RotationEvent {
                     previous_event_hash: self.prev_event,
                     key_config,
@@ -231,6 +230,7 @@ impl EventMsgBuilder {
                 Event::new(prefix, self.sn, EventData::Drt(rotation_data))
                     .to_message(self.format, &self.derivation)?
             }
+            _ => return Err(Error::SemanticError("Not key event".into())),
         })
     }
 }
@@ -243,7 +243,7 @@ pub struct ReceiptBuilder {
 
 impl Default for ReceiptBuilder {
     fn default() -> Self {
-        let default_event = EventMsgBuilder::new(KeyEventType::Icp).build().unwrap();
+        let default_event = EventMsgBuilder::new(EventTypeTag::Icp).build().unwrap();
         Self {
             format: SerializationFormats::JSON,
             derivation: SelfAddressing::Blake3_256,
@@ -308,7 +308,7 @@ fn test_multisig_prefix_derivation() {
             .unwrap(),
     ];
 
-    let msg_builder = EventMsgBuilder::new(KeyEventType::Icp)
+    let msg_builder = EventMsgBuilder::new(EventTypeTag::Icp)
         .with_keys(keys)
         .with_next_keys(next_keys)
         .with_threshold(&SignatureThreshold::Simple(2))

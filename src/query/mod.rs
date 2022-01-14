@@ -2,7 +2,7 @@ use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
     event::{EventMessage, SerializationFormats},
-    event_message::{SaidEvent, Typeable},
+    event_message::{SaidEvent, Typeable, EventTypeTag},
     prefix::{IdentifierPrefix, Prefix},
 };
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
@@ -57,7 +57,7 @@ impl<D: Serialize + Typeable + Clone> Envelope<D> {
 }
 
 impl<D: Serialize + Typeable> Typeable for Envelope<D> {
-    fn get_type(&self) -> Option<String> {
+    fn get_type(&self) -> EventTypeTag {
         self.data.get_type()
     }
 }

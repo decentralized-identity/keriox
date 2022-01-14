@@ -4,7 +4,7 @@ use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
     event::{EventMessage, SerializationFormats},
-    event_message::{SaidEvent, Typeable},
+    event_message::{SaidEvent, Typeable, EventTypeTag},
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
 };
 
@@ -52,8 +52,8 @@ impl QueryEvent {
 }
 
 impl Typeable for QueryData {
-    fn get_type(&self) -> Option<String> {
-        Some("qry".to_string())
+    fn get_type(&self) -> EventTypeTag {
+        EventTypeTag::Qry
     }
 }
 

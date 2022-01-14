@@ -1,4 +1,5 @@
 use crate::error::Error;
+use crate::event_message::EventTypeTag;
 use crate::event_message::serialization_info::SerializationInfo;
 use crate::event_message::Digestible;
 use crate::event_message::Typeable;
@@ -45,8 +46,8 @@ impl Receipt {
 }
 
 impl Typeable for Receipt {
-    fn get_type(&self) -> Option<String> {
-        Some("rct".to_string())
+    fn get_type(&self) -> EventTypeTag {
+        EventTypeTag::Rct
     }
 }
 

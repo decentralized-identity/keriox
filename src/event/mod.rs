@@ -1,4 +1,4 @@
-use crate::event_message::{Typeable, SaidEvent, KeyEvent};
+use crate::event_message::{Typeable, SaidEvent, KeyEvent, EventTypeTag};
 pub use crate::event_message::{serialization_info::SerializationFormats, EventMessage};
 use crate::{prefix::IdentifierPrefix, derivation::self_addressing::SelfAddressing};
 use crate::state::IdentifierState;
@@ -47,7 +47,7 @@ impl Event {
 }
 
 impl Typeable for Event {
-    fn get_type(&self) -> Option<String> {
+    fn get_type(&self) -> EventTypeTag {
         self.event_data.get_type()
     }
 }

@@ -24,10 +24,24 @@ use serialization_info::*;
 use self::{signed_event_message::SignedEventMessage, dummy_event::{DummyEventMessage, dummy_prefix}};
 
 pub trait Typeable {
-    fn get_type(&self) -> Option<String>;
+    fn get_type(&self) -> EventTypeTag;
 }
 pub trait Digestible {
     fn get_digest(&self) -> SelfAddressingPrefix;
+}
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum EventTypeTag {
+    Icp,
+    Rot,
+    Ixn,
+    Dip,
+    Drt,
+    Rct,
+    #[cfg(feature = "query")]
+    Rpy,
+    #[cfg(feature = "query")]
+    Qry,
 }
 
 pub type KeyEvent = SaidEvent<Event>;
@@ -84,7 +98,7 @@ impl<D> Digestible for SaidEvent<D> {
 
 
 impl<D: Typeable> Typeable for SaidEvent<D> {
-    fn get_type(&self) -> Option<String> {
+    fn get_type(&self) -> EventTypeTag {
        self.content.get_type() 
     }
 }
@@ -115,8 +129,8 @@ impl<D: Digestible + Typeable + Serialize + Clone> Serialize for EventMessage<D>
         #[derive(Serialize)]
         struct TypedEventMessage<D> {
             v: SerializationInfo,
-            #[serde(rename = "t", skip_serializing_if = "Option::is_none")]
-            event_type: Option<String>,
+            #[serde(rename = "t")]
+            event_type: EventTypeTag,
 
             #[serde(rename = "d")]
             digest: SelfAddressingPrefix,
@@ -215,7 +229,7 @@ impl Into<DummyEventMessage<Event>> for EventMessage<KeyEvent> {
     fn into(self) -> DummyEventMessage<Event> {
         DummyEventMessage { 
             serialization_info: self.serialization_info, 
-            event_type: self.event.get_type().unwrap(), 
+            event_type: self.event.get_type(), 
             digest: dummy_prefix(&self.event.get_digest().derivation), 
             data: self.event.content,
         }
@@ -351,7 +365,7 @@ mod tests {
             sections::{threshold::SignatureThreshold, InceptionWitnessConfig},
         },
         keys::{PrivateKey, PublicKey},
-        prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix}, state::KeyEventType,
+        prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix},
     };
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
@@ -511,42 +525,42 @@ mod tests {
     #[test]
     fn test_basic_establishment_sequence() -> Result<(), Error> {
         // Sequence should contain Inception Event.
-        let no_inception_seq = vec![KeyEventType::Rot, KeyEventType::Rot];
+        let no_inception_seq = vec![EventTypeTag::Rot, EventTypeTag::Rot];
         assert!(test_mock_event_sequence(no_inception_seq).is_err());
 
         // Sequence can't start with Rotation Event.
-        let rotation_first_seq = vec![KeyEventType::Rot, KeyEventType::Icp];
+        let rotation_first_seq = vec![EventTypeTag::Rot, EventTypeTag::Icp];
         assert!(test_mock_event_sequence(rotation_first_seq).is_err());
 
         // Sequence should contain exacly one Inception Event.
         let wrong_seq = vec![
-            KeyEventType::Icp,
-            KeyEventType::Rot,
-            KeyEventType::Rot,
-            KeyEventType::Icp,
+            EventTypeTag::Icp,
+            EventTypeTag::Rot,
+            EventTypeTag::Rot,
+            EventTypeTag::Icp,
         ];
         assert!(test_mock_event_sequence(wrong_seq).is_err());
 
         let ok_seq = vec![
-            KeyEventType::Icp,
-            KeyEventType::Rot,
-            KeyEventType::Rot,
+            EventTypeTag::Icp,
+            EventTypeTag::Rot,
+            EventTypeTag::Rot,
         ];
         assert!(test_mock_event_sequence(ok_seq).is_ok());
 
         // Wrong delegated events sequence.
         let wrong_delegated_sequence = vec![
-            KeyEventType::Dip,
-            KeyEventType::Drt,
-            KeyEventType::Rot,
+            EventTypeTag::Dip,
+            EventTypeTag::Drt,
+            EventTypeTag::Rot,
         ];
         assert!(test_mock_event_sequence(wrong_delegated_sequence).is_err());
 
         // Delegated events sequence.
         let delegated_sequence = vec![
-            KeyEventType::Dip,
-            KeyEventType::Drt,
-            KeyEventType::Ixn,
+            EventTypeTag::Dip,
+            EventTypeTag::Drt,
+            EventTypeTag::Ixn,
         ];
         assert!(test_mock_event_sequence(delegated_sequence).is_ok());
 
@@ -556,20 +570,20 @@ mod tests {
     #[test]
     fn test_basic_sequence() -> Result<(), Error> {
         let ok_seq = vec![
-            KeyEventType::Icp,
-            KeyEventType::Ixn,
-            KeyEventType::Ixn,
-            KeyEventType::Ixn,
-            KeyEventType::Rot,
-            KeyEventType::Ixn,
+            EventTypeTag::Icp,
+            EventTypeTag::Ixn,
+            EventTypeTag::Ixn,
+            EventTypeTag::Ixn,
+            EventTypeTag::Rot,
+            EventTypeTag::Ixn,
         ];
         assert!(test_mock_event_sequence(ok_seq).is_ok());
 
         let delegated_sequence = vec![
-            KeyEventType::Dip,
-            KeyEventType::Drt,
-            KeyEventType::Ixn,
-            KeyEventType::Drt,
+            EventTypeTag::Dip,
+            EventTypeTag::Drt,
+            EventTypeTag::Ixn,
+            EventTypeTag::Drt,
         ];
         assert!(test_mock_event_sequence(delegated_sequence).is_ok());
 

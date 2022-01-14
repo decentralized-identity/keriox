@@ -7,7 +7,7 @@ use crate::{
     },
 };
 
-use super::{serialization_info::SerializationInfo, Typeable};
+use super::{serialization_info::SerializationInfo, Typeable, EventTypeTag};
 use serde::Serialize;
 use serde_hex::{Compact, SerHex};
 
@@ -25,7 +25,7 @@ pub(crate) struct DummyInceptionEvent {
     #[serde(rename = "v")]
     pub serialization_info: SerializationInfo,
     #[serde(rename = "t")]
-    event_type: String,
+    event_type: EventTypeTag,
     #[serde(rename = "d")]
     digest: String,
     #[serde(rename = "i")]
@@ -63,7 +63,7 @@ impl DummyInceptionEvent {
                 format,
                 Self {
                     serialization_info: SerializationInfo::new(format, 0),
-                    event_type: data.get_type().unwrap(),
+                    event_type: data.get_type(),
                     prefix: dummy_prefix(derivation),
                     digest: dummy_prefix(derivation),
                     sn: 0,
@@ -72,7 +72,7 @@ impl DummyInceptionEvent {
                 .serialize()?
                 .len(),
             ),
-            event_type: data.get_type().unwrap(),
+            event_type: data.get_type(),
             digest: dummy_prefix(derivation),
             prefix: dummy_prefix(derivation),
             sn: 0,
@@ -91,7 +91,7 @@ pub(crate) struct DummyEventMessage<T: Serialize> {
     #[serde(rename = "v")]
     pub serialization_info: SerializationInfo,
     #[serde(rename = "t")]
-    pub event_type: String,
+    pub event_type: EventTypeTag,
     #[serde(rename = "d")]
     pub digest: String,
     #[serde(flatten)]
@@ -106,7 +106,7 @@ impl<T: Serialize + Typeable + Clone> DummyEventMessage<T> {
     ) -> Result<Self, Error> {
         Ok(Self {
             serialization_info: Self::get_serialization_info(event.clone(), format, derivation)?,
-            event_type: event.get_type().unwrap(),
+            event_type: event.get_type(),
             data: event,
             digest: dummy_prefix(derivation),
         })
@@ -120,7 +120,7 @@ impl<T: Serialize + Typeable + Clone> DummyEventMessage<T> {
         Ok(
         Self {
             serialization_info: SerializationInfo::new(format, 0),
-            event_type: event.get_type().unwrap(),
+            event_type: event.get_type(),
             data: event,
             digest: dummy_prefix(derivation),
         }

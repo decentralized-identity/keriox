@@ -1,4 +1,4 @@
-use crate::{error::Error, event::{sections::KeyConfig, event_data::EventData}, prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix}};
+use crate::{error::Error, event::{sections::KeyConfig, event_data::EventData}, prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix}, event_message::EventTypeTag};
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
 
@@ -31,7 +31,7 @@ pub struct IdentifierState {
     pub last_previous: Option<SelfAddressingPrefix>,
     
     #[serde(rename = "et")]
-    pub last_event_type: Option<KeyEventType>,
+    pub last_event_type: Option<EventTypeTag>,
     
     #[serde(flatten)] 
     pub current: KeyConfig,
@@ -49,36 +49,28 @@ pub struct IdentifierState {
     pub last_est: LastEstablishmentData,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum KeyEventType {
-    Icp,
-    Rot,
-    Ixn,
-    Dip,
-    Drt,
-}
 
-impl KeyEventType {
+
+impl EventTypeTag {
     pub fn is_establishment_event(&self) -> bool {
         match self {
-            KeyEventType::Icp
-            | KeyEventType::Rot
-            | KeyEventType::Dip
-            | KeyEventType::Drt => true,
+            EventTypeTag::Icp
+            | EventTypeTag::Rot
+            | EventTypeTag::Dip
+            | EventTypeTag::Drt => true,
             _ => false,
         }
     }
 }
 
-impl From<&EventData> for KeyEventType {
+impl From<&EventData> for EventTypeTag {
     fn from(ed: &EventData) -> Self {
         match ed {
-            EventData::Icp(_) => KeyEventType::Icp,
-            EventData::Rot(_) => KeyEventType::Rot,
-            EventData::Ixn(_) => KeyEventType::Ixn,
-            EventData::Dip(_) => KeyEventType::Dip,
-            EventData::Drt(_) => KeyEventType::Drt,
+            EventData::Icp(_) => EventTypeTag::Icp,
+            EventData::Rot(_) => EventTypeTag::Rot,
+            EventData::Ixn(_) => EventTypeTag::Ixn,
+            EventData::Dip(_) => EventTypeTag::Dip,
+            EventData::Drt(_) => EventTypeTag::Drt,
         }
     }
 }

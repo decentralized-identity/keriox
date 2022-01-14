@@ -6,7 +6,7 @@ use crate::{
     error::Error,
     event::{sections::seal::EventSeal, EventMessage, SerializationFormats},
     event_message::{
-        dummy_event::DummyEventMessage, signature::Signature, Digestible, SaidEvent, Typeable,
+        dummy_event::DummyEventMessage, signature::Signature, Digestible, SaidEvent, Typeable, EventTypeTag,
     },
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     state::IdentifierState,
@@ -73,8 +73,8 @@ impl EventMessage<ReplyEvent> {
 }
 
 impl Typeable for ReplyData {
-    fn get_type(&self) -> Option<String> {
-        Some("rpy".to_string())
+    fn get_type(&self) -> EventTypeTag {
+        EventTypeTag::Rpy
     }
 }
 

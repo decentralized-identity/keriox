@@ -13,14 +13,14 @@ use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivat
             InteractionEvent,
         },
         sections::seal::EventSeal
-    }, event_message::{signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, Message}, KeyEvent}, event_message::{
+    }, event_message::{signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, Message}, KeyEvent, EventTypeTag}, event_message::{
         event_msg_builder::EventMsgBuilder,
     }, event_parsing::{SignedEventData, message::{signed_event_stream, signed_message}}, keys::PublicKey, prefix::AttachedSignaturePrefix, prefix::{
         BasicPrefix,
         IdentifierPrefix, SelfSigningPrefix,
     }, processor::EventProcessor, signer::KeyManager, state::{
         EventSemantics,
-        IdentifierState, KeyEventType
+        IdentifierState
     }};
 #[cfg(feature = "wallet")]
 use universal_wallet::prelude::{Content, UnlockedWallet};
@@ -108,7 +108,7 @@ impl<K: KeyManager> Keri<K> {
 
     pub fn incept(&mut self, initial_witness: Option<Vec<BasicPrefix>>) -> Result<SignedEventMessage, Error> {
         let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
-        let icp = EventMsgBuilder::new(KeyEventType::Icp)
+        let icp = EventMsgBuilder::new(EventTypeTag::Icp)
             .with_prefix(&self.prefix)
             .with_keys(vec![Basic::Ed25519.derive(km.public_key())])
             .with_next_keys(vec![Basic::Ed25519.derive(km.next_public_key())])
@@ -147,7 +147,7 @@ impl<K: KeyManager> Keri<K> {
             // Signing key must be first
             let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
             keys.insert(0, Basic::Ed25519.derive(km.public_key()));
-            let icp = EventMsgBuilder::new(KeyEventType::Icp)
+            let icp = EventMsgBuilder::new(EventTypeTag::Icp)
                 .with_prefix(&self.prefix)
                 .with_keys(keys)
                 .with_next_keys(vec!(Basic::Ed25519.derive(km.next_public_key())))
@@ -239,7 +239,7 @@ impl<K: KeyManager> Keri<K> {
             .compute_state(&self.prefix)?
             .ok_or(Error::SemanticError("There is no state".into()))?;
         match self.key_manager.lock() {
-            Ok(kv) => EventMsgBuilder::new(KeyEventType::Rot)
+            Ok(kv) => EventMsgBuilder::new(EventTypeTag::Rot)
                 .with_prefix(&self.prefix)
                 .with_sn(state.sn + 1)
                 .with_previous_event(&state.last_event_digest)
@@ -264,7 +264,7 @@ impl<K: KeyManager> Keri<K> {
             .compute_state(&self.prefix)?
             .ok_or(Error::SemanticError("There is no state".into()))?;
 
-        let ev = EventMsgBuilder::new(KeyEventType::Ixn)
+        let ev = EventMsgBuilder::new(EventTypeTag::Ixn)
             .with_prefix(&self.prefix)
             .with_sn(state.sn + 1)
             .with_previous_event(&state.last_event_digest)
