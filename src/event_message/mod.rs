@@ -21,7 +21,7 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize, Serializer};
 use serialization_info::*;
 
-use self::{signed_event_message::SignedEventMessage, dummy_event::{DummyEventMessage, dummy_prefix}};
+use self::{signed_event_message::SignedEventMessage, dummy_event::{DummyEventMessage, dummy_prefix, DummyInceptionEvent}};
 
 pub trait Typeable {
     fn get_type(&self) -> EventTypeTag;
@@ -60,7 +60,6 @@ impl KeyEvent {
 
 impl EventSemantics for KeyEvent {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
-        // TODO check sai
         self.content.apply_to(state)
     }
 
@@ -250,15 +249,37 @@ impl EventMessage<KeyEvent> {
         if self_dig.derivation == sai.derivation {
             Ok(&self_dig == sai)
         } else {
-            let dummy_event: DummyEventMessage<_> = self.clone().into();
-            Ok(sai.verify_binding(&dummy_event.serialize()?))
+            Ok(sai.verify_binding(&self.to_derivation_data()?))
         }
+    }
 
+    fn to_derivation_data(&self) -> Result<Vec<u8>, Error> {
+        Ok(match self.event.get_event_data() {
+            EventData::Icp(icp) => DummyInceptionEvent::dummy_inception_data(
+                icp, 
+                &self.event.get_digest().derivation, 
+            self.serialization_info.kind
+            )?.serialize()?,
+            EventData::Dip(dip) => DummyInceptionEvent::dummy_delegated_inception_data(
+                dip, 
+                &self.event.get_digest().derivation, 
+            self.serialization_info.kind
+                )?.serialize()?,
+            _ => {
+                let dummy_event: DummyEventMessage<_> = self.clone().into();
+                dummy_event.serialize()?
+            },
+        })
     }
 }
 
 impl EventSemantics for EventMessage<KeyEvent> {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
+        let check_event_digest = |ev: &EventMessage<KeyEvent>| -> Result<(), Error> {
+            ev.check_digest(&self.get_digest())?
+                    .then(|| ())
+                    .ok_or(Error::IncorrectDigest)
+        };
         // Update state.last with serialized current event message.
         match self.event.get_event_data() {
             EventData::Icp(_) | EventData::Dip(_) => {
@@ -274,6 +295,7 @@ impl EventSemantics for EventMessage<KeyEvent> {
                 }
             }
             EventData::Rot(ref rot) => {
+                check_event_digest(self)?;
                 if let Some(_) = state.delegator {
                     Err(Error::SemanticError(
                         "Applying non-delegated rotation to delegated state.".into(),
@@ -298,6 +320,7 @@ impl EventSemantics for EventMessage<KeyEvent> {
                 }
             }
             EventData::Drt(ref drt) => self.event.apply_to(state.clone()).and_then(|next_state| {
+                check_event_digest(self)?;
                 if let None = state.delegator {
                     Err(Error::SemanticError(
                         "Applying delegated rotation to non-delegated state.".into(),
@@ -315,6 +338,7 @@ impl EventSemantics for EventMessage<KeyEvent> {
                 }
             }),
             EventData::Ixn(ref inter) => {
+                check_event_digest(self)?;
                 self.event.apply_to(state.clone()).and_then(|next_state| {
                     if inter.previous_event_hash.eq(&state.last_event_digest) {
                         Ok(IdentifierState {
@@ -339,7 +363,7 @@ pub fn verify_identifier_binding(icp_event: &EventMessage<KeyEvent>) -> Result<b
             IdentifierPrefix::Basic(bp) => Ok(icp.key_config.public_keys.len() == 1
                 && bp == icp.key_config.public_keys.first().unwrap()),
             IdentifierPrefix::SelfAddressing(sap) => {
-                icp_event.check_digest(sap)
+                Ok(icp_event.check_digest(sap)? && icp_event.get_digest().eq(&sap))
             }
             IdentifierPrefix::SelfSigning(_ssp) => todo!(),
         },

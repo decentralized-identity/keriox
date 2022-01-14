@@ -117,8 +117,6 @@ pub enum QueryError {
     StaleRpy,
     #[error("No previous reply in database")]
     NoSavedReply,
-    #[error("Incorrect event digest")]
-    IncorrectDigest,
     #[error("Error: {0}")]
     Error(String),
 }

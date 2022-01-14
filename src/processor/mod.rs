@@ -195,7 +195,7 @@ impl EventProcessor {
 
             // Check if event seal list contains delegating event seal.
             if !data.iter().any(|s| match s {
-                Seal::Event(es) => delegated_event.check_digest(&es.event_digest).unwrap(), // es.event_digest.verify_binding(delegated_event),
+                Seal::Event(es) => delegated_event.check_digest(&es.event_digest).unwrap(),
                 _ => false,
             }) {
                 return Err(Error::SemanticError(
@@ -607,7 +607,7 @@ impl EventProcessor {
             .event_message;
         event_from_db.check_digest(&ksn.state.last_event_digest)?
             .then(|| ())
-            .ok_or::<Error>(QueryError::IncorrectDigest.into())?;
+            .ok_or::<Error>(Error::IncorrectDigest)?;
 
         match self.check_timestamp_with_last_ksn(ksn.timestamp, &ksn_pre, aid)
         {

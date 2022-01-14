@@ -12,7 +12,7 @@ use crate::{
     state::IdentifierState,
 };
 
-use super::{key_state_notice::KeyStateNotice, Envelope, QueryError, Route};
+use super::{key_state_notice::KeyStateNotice, Envelope, Route};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct ReplyData {
@@ -68,7 +68,7 @@ impl EventMessage<ReplyEvent> {
             .get_digest()
             .verify_binding(&dummy)
             .then(|| ())
-            .ok_or(QueryError::IncorrectDigest.into())
+            .ok_or(Error::IncorrectDigest)
     }
 }
 

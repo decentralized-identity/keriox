@@ -105,7 +105,10 @@ impl<T: Serialize + Typeable + Clone> DummyEventMessage<T> {
         derivation: &SelfAddressing,
     ) -> Result<Self, Error> {
         Ok(Self {
-            serialization_info: Self::get_serialization_info(event.clone(), format, derivation)?,
+            serialization_info: SerializationInfo::new(
+                format,
+                Self::get_size(&event, format, derivation)?,
+            ),
             event_type: event.get_type(),
             data: event,
             digest: dummy_prefix(derivation),
@@ -113,7 +116,7 @@ impl<T: Serialize + Typeable + Clone> DummyEventMessage<T> {
     }
 
     fn get_size(
-        event: T,
+        event: &T,
         format: SerializationFormats,
         derivation: &SelfAddressing,
     ) -> Result<usize, Error> {
@@ -121,23 +124,12 @@ impl<T: Serialize + Typeable + Clone> DummyEventMessage<T> {
         Self {
             serialization_info: SerializationInfo::new(format, 0),
             event_type: event.get_type(),
-            data: event,
+            data: event.clone(),
             digest: dummy_prefix(derivation),
         }
         .serialize()?
         .len()
         )
-    }
-
-    pub fn get_serialization_info(
-        event: T,
-        format: SerializationFormats,
-        derivation: &SelfAddressing,
-    ) -> Result<SerializationInfo, Error> {
-        Ok(SerializationInfo::new(
-            format,
-            Self::get_size(event, format, derivation)?,
-        ))
     }
 
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {

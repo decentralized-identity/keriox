@@ -102,6 +102,9 @@ pub enum Error {
     #[error("mutex is poisoned")]
     MutexPoisoned,
 
+    #[error("Incorrect event digest")]
+    IncorrectDigest,
+
     #[cfg(feature = "query")]
     #[error(transparent)]
     QueryError(#[from] crate::query::QueryError),
