@@ -1,12 +1,10 @@
 use super::EventProcessor;
 use crate::event::sections::seal::EventSeal;
-use crate::event_message::Digestible;
 use crate::event_message::signed_event_message::Message;
+use crate::event_message::Digestible;
 use crate::event_parsing::message::{signed_event_stream, signed_message};
+use crate::prefix::IdentifierPrefix;
 use crate::{database::sled::SledEventDatabase, error::Error};
-use crate::{
-    prefix::IdentifierPrefix,
-};
 use std::convert::TryFrom;
 use std::fs;
 use std::sync::Arc;
@@ -25,7 +23,7 @@ fn test_process() -> Result<(), Error> {
     // (keripy/tests/core/test_eventing.py#1138)
 
     let icp_raw = br#"{"v":"KERI10JSON00017e_","t":"icp","d":"ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk","i":"ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk","s":"0","kt":"2","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"E9izzBkXX76sqt0N-tfLzJeRqj0W56p4pDQ_ZqNCDpyw","bt":"0","b":[],"c":[],"a":[]}-AADAA39j08U7pcU66OPKsaPExhBuHsL5rO1Pjq5zMgt_X6jRbezevis6YBUg074ZNKAGdUwHLqvPX_kse4buuuSUpAQABphobpuQEZ6EhKLhBuwgJmIQu80ZUV1GhBL0Ht47Hsl1rJiMwE2yW7-yi8k3idw2ahlpgdd9ka9QOP9yQmMWGAQACM7yfK1b86p1H62gonh1C7MECDCFBkoH0NZRjHKAEHebvd2_LLz6cpCaqKWDhbM2Rq01f9pgyDTFNLJMxkC-fAQ"#;
-	let parsed = signed_message(icp_raw).unwrap().1;
+    let parsed = signed_message(icp_raw).unwrap().1;
     let deserialized_icp = Message::try_from(parsed).unwrap();
 
     let id = match &deserialized_icp {
@@ -38,11 +36,15 @@ fn test_process() -> Result<(), Error> {
 
     // Check if processed event is in kel.
     let icp_from_db = event_processor.get_event_at_sn(&id, 0).unwrap();
-    let re_serialized = icp_from_db.unwrap().signed_event_message.serialize().unwrap();
+    let re_serialized = icp_from_db
+        .unwrap()
+        .signed_event_message
+        .serialize()
+        .unwrap();
     assert_eq!(icp_raw.to_vec(), re_serialized);
 
     let rot_raw = br#"{"v":"KERI10JSON0001b3_","t":"rot","d":"E0UUmo4JsLq9C6LDnerxTjV0PcegpXcPsT_m2J4SeQbE","i":"ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk","s":"1","p":"ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk","kt":"2","k":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ","D1kcBE7h0ImWW6_Sp7MQxGYSshZZz6XM7OiUE5DXm0dU","D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM"],"n":"EQpRYqbID2rW8X5lB6mOzDckJEIFae6NbJISXgJSN9qg","bt":"0","br":[],"ba":[],"a":[]}-AADAATWNmB15NNCgCUeFmDv9HbSkPzZ3hK1oS4DAnBVvA1hSkBm1biGDGPIVRPMLqB_MhAy516DV7B7AQs7eoS5b1DgABOXlDXb4TktNyn_Iindz3GLwRkH_lRo3rfez107T1GfoHFetzbpx3uQExyiuiQM2JRWuHCe3wUFdhzjqQ2_MpAgACVMBC6elfrKOfs2ZQxyXrzkuxNCgpgDBPmstysWo2P6GA2epCGnKwUPq83S_g6RC6oCl9N0-DEWf7tgaD0aTcCg"#;
-	let parsed = signed_message(rot_raw).unwrap().1;
+    let parsed = signed_message(rot_raw).unwrap().1;
     let deserialized_rot = Message::try_from(parsed).unwrap();
 
     // Process rotation event.
@@ -59,7 +61,7 @@ fn test_process() -> Result<(), Error> {
     assert!(matches!(id_state, Err(Error::EventDuplicateError)));
 
     let ixn_raw = br#"{"v":"KERI10JSON0000cb_","t":"ixn","d":"E2R3qlKVg96GqkpGGaIVgjEDy_3Zklm5l0JJaI2g7lqY","i":"ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk","s":"2","p":"E0UUmo4JsLq9C6LDnerxTjV0PcegpXcPsT_m2J4SeQbE","a":[]}-AADAAUHrvRANKmre1dXRNpBeJFTRBouy4Wmj72QHjBrv74JtKBq7_JzYz17A5Kem6wk5IjOi7Q3gtoxQc4a3xDXHkBwABnHvoCVgqyZZxxdVRY74SHItB8IDVK9udSY8eID7m-oktOm6mtRSbazNRq0gsCh0IwzH_-7REtFvO7CO-noQgCwACr7Re0-LgCMTtBpsq5wK7YqwSpqP6-YLu1m9IOQWv5O9zGAp-z6Qbp1x9cpMGrpTEJTHLp2PNtdTzffvztWuBBQ"#;
-	let parsed = signed_message(ixn_raw).unwrap().1;
+    let parsed = signed_message(ixn_raw).unwrap().1;
     let deserialized_ixn = Message::try_from(parsed).unwrap();
 
     // Process interaction event.
@@ -77,7 +79,7 @@ fn test_process() -> Result<(), Error> {
 
     // Construct partially signed interaction event.
     let ixn_raw_2 = br#"{"v":"KERI10JSON0000cb_","t":"ixn","d":"E1dzN2DTAXoC3HsdbUuiGB8nDOCYMeAtAeulBT0ljDgs","i":"ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk","s":"3","p":"E2R3qlKVg96GqkpGGaIVgjEDy_3Zklm5l0JJaI2g7lqY","a":[]}-AADAAMXFghkY_dHBEDE5tHvbPu3NNwYEE8lVyYQrxvpbuXRq50jGOekJ8JoSj-_ysjD6j5Yd6fwS_h92Ie0jP-4epCQAB3CJfe8LDC3FP7RsIt4Weu0ks8IyuqeqJ_g_uko5436TONysurOp76RKisehot0SQBUcFPZ5Yp90XFb5dq661DwACJnPkO6ypAZAEkj7Wn6w0Re0Nym2mvNpxefwANJbRZPoBdAn94nKrxJW9S8jePZ49EBihU8R5j6j7Bc2rMMD7AA"#;
-	let parsed = signed_message(ixn_raw_2).unwrap().1;
+    let parsed = signed_message(ixn_raw_2).unwrap().1;
     let deserialized_ixn = Message::try_from(parsed).unwrap();
     // Make event partially signed.
     let partially_signed_deserialized_ixn = match deserialized_ixn {
@@ -99,7 +101,7 @@ fn test_process() -> Result<(), Error> {
 
     // // Out of order event.
     let out_of_order_rot_raw = br#"{"v":"KERI10JSON000187_","t":"rot","d":"E5QnF__pQnqFHkHfIjZr4saPnEnzNelDRM9jEENN6WQs","i":"ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk","s":"4","p":"E1dzN2DTAXoC3HsdbUuiGB8nDOCYMeAtAeulBT0ljDgs","kt":"2","k":["D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM","DVjWcaNX2gCkHOjk6rkmqPBCxkRCqwIJ-3OjdYmMwxf4","DT1nEDepd6CSAMCE7NY_jlLdG6_mKUlKS_mW-2HJY1hg"],"n":"","bt":"0","br":[],"ba":[],"a":[]}-AADAADjTnTZ5cisTrUXSgnYJpbKoNra2IRRSglzwn2b-WtF99gUixNUIl1KNilQJn0pQlRngPZUKbAxhBgqRvXqWFAgABX0mBBLQ1IMtlzDzEYXDPwztt-ySMFQszQAY7TGSrwzuSMFFA5mBBxxg_muulDClcNAYVt3iKdUodT8N0q-33CwACAyzq3lRXJonJl1X2f9IXBZZiiyIhyetWhNETXjiRbKZKJohfuhSVXsnigwWGscc0S1t_hRTbdB1ijq6fJ4UhBg"#;
-	let parsed = signed_message(out_of_order_rot_raw).unwrap().1;
+    let parsed = signed_message(out_of_order_rot_raw).unwrap().1;
     let out_of_order_rot = Message::try_from(parsed).unwrap();
 
     let id_state = event_processor.process(out_of_order_rot);
@@ -137,14 +139,14 @@ fn test_process_receipt() -> Result<(), Error> {
     // (keripy/tests/core/test_eventing.py)
     // Parse and process controller's inception event.
     let icp_raw = br#"{"v":"KERI10JSON000120_","t":"icp","d":"EsZuhYAPBDnexP3SOl9YsGvWBrYkjYcRjomUYmCcLAYY","i":"EsZuhYAPBDnexP3SOl9YsGvWBrYkjYcRjomUYmCcLAYY","s":"0","kt":"1","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"n":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","bt":"0","b":[],"c":[],"a":[]}-AABAAWKO9bl3OhABTaevxYiXQ1poRIGfM9ndMPq4bvrKmU_3pTN3VLNDYOI8pJBeAQxRtajQn4CSWOqgdGnmeG6fBCQ"#;
-	let parsed =  signed_message(icp_raw).unwrap().1;
+    let parsed = signed_message(icp_raw).unwrap().1;
     let icp = Message::try_from(parsed).unwrap();
 
     let controller_id_state = event_processor.process(icp)?;
 
     // Parse receipt of controller's inception event.
     let vrc_raw = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EsZuhYAPBDnexP3SOl9YsGvWBrYkjYcRjomUYmCcLAYY","i":"EsZuhYAPBDnexP3SOl9YsGvWBrYkjYcRjomUYmCcLAYY","s":"0"}-FABE7pB5IKuaYh3aIWKxtexyYFhpSjDNTEGSQuxeJbWiylg0AAAAAAAAAAAAAAAAAAAAAAAE7pB5IKuaYh3aIWKxtexyYFhpSjDNTEGSQuxeJbWiylg-AABAAlIts3z2kNyis9l0Pfu54HhVN_yZHEV7NWIVoSTzl5IABelbY8xi7VRyW42ZJvBaaFTGtiqwMOywloVNpG_ZHAQ'"#;
-	let parsed = signed_message(vrc_raw).unwrap().1;
+    let parsed = signed_message(vrc_raw).unwrap().1;
     let rcp = Message::try_from(parsed).unwrap();
 
     let id_state = event_processor.process(rcp.clone());
@@ -153,7 +155,7 @@ fn test_process_receipt() -> Result<(), Error> {
 
     // Parse and process validator's inception event.
     let val_icp_raw = br#"{"v":"KERI10JSON000120_","t":"icp","d":"E7pB5IKuaYh3aIWKxtexyYFhpSjDNTEGSQuxeJbWiylg","i":"E7pB5IKuaYh3aIWKxtexyYFhpSjDNTEGSQuxeJbWiylg","s":"0","kt":"1","k":["D8KY1sKmgyjAiUDdUBPNPyrSz_ad_Qf9yzhDNZlEKiMc"],"n":"EOWDAJvex5dZzDxeHBANyaIoUG3F4-ic81G6GwtnC4f4","bt":"0","b":[],"c":[],"a":[]}-AABAAsnbd4AkK3mlX2Z3quAfTznEPmFJInT9CE9i0aisswqaSW7QNp6XlPHo3natTevQCmS0H9J4Kb-H_V-BtpqavBA"#;
-	let parsed = signed_message(val_icp_raw).unwrap().1;
+    let parsed = signed_message(val_icp_raw).unwrap().1;
     let val_icp = Message::try_from(parsed).unwrap();
 
     event_processor.process(val_icp)?;
@@ -180,13 +182,13 @@ fn test_process_delegated() -> Result<(), Error> {
     let bobs_pref: IdentifierPrefix = "Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8".parse()?;
 
     let bobs_icp = br#"{"v":"KERI10JSON000120_","t":"icp","d":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"0","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","bt":"0","b":[],"c":[],"a":[]}-AABAAJEloPu7b4z8v1455StEJ1b7dMIz-P0tKJ_GBBCxQA8JEg0gm8qbS4TWGiHikLoZ2GtLA58l9dzIa2x_otJhoDA"#;
-	let parsed = signed_message(bobs_icp).unwrap().1;
+    let parsed = signed_message(bobs_icp).unwrap().1;
     let msg = Message::try_from(parsed).unwrap();
     event_processor.process(msg)?;
 
     // Delegated inception event.
     let dip_raw = br#"{"v":"KERI10JSON000154_","t":"dip","d":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI","i":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI","s":"0","kt":"1","k":["DuK1x8ydpucu3480Jpd1XBfjnCwb3dZ3x5b1CJmuUphA"],"n":"EWWkjZkZDXF74O2bOQ4H5hu4nXDlKg2m4CBEBkUxibiU","bt":"0","b":[],"c":[],"a":[],"di":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8"}-AABAA_zcT2-86Zll3FG-hwoQiVuFiT0X28Ft0t4fZGNFISgtZjH2DCrBGoceko604NDZ0QF0Z3bSgEkN_y0lBafD_Bw-GAB0AAAAAAAAAAAAAAAAAAAAAAQE1_-icBrwC_HhxyFwsQLV6hZEbApOc_McGUjhLONpQuc"#;
-	let parsed = signed_message(dip_raw).unwrap().1;
+    let parsed = signed_message(dip_raw).unwrap().1;
     let deserialized_dip = Message::try_from(parsed).unwrap();
 
     // Process dip event before delegating ixn event.
@@ -201,7 +203,7 @@ fn test_process_delegated() -> Result<(), Error> {
 
     // Bob's ixn event with delegating event seal.
     let bobs_ixn = br#"{"v":"KERI10JSON00013a_","t":"ixn","d":"E1_-icBrwC_HhxyFwsQLV6hZEbApOc_McGUjhLONpQuc","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"1","p":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","a":[{"i":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI","s":"0","d":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI"}]}-AABAA6h5mD5stIwO_rwV9apMuhHXjxrKp2ATa35u-H6DM2X-BKo5NkJ1khzBdHo-VLQ6Zw_yajj2Ul_WOL8pFSk_ZDg"#;
-	let parsed = signed_message(bobs_ixn).unwrap().1;
+    let parsed = signed_message(bobs_ixn).unwrap().1;
     let deserialized_ixn = Message::try_from(parsed).unwrap();
     event_processor.process(deserialized_ixn.clone())?;
 
@@ -214,27 +216,34 @@ fn test_process_delegated() -> Result<(), Error> {
     };
 
     // Check if processed event is in db.
-    let ixn_from_db = event_processor.get_event_at_sn(&bobs_pref, 1).unwrap().unwrap();
-    assert_eq!(ixn_from_db.signed_event_message.event_message.serialize()?, raw_parsed(deserialized_ixn)?);
+    let ixn_from_db = event_processor
+        .get_event_at_sn(&bobs_pref, 1)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        ixn_from_db.signed_event_message.event_message.serialize()?,
+        raw_parsed(deserialized_ixn)?
+    );
 
     // Process delegated inception event once again.
     event_processor.process(deserialized_dip.clone())?;
 
     // Check if processed dip event is in db.
-    let dip_from_db = event_processor
-        .get_event_at_sn(&child_prefix, 0)?
-        .unwrap();
-        
-    assert_eq!(dip_from_db.signed_event_message.event_message.serialize()?, raw_parsed(deserialized_dip.clone())?);
+    let dip_from_db = event_processor.get_event_at_sn(&child_prefix, 0)?.unwrap();
+
+    assert_eq!(
+        dip_from_db.signed_event_message.event_message.serialize()?,
+        raw_parsed(deserialized_dip.clone())?
+    );
 
     // Bobs interaction event with delegated event seal.
     let bob_ixn = br#"{"v":"KERI10JSON00013a_","t":"ixn","d":"Eq-MPVuYTPXNUlQSHKfnPhiV3rWo7hkkLa7ui67OIG68","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"2","p":"E1_-icBrwC_HhxyFwsQLV6hZEbApOc_McGUjhLONpQuc","a":[{"i":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI","s":"1","d":"ELEnIYF_rAsluR9TI_jh5Dizq61dCXjos22AGN0hiVjw"}]}-AABAA-QDEYYQCDtosLkziTAaWTu3mfVdFUxa8tytwQVohRwBJEhefCIaCDIbFhrrEn17KMwGoOJKBrJ7Da4WqeWbtAA"#;
-	let parsed = signed_message(bob_ixn).unwrap().1;
+    let parsed = signed_message(bob_ixn).unwrap().1;
     let deserialized_ixn_drt = Message::try_from(parsed).unwrap();
 
     // Delegated rotation event.
     let drt_raw = br#"{"v":"KERI10JSON000155_","t":"drt","d":"ELEnIYF_rAsluR9TI_jh5Dizq61dCXjos22AGN0hiVjw","i":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI","s":"1","p":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI","kt":"1","k":["DTf6QZWoet154o9wvzeMuNhLQRr8JaAUeiC6wjB_4_08"],"n":"E8kyiXDfkE7idwWnAZQjHbUZMz-kd_yIMH0miptIFFPo","bt":"0","br":[],"ba":[],"a":[]}-AABAAer7S2mRuHlXxmJxy6E5lgdBmh3eeKd2TnkyivHlEw83Xhq98h6RBjXRDc_S0Z-TrLUS2u-6FnIkP_yYsOeH0Dg-GAB0AAAAAAAAAAAAAAAAAAAAAAgEq-MPVuYTPXNUlQSHKfnPhiV3rWo7hkkLa7ui67OIG68"#;
-	let parsed = signed_message(drt_raw).unwrap().1;
+    let parsed = signed_message(drt_raw).unwrap().1;
     let deserialized_drt = Message::try_from(parsed).unwrap();
 
     // Process drt event before delegating ixn event.
@@ -249,16 +258,20 @@ fn test_process_delegated() -> Result<(), Error> {
 
     // Check if processed event is in db.
     let ixn_from_db = event_processor.get_event_at_sn(&bobs_pref, 2)?.unwrap();
-    assert_eq!(ixn_from_db.signed_event_message.event_message.serialize()?, raw_parsed(deserialized_ixn_drt)?);
+    assert_eq!(
+        ixn_from_db.signed_event_message.event_message.serialize()?,
+        raw_parsed(deserialized_ixn_drt)?
+    );
 
     // Process delegated rotation event once again.
     event_processor.process(deserialized_drt.clone())?.unwrap();
 
     // Check if processed drt event is in db.
-    let drt_from_db = event_processor
-        .get_event_at_sn(&child_prefix, 1)?
-        .unwrap();
-    assert_eq!(drt_from_db.signed_event_message.event_message.serialize()?, raw_parsed(deserialized_drt)?);
+    let drt_from_db = event_processor.get_event_at_sn(&child_prefix, 1)?.unwrap();
+    assert_eq!(
+        drt_from_db.signed_event_message.event_message.serialize()?,
+        raw_parsed(deserialized_drt)?
+    );
 
     Ok(())
 }
@@ -277,14 +290,14 @@ fn test_validate_seal() -> Result<(), Error> {
 
     // Process icp.
     let delegator_icp_raw= br#"{"v":"KERI10JSON000120_","t":"icp","d":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"0","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","bt":"0","b":[],"c":[],"a":[]}-AABAAJEloPu7b4z8v1455StEJ1b7dMIz-P0tKJ_GBBCxQA8JEg0gm8qbS4TWGiHikLoZ2GtLA58l9dzIa2x_otJhoDA"#;
-	let parsed = signed_message(delegator_icp_raw).unwrap().1;
+    let parsed = signed_message(delegator_icp_raw).unwrap().1;
     let deserialized_icp = Message::try_from(parsed).unwrap();
     event_processor.process(deserialized_icp.clone())?.unwrap();
     let delegator_id = "Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8".parse()?;
 
     // Delegated inception event.
     let dip_raw = br#"{"v":"KERI10JSON000154_","t":"dip","d":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI","i":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI","s":"0","kt":"1","k":["DuK1x8ydpucu3480Jpd1XBfjnCwb3dZ3x5b1CJmuUphA"],"n":"EWWkjZkZDXF74O2bOQ4H5hu4nXDlKg2m4CBEBkUxibiU","bt":"0","b":[],"c":[],"a":[],"di":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8"}-AABAA_zcT2-86Zll3FG-hwoQiVuFiT0X28Ft0t4fZGNFISgtZjH2DCrBGoceko604NDZ0QF0Z3bSgEkN_y0lBafD_Bw-GAB0AAAAAAAAAAAAAAAAAAAAAAQE1_-icBrwC_HhxyFwsQLV6hZEbApOc_McGUjhLONpQuc"#;
-	let parsed = signed_message(dip_raw).unwrap().1;
+    let parsed = signed_message(dip_raw).unwrap().1;
     let msg = Message::try_from(parsed).unwrap();
     if let Message::Event(dip) = msg {
         let delegated_event_digest = dip.event_message.event.get_digest();
@@ -300,19 +313,19 @@ fn test_validate_seal() -> Result<(), Error> {
             event_processor.validate_seal(seal.clone(), &dip.event_message),
             Err(Error::EventOutOfOrderError)
         ));
-        
+
         // Process delegating event.
         let delegating_event_raw = br#"{"v":"KERI10JSON00013a_","t":"ixn","d":"E1_-icBrwC_HhxyFwsQLV6hZEbApOc_McGUjhLONpQuc","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"1","p":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","a":[{"i":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI","s":"0","d":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI"}]}-AABAA6h5mD5stIwO_rwV9apMuhHXjxrKp2ATa35u-H6DM2X-BKo5NkJ1khzBdHo-VLQ6Zw_yajj2Ul_WOL8pFSk_ZDg"#;
         let parsed = signed_message(delegating_event_raw).unwrap().1;
         let deserialized_ixn = Message::try_from(parsed).unwrap();
         event_processor.process(deserialized_ixn.clone())?;
-        
+
         // Validate seal again.
         assert!(event_processor
             .validate_seal(seal, &dip.event_message)
             .is_ok());
-        };
-            
+    };
+
     Ok(())
 }
 
@@ -334,7 +347,9 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
         .1
         .into_iter()
         .for_each(|event| {
-            event_processor.process(Message::try_from(event.clone()).unwrap()).unwrap();
+            event_processor
+                .process(Message::try_from(event.clone()).unwrap())
+                .unwrap();
         });
 
     let event_seal = EventSeal {
@@ -356,9 +371,9 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
 #[cfg(feature = "query")]
 #[test]
 pub fn test_reply_escrow() -> Result<(), Error> {
-    use tempfile::Builder;
     use crate::query::QueryError;
-    
+    use tempfile::Builder;
+
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
@@ -383,7 +398,10 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     let deserialized_new_rpy = Message::try_from(parsed).unwrap();
 
     // Try to process out of order reply
-    assert!(matches!(event_processor.process(deserialized_old_rpy.clone()), Err(Error::QueryError(QueryError::OutOfOrderEventError))));
+    assert!(matches!(
+        event_processor.process(deserialized_old_rpy.clone()),
+        Err(Error::QueryError(QueryError::OutOfOrderEventError))
+    ));
     let escrow = event_processor.db.get_escrowed_replys(&identifier);
     assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 1);
 
@@ -392,7 +410,9 @@ pub fn test_reply_escrow() -> Result<(), Error> {
 
     // process kel events and update escrow
     // reply event should be unescrowed and save as accepted
-    kel_events.for_each(|ev| {event_processor.process(ev).unwrap();});
+    kel_events.for_each(|ev| {
+        event_processor.process(ev).unwrap();
+    });
     event_processor.process_escrow()?;
 
     let escrow = event_processor.db.get_escrowed_replys(&identifier);
@@ -403,25 +423,39 @@ pub fn test_reply_escrow() -> Result<(), Error> {
 
     // Try to process new out of order reply
     // reply event should be escrowed, accepted reply shouldn't change
-    assert!(matches!(event_processor.process(deserialized_new_rpy.clone()), Err(Error::QueryError(QueryError::OutOfOrderEventError))));
+    assert!(matches!(
+        event_processor.process(deserialized_new_rpy.clone()),
+        Err(Error::QueryError(QueryError::OutOfOrderEventError))
+    ));
     let mut escrow = event_processor.db.get_escrowed_replys(&identifier).unwrap();
-    assert_eq!(Message::KeyStateNotice(escrow.next().unwrap()), deserialized_new_rpy);
+    assert_eq!(
+        Message::KeyStateNotice(escrow.next().unwrap()),
+        deserialized_new_rpy
+    );
     assert!(escrow.next().is_none());
 
     let mut accepted_rpys = event_processor.db.get_accepted_replys(&identifier).unwrap();
-    assert_eq!(Message::KeyStateNotice(accepted_rpys.next().unwrap()), deserialized_old_rpy);
+    assert_eq!(
+        Message::KeyStateNotice(accepted_rpys.next().unwrap()),
+        deserialized_old_rpy
+    );
     assert!(accepted_rpys.next().is_none());
 
     // process rest of kel and update escrow
     // reply event should be unescrowed and save as accepted
-    rest_of_kel.for_each(|ev| {event_processor.process(ev).unwrap();});
+    rest_of_kel.for_each(|ev| {
+        event_processor.process(ev).unwrap();
+    });
     event_processor.process_escrow()?;
 
     let escrow = event_processor.db.get_escrowed_replys(&identifier);
     assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 0);
 
     let mut accepted_rpys = event_processor.db.get_accepted_replys(&identifier).unwrap();
-    assert_eq!(Message::KeyStateNotice(accepted_rpys.next().unwrap()), deserialized_new_rpy);
+    assert_eq!(
+        Message::KeyStateNotice(accepted_rpys.next().unwrap()),
+        deserialized_new_rpy
+    );
     assert!(accepted_rpys.next().is_none());
 
     Ok(())
@@ -430,8 +464,8 @@ pub fn test_reply_escrow() -> Result<(), Error> {
 #[cfg(feature = "query")]
 #[test]
 pub fn test_query() -> Result<(), Error> {
+    use crate::{keri::witness::Witness, query::ReplyType};
     use tempfile::Builder;
-    use crate::{query::ReplyType, keri::witness::Witness};
 
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     let witness = Witness::new(root.path())?;
@@ -448,7 +482,6 @@ pub fn test_query() -> Result<(), Error> {
     if let Message::Query(qry) = deserialized_qy {
         let res = witness.process_signed_query(qry)?;
         assert!(matches!(res, ReplyType::Rep(_)));
-
     } else {
         assert!(false)
     }

@@ -1,12 +1,12 @@
 use crate::event_message::key_event_message::KeyEvent;
-use crate::event_message::{Typeable, SaidEvent, EventTypeTag};
 pub use crate::event_message::{serialization_info::SerializationFormats, EventMessage};
-use crate::{prefix::IdentifierPrefix, derivation::self_addressing::SelfAddressing};
+use crate::event_message::{EventTypeTag, SaidEvent, Typeable};
 use crate::state::IdentifierState;
+use crate::{derivation::self_addressing::SelfAddressing, prefix::IdentifierPrefix};
 use serde::{Deserialize, Serialize};
 pub mod event_data;
-pub mod sections;
 pub mod receipt;
+pub mod sections;
 use self::event_data::EventData;
 use crate::error::Error;
 use crate::state::EventSemantics;
@@ -25,23 +25,26 @@ pub struct Event {
 }
 
 impl Event {
-    pub fn new(prefix: IdentifierPrefix, sn: u64, event_data: EventData)
-        -> Self {
-            Event {
-                prefix,
-                sn,
-                event_data
-            }
+    pub fn new(prefix: IdentifierPrefix, sn: u64, event_data: EventData) -> Self {
+        Event {
+            prefix,
+            sn,
+            event_data,
         }
+    }
 
-    pub fn to_message(self, format: SerializationFormats, derivation: &SelfAddressing) -> Result<EventMessage<KeyEvent>, Error> {
+    pub fn to_message(
+        self,
+        format: SerializationFormats,
+        derivation: &SelfAddressing,
+    ) -> Result<EventMessage<KeyEvent>, Error> {
         match (&self.prefix, self.event_data.clone()) {
             (IdentifierPrefix::SelfAddressing(_), EventData::Icp(icp)) => {
-               icp.incept_self_addressing(derivation.clone(), format) 
-            },
+                icp.incept_self_addressing(derivation.clone(), format)
+            }
             (IdentifierPrefix::SelfAddressing(_), EventData::Dip(dip)) => {
-               dip.incept_self_addressing(derivation.clone(), format) 
-            },
+                dip.incept_self_addressing(derivation.clone(), format)
+            }
             _ => SaidEvent::<Event>::to_message(self, format, derivation),
         }
     }
@@ -78,12 +81,11 @@ impl EventSemantics for Event {
                 }
             }
         };
-        self.event_data
-            .apply_to(IdentifierState {
-                sn: self.sn,
-                prefix: self.prefix.clone(),
-                ..state
-            })
+        self.event_data.apply_to(IdentifierState {
+            sn: self.sn,
+            prefix: self.prefix.clone(),
+            ..state
+        })
     }
 }
 

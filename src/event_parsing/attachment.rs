@@ -1,13 +1,27 @@
 use std::convert::TryFrom;
 
-use nom::{Needed, bytes::complete::take, combinator::map, error::ErrorKind, multi::{count, many0}};
+use nom::{
+    bytes::complete::take,
+    combinator::map,
+    error::ErrorKind,
+    multi::{count, many0},
+    Needed,
+};
 
-use crate::{derivation::attached_signature_code::b64_to_num, event::sections::seal::{EventSeal, SourceSeal}, event_parsing::payload_size::PayloadType, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix}};
+use crate::{
+    derivation::attached_signature_code::b64_to_num,
+    event::sections::seal::{EventSeal, SourceSeal},
+    event_parsing::payload_size::PayloadType,
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+};
 
-use super::{Attachment, prefix::{
-    attached_signature, attached_sn, basic_prefix, prefix, self_addressing_prefix,
-    self_signing_prefix,
-}};
+use super::{
+    prefix::{
+        attached_signature, attached_sn, basic_prefix, prefix, self_addressing_prefix,
+        self_signing_prefix,
+    },
+    Attachment,
+};
 
 /// returns attached source seals
 fn source_seal(s: &[u8]) -> nom::IResult<&[u8], Vec<SourceSeal>> {
@@ -62,14 +76,16 @@ fn couplets(s: &[u8]) -> nom::IResult<&[u8], Vec<(BasicPrefix, SelfSigningPrefix
     )(rest)
 }
 
-fn indexed_signatures(input: &[u8]) ->  nom::IResult<&[u8], Vec<AttachedSignaturePrefix>> {
-        attachment(input).map(|(rest, att)| match att {
-            Attachment::AttachedSignatures(sigs) => Ok((rest, sigs)),
-            _ => Err(nom::Err::Error((rest, ErrorKind::IsNot)))
-        })?
-    }
+fn indexed_signatures(input: &[u8]) -> nom::IResult<&[u8], Vec<AttachedSignaturePrefix>> {
+    attachment(input).map(|(rest, att)| match att {
+        Attachment::AttachedSignatures(sigs) => Ok((rest, sigs)),
+        _ => Err(nom::Err::Error((rest, ErrorKind::IsNot))),
+    })?
+}
 
-fn identifier_signatures(s: &[u8]) -> nom::IResult<&[u8], Vec<(IdentifierPrefix, Vec<AttachedSignaturePrefix>)>> {
+fn identifier_signatures(
+    s: &[u8],
+) -> nom::IResult<&[u8], Vec<(IdentifierPrefix, Vec<AttachedSignaturePrefix>)>> {
     let (rest, sc) = b64_count(s)?;
     count(
         nom::sequence::tuple((prefix, indexed_signatures)),
@@ -77,7 +93,9 @@ fn identifier_signatures(s: &[u8]) -> nom::IResult<&[u8], Vec<(IdentifierPrefix,
     )(rest)
 }
 
-fn seal_signatures(s: &[u8]) -> nom::IResult<&[u8], Vec<(EventSeal, Vec<AttachedSignaturePrefix>)>> {
+fn seal_signatures(
+    s: &[u8],
+) -> nom::IResult<&[u8], Vec<(EventSeal, Vec<AttachedSignaturePrefix>)>> {
     let (rest, sc) = b64_count(s)?;
     count(
         nom::sequence::tuple((event_seal, indexed_signatures)),
@@ -99,7 +117,7 @@ pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
         }
         PayloadType::MF => {
             let (rest, event_seals) = seal_signatures(rest)?;
-		    Ok((rest, Attachment::SealSignaturesGroups(event_seals)))
+            Ok((rest, Attachment::SealSignaturesGroups(event_seals)))
         }
         PayloadType::MA => {
             let (rest, sigs) = signatures(rest)?;
@@ -121,17 +139,18 @@ pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
                     let (extra, atts) = many0(attachment)(total)?;
                     if !extra.is_empty() {
                         // something is wrong, should not happend
-                        Err(nom::Err::Incomplete(Needed::Size(((sc * 4) as usize - rest.len()).into()) ))
+                        Err(nom::Err::Incomplete(Needed::Size(
+                            ((sc * 4) as usize - rest.len()).into(),
+                        )))
                     } else {
                         Ok((rest, Attachment::Frame(atts)))
                     }
-                },
-                Err(nom::Err::Error((rest, _))) => {
-                    Err(nom::Err::Incomplete(Needed::Size(((sc * 4) as usize - rest.len()).into()) ))
-                },
-                Err(e) => Err(e)
+                }
+                Err(nom::Err::Error((rest, _))) => Err(nom::Err::Incomplete(Needed::Size(
+                    ((sc * 4) as usize - rest.len()).into(),
+                ))),
+                Err(e) => Err(e),
             }
-
         }
 
         _ => todo!(),
@@ -231,5 +250,4 @@ fn test_attachement() {
     let (rest, att) = attachment(cesr_attachment.as_bytes()).unwrap();
     assert!(matches!(att, Attachment::Frame(_)));
     assert!(rest.is_empty());
-
 }

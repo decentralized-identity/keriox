@@ -61,14 +61,18 @@ impl Display for Error {
             Error::ExpectedString => formatter.write_str("incorrect input: expected string"),
             Error::ExpectedNull => formatter.write_str("incorrect input: expected null"),
             Error::ExpectedArray => formatter.write_str("incorrect input: expected array"),
-            Error::ExpectedArrayComma => formatter.write_str("incorrect input: expected array comma"),
+            Error::ExpectedArrayComma => {
+                formatter.write_str("incorrect input: expected array comma")
+            }
             Error::ExpectedArrayEnd => formatter.write_str("incorrect input: expected array end"),
             Error::ExpectedMap => formatter.write_str("incorrect input: expected map"),
             Error::ExpectedMapColon => formatter.write_str("incorrect input: expected map colon"),
             Error::ExpectedMapComma => formatter.write_str("incorrect input: expected map comma"),
             Error::ExpectedMapEnd => formatter.write_str("incorrect input: expected map end"),
             Error::ExpectedEnum => formatter.write_str("incorrect input: expected enum"),
-            Error::TrailingCharacters => formatter.write_str("incorrect input: unexpected trailing characters"),
+            Error::TrailingCharacters => {
+                formatter.write_str("incorrect input: unexpected trailing characters")
+            }
         }
     }
 }

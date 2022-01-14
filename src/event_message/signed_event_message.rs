@@ -2,12 +2,21 @@ use chrono::{DateTime, Local};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use std::cmp::Ordering;
 
-use crate::{error::Error, event::{sections::seal::{EventSeal, SourceSeal}, receipt::Receipt}, event_parsing::Attachment, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}, state::{EventSemantics, IdentifierState}};
-use super::{serializer::to_string, KeyEvent};
 use super::EventMessage;
+use super::{serializer::to_string, KeyEvent};
+use crate::{
+    error::Error,
+    event::{
+        receipt::Receipt,
+        sections::seal::{EventSeal, SourceSeal},
+    },
+    event_parsing::Attachment,
+    prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix},
+    state::{EventSemantics, IdentifierState},
+};
 
 #[cfg(feature = "query")]
-use crate::query::{reply::SignedReply, query::SignedQuery};
+use crate::query::{query::SignedQuery, reply::SignedReply};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Message {
@@ -146,7 +155,7 @@ impl SignedEventMessage {
         Self {
             event_message: message.clone(),
             signatures: sigs,
-            delegator_seal
+            delegator_seal,
         }
     }
 
@@ -201,7 +210,10 @@ pub struct SignedNontransferableReceipt {
 }
 
 impl SignedNontransferableReceipt {
-    pub fn new(message: &EventMessage<Receipt>, couplets: Vec<(BasicPrefix, SelfSigningPrefix)>) -> Self {
+    pub fn new(
+        message: &EventMessage<Receipt>,
+        couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
+    ) -> Self {
         Self {
             body: message.clone(),
             couplets,

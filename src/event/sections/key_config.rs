@@ -1,7 +1,10 @@
-
 use serde::{Deserialize, Serialize};
 
-use crate::{derivation::self_addressing::SelfAddressing, error::Error, prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfAddressingPrefix}};
+use crate::{
+    derivation::self_addressing::SelfAddressing,
+    error::Error,
+    prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfAddressingPrefix},
+};
 
 use super::threshold::SignatureThreshold;
 
@@ -102,8 +105,9 @@ pub fn nxt_commitment(
         SignatureThreshold::Simple(n) => format!("{:x}", n),
         SignatureThreshold::Weighted(thresh) => thresh.extract_threshold(),
     };
-    keys.iter()
-        .fold(derivation.derive(extracted_threshold.as_bytes()), |acc, pk| {
+    keys.iter().fold(
+        derivation.derive(extracted_threshold.as_bytes()),
+        |acc, pk| {
             SelfAddressingPrefix::new(
                 derivation.to_owned(),
                 acc.derivative()
@@ -112,7 +116,8 @@ pub fn nxt_commitment(
                     .map(|(acc_byte, pk_byte)| acc_byte ^ pk_byte)
                     .collect(),
             )
-        })
+        },
+    )
 }
 
 mod empty_string_as_none {
@@ -266,7 +271,7 @@ fn test_threshold() -> Result<(), Error> {
 fn test_verify() -> Result<(), Error> {
     use crate::event::event_data::EventData;
     use crate::event_message::signed_event_message::Message;
-    use crate::event_parsing::message::signed_message; 
+    use crate::event_parsing::message::signed_message;
     use std::convert::TryFrom;
 
     // test data taken from keripy
@@ -284,7 +289,7 @@ fn test_verify() -> Result<(), Error> {
         }
         _ => (),
     };
-    
+
     let ev = br#"{"v":"KERI10JSON000231_","t":"rot","d":"EDK-dx1__PH_ZJXeZBfxVnodjUsaczSocKCNluEV6Cec","i":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","s":"4","p":"Ebhb0Fnink_-r0JfJQIVr15G0Ew8upPjo94-cT3SzdlU","kt":[["1/2","1/2","1/2"],["1/1","1/1"]],"k":["DToUWoemnetqJoLFIqDI7lxIJEfF0W7xG5ZlqAseVUQc","Drz-IZjko61q-sPMDIW6n-0NGFubbXiZhzWZrO_BZ0Wc","DiGwL3hjQqiUgQlFPeA6kRR1EBXX0vSLm9b6QhPS8IkQ","Dxj5pcStgZ6CbQ2YktNaj8KLE_g9YAOZF6AL9fyLcWQw","DE5zr5eH8EUVQXyAaxWfQUWkGCId-QDCvvxMT77ibj2Q"],"n":"E3in3Z14va0kk4Wqd3vcCAojKNtQq7ZTrQaavR8x0yu4","bt":"0","br":[],"ba":[],"a":[]}-AAFAAt2EjEPyJOMqtUdrp2EaRenlwriXviQ0hJ4Wx0agCok1sU3QMFS5hRdwX_NEFca9OnKGVjOag6K_F4yOs1BiuDQABN30bxBTVoemwfv6bPMqi9aIBKAuqm5IjcXFpS6vdnSdcQiz5VWb5DzpjhBztZyTiBbmxihl4tGyJ8xMTlIcmAwACq5YQaTJ45Smm2UwhyX5YLVkvxeJxt9oewmGAhOxyp-_tu0KAe2mehFHa6s9BlcqE-401mQh5EcniFbdHx3eAAQADR8Mtsn-7UKC-LjWq45-tKJfV8QVTaAXGiQsXye6DC7cf5iKQeUw7NXIcuxb-CXLL3AIMg3ZfhYy44-wW6pq6BgAEPtQg63EnWDfhwQjqgIlAHGupkeE_2hZhEp2Lcx0m5x4w0S6XqR9_Lx86RMnrzc3G9W3CJ_V5iEJhNQAqdTFqCw"#;
     let parsed = signed_message(ev).unwrap().1;
     let signed_msg = Message::try_from(parsed).unwrap();

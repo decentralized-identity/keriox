@@ -1,7 +1,7 @@
 use crate::error::Error;
-use crate::event_message::EventTypeTag;
 use crate::event_message::serialization_info::SerializationInfo;
 use crate::event_message::Digestible;
+use crate::event_message::EventTypeTag;
 use crate::event_message::Typeable;
 use crate::prefix::IdentifierPrefix;
 use crate::prefix::SelfAddressingPrefix;
@@ -13,7 +13,7 @@ use super::SerializationFormats;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Receipt {
-   /// Receipted Event Digest
+    /// Receipted Event Digest
     ///
     /// A Qualified Digest of the event which this receipt is made for
     /// (not the receipt message itself).

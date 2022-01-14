@@ -1,8 +1,8 @@
-use std::sync::Arc;
 #[cfg(feature = "query")]
-use crate::query::{key_state_notice::KeyStateNotice, QueryError, reply::SignedReply};
+use crate::query::{key_state_notice::KeyStateNotice, reply::SignedReply, QueryError};
 #[cfg(feature = "query")]
 use chrono::{DateTime, FixedOffset};
+use std::sync::Arc;
 
 use crate::{
     database::sled::SledEventDatabase,
@@ -12,16 +12,20 @@ use crate::{
         sections::{
             seal::{EventSeal, Seal},
             KeyConfig,
-        },    
+        },
         EventMessage,
-    },    
-    event_message::{signed_event_message::{
-        Message, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
-        TimestampedSignedEventMessage,
-    }, signature::Signature, key_event_message::KeyEvent},    
+    },
+    event_message::{
+        key_event_message::KeyEvent,
+        signature::Signature,
+        signed_event_message::{
+            Message, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
+            TimestampedSignedEventMessage,
+        },
+    },
     prefix::{IdentifierPrefix, SelfAddressingPrefix},
     state::{EventSemantics, IdentifierState},
-};    
+};
 
 #[cfg(feature = "async")]
 pub mod async_processing;
@@ -107,7 +111,12 @@ impl EventProcessor {
             for event in events {
                 state = state.apply(&event.signed_event_message.event_message.event)?;
                 // TODO: is this event.event.event stuff too ugly? =)
-                last_est = match event.signed_event_message.event_message.event.get_event_data() {
+                last_est = match event
+                    .signed_event_message
+                    .event_message
+                    .event
+                    .get_event_data()
+                {
                     EventData::Icp(_) => Some(event.signed_event_message),
                     EventData::Rot(_) => Some(event.signed_event_message),
                     _ => last_est,
@@ -156,10 +165,19 @@ impl EventProcessor {
     ) -> Result<Option<KeyConfig>, Error> {
         if let Ok(Some(event)) = self.get_event_at_sn(id, sn) {
             // if it's the event we're looking for
-            if event.signed_event_message.event_message.check_digest(&event_digest)? {
+            if event
+                .signed_event_message
+                .event_message
+                .check_digest(&event_digest)?
+            {
                 // return the config or error if it's not an establishment event
                 Ok(Some(
-                    match event.signed_event_message.event_message.event.get_event_data() {
+                    match event
+                        .signed_event_message
+                        .event_message
+                        .event
+                        .get_event_data()
+                    {
                         EventData::Icp(icp) => icp.key_config,
                         EventData::Rot(rot) => rot.key_config,
                         EventData::Dip(dip) => dip.inception_data.key_config,
@@ -180,11 +198,20 @@ impl EventProcessor {
     ///
     /// Validates binding between delegated and delegating events. The validation
     /// is based on delegating event seal and delegated event.
-    fn validate_seal(&self, seal: EventSeal, delegated_event: &EventMessage<KeyEvent>) -> Result<(), Error> {
+    fn validate_seal(
+        &self,
+        seal: EventSeal,
+        delegated_event: &EventMessage<KeyEvent>,
+    ) -> Result<(), Error> {
         // Check if event of seal's prefix and sn is in db.
         if let Ok(Some(event)) = self.get_event_at_sn(&seal.prefix, seal.sn) {
             // Extract prior_digest and data field from delegating event.
-            let data = match event.signed_event_message.event_message.event.get_event_data() {
+            let data = match event
+                .signed_event_message
+                .event_message
+                .event
+                .get_event_data()
+            {
                 EventData::Rot(rot) => rot.data,
                 EventData::Ixn(ixn) => ixn.data,
                 EventData::Drt(drt) => drt.data,
@@ -280,9 +307,9 @@ impl EventProcessor {
             EventData::Drt(_drt) => {
                 let delegator = self
                     .compute_state(&signed_event.event_message.event.get_prefix())?
-                    .ok_or_else(|| Error::SemanticError(
-                        "Missing state of delegated identifier".into(),
-                    ))?
+                    .ok_or_else(|| {
+                        Error::SemanticError("Missing state of delegated identifier".into())
+                    })?
                     .delegator
                     .ok_or(Error::SemanticError("Missing delegator".into()))?;
                 let (sn, dig) = signed_event
@@ -348,9 +375,7 @@ impl EventProcessor {
         &self,
         vrc: SignedTransferableReceipt,
     ) -> Result<Option<IdentifierState>, Error> {
-        if let Ok(Some(event)) =
-            self.get_event_at_sn(&vrc.body.event.prefix, vrc.body.event.sn)
-        {
+        if let Ok(Some(event)) = self.get_event_at_sn(&vrc.body.event.prefix, vrc.body.event.sn) {
             let kp = self.get_keys_at_event(
                 &vrc.validator_seal.prefix,
                 vrc.validator_seal.sn,
@@ -386,9 +411,7 @@ impl EventProcessor {
     ) -> Result<Option<IdentifierState>, Error> {
         // get event which is being receipted
         let id = &rct.body.event.prefix.to_owned();
-        if let Ok(Some(event)) =
-            self.get_event_at_sn(&rct.body.event.prefix, rct.body.event.sn)
-        {
+        if let Ok(Some(event)) = self.get_event_at_sn(&rct.body.event.prefix, rct.body.event.sn) {
             let serialized_event = event.signed_event_message.serialize()?;
             let (_, mut errors): (Vec<_>, Vec<Result<bool, Error>>) = rct
                 .clone()
@@ -532,7 +555,7 @@ impl EventProcessor {
             let verification_result = self.verify(&rpy.reply.serialize()?, &rpy.signature);
             if let Err(Error::EventOutOfOrderError) = verification_result {
                 self.escrow_reply(&rpy)?;
-                return Err(Error::QueryError(QueryError::OutOfOrderEventError))
+                return Err(Error::QueryError(QueryError::OutOfOrderEventError));
             }
             verification_result?;
             rpy.reply.check_digest()?;
@@ -541,7 +564,7 @@ impl EventProcessor {
                 Err(Error::QueryError(QueryError::NoSavedReply)) => {
                     // no previous rpy event to compare
                     Ok(())
-                },
+                }
                 anything => anything,
             }?;
             // now unpack ksn and check its details
@@ -551,7 +574,8 @@ impl EventProcessor {
                 self.escrow_reply(&rpy)?;
             };
             ksn_checking_result?;
-            self.db.update_accepted_reply(rpy.clone(), &rpy.reply.event.get_prefix())?;
+            self.db
+                .update_accepted_reply(rpy.clone(), &rpy.reply.event.get_prefix())?;
             Ok(Some(rpy.reply.event.get_state()))
         } else {
             Err(Error::SemanticError("wrong route type".into()))
@@ -603,12 +627,12 @@ impl EventProcessor {
             .ok_or(Error::QueryError(QueryError::OutOfOrderEventError))?
             .signed_event_message
             .event_message;
-        event_from_db.check_digest(&ksn.state.last_event_digest)?
+        event_from_db
+            .check_digest(&ksn.state.last_event_digest)?
             .then(|| ())
             .ok_or::<Error>(Error::IncorrectDigest)?;
 
-        match self.check_timestamp_with_last_ksn(ksn.timestamp, &ksn_pre, aid)
-        {
+        match self.check_timestamp_with_last_ksn(ksn.timestamp, &ksn_pre, aid) {
             Err(Error::QueryError(QueryError::OutOfOrderEventError)) => {
                 // no previous accepted ksn from that aid in db
                 Ok(())
@@ -640,7 +664,9 @@ impl EventProcessor {
         self.db.get_all_escrowed_replys().map(|esc| {
             esc.for_each(|sig_rep| {
                 match self.process_signed_reply(&sig_rep) {
-                    Ok(_) | Err(Error::SignatureVerificationError) | Err(Error::QueryError(QueryError::StaleRpy)) => {
+                    Ok(_)
+                    | Err(Error::SignatureVerificationError)
+                    | Err(Error::QueryError(QueryError::StaleRpy)) => {
                         // remove from escrow
                         self.db
                             .remove_escrowed_reply(&sig_rep.reply.event.get_prefix(), sig_rep)

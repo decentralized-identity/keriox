@@ -1,6 +1,9 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-use crate::{event::sections::seal::EventSeal, prefix::{AttachedSignaturePrefix, SelfSigningPrefix, BasicPrefix, IdentifierPrefix}};
+use crate::{
+    event::sections::seal::EventSeal,
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Signature {

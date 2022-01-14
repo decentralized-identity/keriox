@@ -1,11 +1,11 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::query::reply::{SignedReply, ReplyEvent};
+use crate::query::reply::{ReplyEvent, SignedReply};
 use crate::query::{
+    key_state_notice::KeyStateNotice,
     query::{QueryData, SignedQuery},
-    ReplyType,
-    key_state_notice::KeyStateNotice, Route
+    ReplyType, Route,
 };
 
 use crate::{
@@ -41,10 +41,7 @@ impl Witness {
 
     pub fn get_ksn_for_prefix(&self, prefix: &IdentifierPrefix) -> Result<SignedReply, Error> {
         let state = self.processor.compute_state(prefix).unwrap().unwrap();
-        let ksn = KeyStateNotice::new_ksn(
-            state,
-            SerializationFormats::JSON,
-        );
+        let ksn = KeyStateNotice::new_ksn(state, SerializationFormats::JSON);
         let rpy = ReplyEvent::new_reply(
             ksn,
             Route::ReplyKsn(IdentifierPrefix::Basic(self.prefix.clone())),
@@ -96,10 +93,7 @@ impl Witness {
                     .compute_state(&i)
                     .unwrap()
                     .ok_or(Error::SemanticError("No id in database".into()))?;
-                let ksn = KeyStateNotice::new_ksn(
-                    state,
-                    SerializationFormats::JSON,
-                );
+                let ksn = KeyStateNotice::new_ksn(state, SerializationFormats::JSON);
                 let rpy = ReplyEvent::new_reply(
                     ksn,
                     Route::ReplyKsn(IdentifierPrefix::Basic(self.prefix.clone())),

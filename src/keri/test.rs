@@ -1,11 +1,16 @@
 #[cfg(feature = "wallet")]
 use universal_wallet::prelude::UnlockedWallet;
 
-use crate::{event_parsing::message::signed_event_stream, event_message::signed_event_message::Message};
 #[cfg(test)]
 use crate::{database::sled::SledEventDatabase, error::Error, keri::Keri};
+use crate::{
+    event_message::signed_event_message::Message, event_parsing::message::signed_event_stream,
+};
 
-use std::{sync::{Arc, Mutex}, convert::TryFrom};
+use std::{
+    convert::TryFrom,
+    sync::{Arc, Mutex},
+};
 
 #[test]
 fn test_direct_mode() -> Result<(), Error> {
@@ -20,7 +25,6 @@ fn test_direct_mode() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     std::fs::create_dir_all(root.path()).unwrap();
     let db_bob = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-
 
     let alice_key_manager = {
         #[cfg(feature = "wallet")]
@@ -79,7 +83,10 @@ fn test_direct_mode() -> Result<(), Error> {
         .into_iter()
         .map(|msg| Message::try_from(msg).unwrap());
     assert!(matches!(events_in_response.next(), Some(Message::Event(_))));
-    assert!(matches!(events_in_response.next(), Some(Message::TransferableRct(_))));
+    assert!(matches!(
+        events_in_response.next(),
+        Some(Message::TransferableRct(_))
+    ));
 
     // Check if bob's state of alice is the same as current alice state.
     let alice_state_in_bob = bob.get_state_for_prefix(&alice.prefix)?.unwrap();
@@ -94,7 +101,10 @@ fn test_direct_mode() -> Result<(), Error> {
         .1
         .into_iter()
         .map(|msg| Message::try_from(msg).unwrap());
-    assert!(matches!(events_in_response.next(), Some(Message::TransferableRct(_))));
+    assert!(matches!(
+        events_in_response.next(),
+        Some(Message::TransferableRct(_))
+    ));
 
     // Check if alice's state of bob is the same as current bob state.
     let bob_state_in_alice = alice.get_state_for_prefix(&bob.prefix)?.unwrap();
@@ -118,7 +128,10 @@ fn test_direct_mode() -> Result<(), Error> {
         .1
         .into_iter()
         .map(|msg| Message::try_from(msg).unwrap());
-    assert!(matches!(events_in_response.next(), Some(Message::TransferableRct(_))));
+    assert!(matches!(
+        events_in_response.next(),
+        Some(Message::TransferableRct(_))
+    ));
 
     // Check if bob's state of alice is the same as current alice state.
     let alice_state_in_bob = bob.get_state_for_prefix(&alice.prefix)?.unwrap();
@@ -142,7 +155,10 @@ fn test_direct_mode() -> Result<(), Error> {
         .1
         .into_iter()
         .map(|msg| Message::try_from(msg).unwrap());
-    assert!(matches!(events_in_response.next(), Some(Message::TransferableRct(_))));
+    assert!(matches!(
+        events_in_response.next(),
+        Some(Message::TransferableRct(_))
+    ));
 
     // Check if bob's state of alice is the same as current alice state.
     let alice_state_in_bob = bob.get_state_for_prefix(&alice.prefix)?.unwrap();
@@ -159,15 +175,15 @@ fn test_qry_rpy() -> Result<(), Error> {
     use tempfile::Builder;
 
     use crate::{
-        derivation::{self_signing::SelfSigning, self_addressing::SelfAddressing},
+        derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
         event::SerializationFormats,
+        keri::witness::Witness,
         prefix::AttachedSignaturePrefix,
         query::{
-            query::{SignedQuery, QueryEvent},
-            Route, ReplyType,
+            query::{QueryEvent, SignedQuery},
+            ReplyType, Route,
         },
         signer::KeyManager,
-        keri::witness::Witness,
     };
 
     // Create test db and event processor.
@@ -210,7 +226,12 @@ fn test_qry_rpy() -> Result<(), Error> {
 
     // Bob asks about alices key state
     // construct qry message to ask of alice key state message
-    let qry = QueryEvent::new_query(Route::Ksn, alice_pref, SerializationFormats::JSON, &SelfAddressing::Blake3_256)?;
+    let qry = QueryEvent::new_query(
+        Route::Ksn,
+        alice_pref,
+        SerializationFormats::JSON,
+        &SelfAddressing::Blake3_256,
+    )?;
 
     // sign message by bob
     let signature = AttachedSignaturePrefix::new(
@@ -226,11 +247,14 @@ fn test_qry_rpy() -> Result<(), Error> {
 
     // ask witness about alice's key state notice
     let rep = witness.process_signed_query(s)?;
-   
+
     match rep {
         ReplyType::Rep(rep) => {
-            assert_eq!(&rep.reply.event.get_state(), &alice.get_state().unwrap().unwrap())
-        },
+            assert_eq!(
+                &rep.reply.event.get_state(),
+                &alice.get_state().unwrap().unwrap()
+            )
+        }
         ReplyType::Kel(_) => assert!(false),
     }
 
@@ -241,9 +265,7 @@ fn test_qry_rpy() -> Result<(), Error> {
 #[test]
 pub fn test_key_state_notice() -> Result<(), Error> {
     use crate::{
-        processor::EventProcessor,
-        query::QueryError,
-        signer::CryptoBox, keri::witness::Witness,
+        keri::witness::Witness, processor::EventProcessor, query::QueryError, signer::CryptoBox,
     };
     use tempfile::Builder;
 
@@ -310,7 +332,10 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     // Create transferable reply by bob and process it by alice.
     let trans_rpy = witness.get_ksn_for_prefix(&bob_pref)?;
     let res = alice.process_signed_reply(&trans_rpy.clone());
-    assert!(matches!(res, Err(Error::QueryError(QueryError::OutOfOrderEventError))));
+    assert!(matches!(
+        res,
+        Err(Error::QueryError(QueryError::OutOfOrderEventError))
+    ));
 
     // Now update bob's state in alice's db to most recent.
     alice.process_event(&new_bob_rot)?;

@@ -24,7 +24,7 @@ use crate::{
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
 
-use super::{KeyEvent, EventTypeTag};
+use super::{EventTypeTag, KeyEvent};
 
 pub struct EventMsgBuilder {
     event_type: EventTypeTag,

@@ -1,16 +1,20 @@
-use crate::{error::Error, event::{sections::KeyConfig, event_data::EventData}, prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix}, event_message::EventTypeTag};
+use crate::{
+    error::Error,
+    event::{event_data::EventData, sections::KeyConfig},
+    event_message::EventTypeTag,
+    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
+};
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
 
-
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct LastEstablishmentData {
-	#[serde(rename = "s", with = "SerHex::<Compact>")]
-	pub(crate) sn: u64,
-	#[serde(rename = "d")]
-	pub(crate) digest: SelfAddressingPrefix,
-	pub(crate) br: Vec<BasicPrefix>,
-	pub(crate) ba: Vec<BasicPrefix>,
+    #[serde(rename = "s", with = "SerHex::<Compact>")]
+    pub(crate) sn: u64,
+    #[serde(rename = "d")]
+    pub(crate) digest: SelfAddressingPrefix,
+    pub(crate) br: Vec<BasicPrefix>,
+    pub(crate) ba: Vec<BasicPrefix>,
 }
 
 /// Identifier State
@@ -18,46 +22,41 @@ pub struct LastEstablishmentData {
 /// represents the accumulated state after applying events, based on section 13 of the paper
 #[derive(Default, PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct IdentifierState {
-    #[serde(rename = "i")] 
+    #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
 
-    #[serde(rename = "s", with = "SerHex::<Compact>")] 
+    #[serde(rename = "s", with = "SerHex::<Compact>")]
     pub sn: u64,
-    
+
     #[serde(rename = "d")]
     pub last_event_digest: SelfAddressingPrefix,
 
     #[serde(rename = "p")]
     pub last_previous: Option<SelfAddressingPrefix>,
-    
+
     #[serde(rename = "et")]
     pub last_event_type: Option<EventTypeTag>,
-    
-    #[serde(flatten)] 
+
+    #[serde(flatten)]
     pub current: KeyConfig,
-    
-    #[serde(rename = "bt", with = "SerHex::<Compact>")] 
+
+    #[serde(rename = "bt", with = "SerHex::<Compact>")]
     pub tally: u64,
-    
-    #[serde(rename = "b")] 
+
+    #[serde(rename = "b")]
     pub witnesses: Vec<BasicPrefix>,
-    
-    #[serde(rename = "di")] 
+
+    #[serde(rename = "di")]
     pub delegator: Option<IdentifierPrefix>,
-	
+
     #[serde(rename = "ee")]
     pub last_est: LastEstablishmentData,
 }
 
-
-
 impl EventTypeTag {
     pub fn is_establishment_event(&self) -> bool {
         match self {
-            EventTypeTag::Icp
-            | EventTypeTag::Rot
-            | EventTypeTag::Dip
-            | EventTypeTag::Drt => true,
+            EventTypeTag::Icp | EventTypeTag::Rot | EventTypeTag::Dip | EventTypeTag::Drt => true,
             _ => false,
         }
     }
@@ -74,7 +73,6 @@ impl From<&EventData> for EventTypeTag {
         }
     }
 }
-
 
 impl IdentifierState {
     /// Apply
