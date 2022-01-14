@@ -10,17 +10,22 @@ use serde::Deserialize;
 #[cfg(feature = "async")]
 use crate::event_message::serialization_info::SerializationInfo;
 
-use crate::{event::{EventMessage, receipt::Receipt}, event_parsing::{Attachment, SignedEventData, attachment::attachment, EventType}, event_message::{Digestible, key_event_message::KeyEvent}}; 
-#[cfg(feature = "query")]
-use serde::Serialize;
-#[cfg(feature = "query")]
-use crate::query::Envelope;
 #[cfg(feature = "query")]
 use crate::event_message::{SaidEvent, Typeable};
+#[cfg(feature = "query")]
+use crate::query::Envelope;
+use crate::{
+    event::{receipt::Receipt, EventMessage},
+    event_message::{key_event_message::KeyEvent, Digestible},
+    event_parsing::{attachment::attachment, Attachment, EventType, SignedEventData},
+};
 use rmp_serde as serde_mgpk;
+#[cfg(feature = "query")]
+use serde::Serialize;
 
-
-fn json_message<'a, D: Deserialize<'a> + Digestible>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<D>> {
+fn json_message<'a, D: Deserialize<'a> + Digestible>(
+    s: &'a [u8],
+) -> nom::IResult<&[u8], EventMessage<D>> {
     let mut stream = serde_json::Deserializer::from_slice(s).into_iter::<EventMessage<D>>();
     match stream.next() {
         Some(Ok(event)) => Ok((&s[stream.byte_offset()..], event)),
@@ -44,27 +49,25 @@ fn mgpk_message<'a, D: Deserialize<'a>>(s: &[u8]) -> nom::IResult<&[u8], EventMe
     }
 }
 
-pub fn message<'a, D: Deserialize<'a> + Digestible>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<D>> {
+pub fn message<'a, D: Deserialize<'a> + Digestible>(
+    s: &'a [u8],
+) -> nom::IResult<&[u8], EventMessage<D>> {
     alt((json_message::<D>, cbor_message::<D>, mgpk_message::<D>))(s)
-
 }
 
 pub fn key_event_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
-    message::<KeyEvent>(s)
-        .map(|d| (d.0, EventType::KeyEvent(d.1)))
-
+    message::<KeyEvent>(s).map(|d| (d.0, EventType::KeyEvent(d.1)))
 }
 
 pub fn receipt_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
-    message::<Receipt>(s)
-        .map(|d| (d.0, EventType::Receipt(d.1)))
-
+    message::<Receipt>(s).map(|d| (d.0, EventType::Receipt(d.1)))
 }
 
 #[cfg(feature = "query")]
-fn envelope<'a, D: Serialize + Deserialize<'a> + Typeable>(s: &'a [u8]) -> nom::IResult<&[u8], EventMessage<SaidEvent<Envelope<D>>>> {
-    message::<SaidEvent<Envelope<D>>>(s)
-        .map(|d| (d.0, d.1))
+fn envelope<'a, D: Serialize + Deserialize<'a> + Typeable>(
+    s: &'a [u8],
+) -> nom::IResult<&[u8], EventMessage<SaidEvent<Envelope<D>>>> {
+    message::<SaidEvent<Envelope<D>>>(s).map(|d| (d.0, d.1))
 }
 
 #[cfg(feature = "query")]
@@ -83,7 +86,12 @@ pub fn reply_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], EventType> {
 
 pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
     #[cfg(feature = "query")]
-    let (rest, event) = alt((key_event_message, reply_message, query_message, receipt_message))(s)?;
+    let (rest, event) = alt((
+        key_event_message,
+        reply_message,
+        query_message,
+        receipt_message,
+    ))(s)?;
     #[cfg(not(feature = "query"))]
     let (rest, event) = alt((key_event_message, receipt_message))(s)?;
     let (rest, attachments): (&[u8], Vec<Attachment>) =
@@ -91,13 +99,14 @@ pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
             acc.push(item);
             acc
         })(rest)?;
-        
+
     Ok((
         rest,
         SignedEventData {
             deserialized_event: event,
             attachments,
-        }))
+        },
+    ))
 }
 
 pub fn signed_event_stream(s: &[u8]) -> nom::IResult<&[u8], Vec<SignedEventData>> {
@@ -161,7 +170,7 @@ fn test_key_event_parsing() {
     assert_eq!(event.unwrap().1.serialize().unwrap(), stream);
 
     // Rotation event.
-    let stream = br#"{"v":"KERI10JSON000155_","t":"rot","d":"EAntLipNnDDcGAJfGz9TStcJ8M19YLji3LPNVpXalwv4","i":"DWzwEHHzq7K0gzQPYGGwTmuupUhPx5_yZ-Wk1x4ejhcc","s":"1","p":"EO4Z11IVb8w4dUs4cGqYtp53dYKIV8j-mORGJ7wOdSN8","kt":"1","k":["DHgZa-u7veNZkqk2AxCnxrINGKfQ0bRiaf9FdA_-_49A"],"n":"EAXTvbATMnVRGjyC_VCNuXcPTxxpLanfzj14u3QMsD_U","bt":"0","br":[],"ba":[],"a":[]}"#; 
+    let stream = br#"{"v":"KERI10JSON000155_","t":"rot","d":"EAntLipNnDDcGAJfGz9TStcJ8M19YLji3LPNVpXalwv4","i":"DWzwEHHzq7K0gzQPYGGwTmuupUhPx5_yZ-Wk1x4ejhcc","s":"1","p":"EO4Z11IVb8w4dUs4cGqYtp53dYKIV8j-mORGJ7wOdSN8","kt":"1","k":["DHgZa-u7veNZkqk2AxCnxrINGKfQ0bRiaf9FdA_-_49A"],"n":"EAXTvbATMnVRGjyC_VCNuXcPTxxpLanfzj14u3QMsD_U","bt":"0","br":[],"ba":[],"a":[]}"#;
 
     let event = key_event_message(stream);
     assert!(event.is_ok());
@@ -193,7 +202,7 @@ fn test_key_event_parsing() {
 
 #[test]
 fn test_receipt_parsing() {
-     // Receipt event
+    // Receipt event
     let stream = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EsZuhYAPBDnexP3SOl9YsGvWBrYkjYcRjomUYmCcLAYY","i":"EsZuhYAPBDnexP3SOl9YsGvWBrYkjYcRjomUYmCcLAYY","s":"0"}"#;
     let event = receipt_message(stream);
     assert!(event.is_ok());

@@ -5,15 +5,14 @@ pub mod rotation;
 
 use crate::{
     error::Error,
-    state::{EventSemantics, IdentifierState}, event_message::{Typeable, EventTypeTag},
+    event_message::{EventTypeTag, Typeable},
+    state::{EventSemantics, IdentifierState},
 };
-use serde::{Deserialize, Serialize, Deserializer, de};
+use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
 pub use self::{
-    delegated::DelegatedInceptionEvent,
-    inception::InceptionEvent,
-    interaction::InteractionEvent,
+    delegated::DelegatedInceptionEvent, inception::InceptionEvent, interaction::InteractionEvent,
     rotation::RotationEvent,
 };
 
@@ -38,22 +37,31 @@ impl<'de> Deserialize<'de> for EventData {
         // Helper struct for adding tag to properly deserialize 't' field
         #[derive(Deserialize)]
         struct EventType {
-            t: EventTypeTag
+            t: EventTypeTag,
         }
 
         let v = Value::deserialize(deserializer)?;
         let m = EventType::deserialize(&v).map_err(de::Error::custom)?;
         match m.t {
-            EventTypeTag::Icp => Ok(EventData::Icp(InceptionEvent::deserialize(&v).map_err(de::Error::custom)?)),
-            EventTypeTag::Rot => Ok(EventData::Rot(RotationEvent::deserialize(&v).map_err(de::Error::custom)?)),
-            EventTypeTag::Ixn => Ok(EventData::Ixn(InteractionEvent::deserialize(&v).map_err(de::Error::custom)?)),
-            EventTypeTag::Dip => Ok(EventData::Dip(DelegatedInceptionEvent::deserialize(&v).map_err(de::Error::custom)?)),
-            EventTypeTag::Drt => Ok(EventData::Drt(RotationEvent::deserialize(&v).map_err(de::Error::custom)?)),
-            _ => Err(Error::SemanticError("Not a key event".into())).map_err(de::Error::custom)?
+            EventTypeTag::Icp => Ok(EventData::Icp(
+                InceptionEvent::deserialize(&v).map_err(de::Error::custom)?,
+            )),
+            EventTypeTag::Rot => Ok(EventData::Rot(
+                RotationEvent::deserialize(&v).map_err(de::Error::custom)?,
+            )),
+            EventTypeTag::Ixn => Ok(EventData::Ixn(
+                InteractionEvent::deserialize(&v).map_err(de::Error::custom)?,
+            )),
+            EventTypeTag::Dip => Ok(EventData::Dip(
+                DelegatedInceptionEvent::deserialize(&v).map_err(de::Error::custom)?,
+            )),
+            EventTypeTag::Drt => Ok(EventData::Drt(
+                RotationEvent::deserialize(&v).map_err(de::Error::custom)?,
+            )),
+            _ => Err(Error::SemanticError("Not a key event".into())).map_err(de::Error::custom)?,
         }
     }
 }
-
 
 impl EventSemantics for EventData {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
@@ -67,9 +75,9 @@ impl EventSemantics for EventData {
     }
 }
 
-impl Into<EventTypeTag> for EventData {
-    fn into(self) -> EventTypeTag {
-        match self {
+impl From<EventData> for EventTypeTag {
+    fn from(ed: EventData) -> Self {
+        match ed {
             EventData::Icp(_) => EventTypeTag::Icp,
             EventData::Rot(_) => EventTypeTag::Rot,
             EventData::Ixn(_) => EventTypeTag::Ixn,

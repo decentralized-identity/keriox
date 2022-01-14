@@ -7,14 +7,12 @@ use crate::{
     },
 };
 
-use super::{serialization_info::SerializationInfo, Typeable, EventTypeTag};
+use super::{serialization_info::SerializationInfo, EventTypeTag, Typeable};
 use serde::Serialize;
 use serde_hex::{Compact, SerHex};
 
 pub fn dummy_prefix(derivation: &SelfAddressing) -> String {
-    std::iter::repeat("#")
-        .take(derivation.code_len() + derivation.derivative_b64_len())
-        .collect::<String>()
+    "#".repeat(derivation.code_len() + derivation.derivative_b64_len())
 }
 
 /// Dummy Inception Event
@@ -76,9 +74,8 @@ impl DummyInceptionEvent {
             digest: dummy_prefix(derivation),
             prefix: dummy_prefix(derivation),
             sn: 0,
-            data: data,
-        }
-        )
+            data,
+        })
     }
 
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
@@ -120,16 +117,14 @@ impl<T: Serialize + Typeable + Clone> DummyEventMessage<T> {
         format: SerializationFormats,
         derivation: &SelfAddressing,
     ) -> Result<usize, Error> {
-        Ok(
-        Self {
+        Ok(Self {
             serialization_info: SerializationInfo::new(format, 0),
             event_type: event.get_type(),
             data: event.clone(),
             digest: dummy_prefix(derivation),
         }
         .serialize()?
-        .len()
-        )
+        .len())
     }
 
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {

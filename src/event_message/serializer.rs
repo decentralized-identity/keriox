@@ -1,18 +1,18 @@
-use serde::{ser, Serialize};
 use crate::error::serializer_error::Error;
+use serde::{ser, Serialize};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
 pub struct KeriJsonSerializer {
-    output: String
+    output: String,
 }
 
 pub fn to_string<T>(value: &T) -> Result<String>
 where
-    T: Serialize
+    T: Serialize,
 {
     let mut serializer = KeriJsonSerializer {
-        output: String::new()
+        output: String::new(),
     };
     value.serialize(&mut serializer)?;
     Ok(serializer.output)
@@ -83,7 +83,7 @@ impl<'a> ser::Serializer for &'a mut KeriJsonSerializer {
 
     // for KERI master codes we skip adding quotes
     fn serialize_str(self, v: &str) -> Result<()> {
-        if v.starts_with("-") {
+        if v.starts_with('-') {
             self.output += v;
         } else {
             self.output += "\"";
@@ -131,11 +131,7 @@ impl<'a> ser::Serializer for &'a mut KeriJsonSerializer {
         self.serialize_str(variant)
     }
 
-    fn serialize_newtype_struct<T>(
-        self,
-        _name: &'static str,
-        value: &T,
-    ) -> Result<()>
+    fn serialize_newtype_struct<T>(self, _name: &'static str, value: &T) -> Result<()>
     where
         T: ?Sized + Serialize,
     {
@@ -195,11 +191,7 @@ impl<'a> ser::Serializer for &'a mut KeriJsonSerializer {
         Ok(self)
     }
     // this is used to start serializing KERI struct, nothing more
-    fn serialize_struct(
-        self,
-        _name: &'static str,
-        _len: usize,
-    ) -> Result<Self::SerializeStruct> {
+    fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
         Ok(self)
     }
 
@@ -343,9 +335,10 @@ impl<'a> ser::SerializeStruct for &'a mut KeriJsonSerializer {
     {
         // KERI master code
         // value must be concatenated with code upfront
-        if key.starts_with("-") {
+        if key.starts_with('-') {
             value.serialize(&mut **self)?;
-        } else { // regular field here
+        } else {
+            // regular field here
             if !self.output.ends_with('{') && !self.output.is_empty() {
                 self.output += ",";
                 self.output += "{";

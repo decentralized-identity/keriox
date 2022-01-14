@@ -3,8 +3,7 @@ use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use serde_hex::{Compact, SerHex};
 
 use crate::{
-    event::SerializationFormats,
-    event_message::serialization_info::SerializationInfo,
+    event::SerializationFormats, event_message::serialization_info::SerializationInfo,
     state::IdentifierState,
 };
 
@@ -59,10 +58,7 @@ impl Serialize for KeyStateNotice {
 }
 
 impl KeyStateNotice {
-    pub fn new_ksn(
-        state: IdentifierState,
-        serialization: SerializationFormats,
-    ) -> Self {
+    pub fn new_ksn(state: IdentifierState, serialization: SerializationFormats) -> Self {
         let dt: DateTime<FixedOffset> = DateTime::from(Utc::now());
 
         let ksn = KeyStateNotice {

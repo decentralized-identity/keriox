@@ -2,7 +2,7 @@ use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
     event::{EventMessage, SerializationFormats},
-    event_message::{SaidEvent, Typeable, EventTypeTag},
+    event_message::{EventTypeTag, SaidEvent, Typeable},
     prefix::{IdentifierPrefix, Prefix},
 };
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};

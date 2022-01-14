@@ -1,8 +1,11 @@
 use super::Prefix;
-use crate::{error::Error, keys::{PrivateKey, PublicKey}};
+use crate::{
+    error::Error,
+    keys::{PrivateKey, PublicKey},
+};
 use base64::decode_config;
 use core::str::FromStr;
-use ed25519_dalek::{SecretKey};
+use ed25519_dalek::SecretKey;
 use k256::ecdsa::{SigningKey, VerifyingKey};
 
 #[derive(Debug, PartialEq, Clone)]
@@ -18,12 +21,13 @@ impl SeedPrefix {
         match self {
             Self::RandomSeed256Ed25519(seed) => {
                 let secret = SecretKey::from_bytes(seed)?;
-                let vk = PublicKey::new(ed25519_dalek::PublicKey::from(&secret).as_bytes().to_vec());
+                let vk =
+                    PublicKey::new(ed25519_dalek::PublicKey::from(&secret).as_bytes().to_vec());
                 let sk = PrivateKey::new(secret.as_bytes().to_vec());
                 Ok((vk, sk))
             }
             Self::RandomSeed256ECDSAsecp256k1(seed) => {
-                let sk = SigningKey::from_bytes(&seed)?;
+                let sk = SigningKey::from_bytes(seed)?;
                 Ok((
                     PublicKey::new(VerifyingKey::from(&sk).to_bytes().to_vec()),
                     PrivateKey::new(sk.to_bytes().to_vec()),
@@ -56,9 +60,15 @@ impl FromStr for SeedPrefix {
                     &s[2..],
                     base64::URL_SAFE,
                 )?)),
-                _ => Err(Error::DeserializeError(format!("Unknown seed prefix cod: {}", s))),
+                _ => Err(Error::DeserializeError(format!(
+                    "Unknown seed prefix cod: {}",
+                    s
+                ))),
             },
-            _ => Err(Error::DeserializeError(format!("Unknown seed prefix cod: {}", s))),
+            _ => Err(Error::DeserializeError(format!(
+                "Unknown seed prefix cod: {}",
+                s
+            ))),
         }
     }
 }

@@ -6,7 +6,8 @@ use crate::{
     error::Error,
     event::{sections::seal::EventSeal, EventMessage, SerializationFormats},
     event_message::{
-        dummy_event::DummyEventMessage, signature::Signature, Digestible, SaidEvent, Typeable, EventTypeTag,
+        dummy_event::DummyEventMessage, signature::Signature, Digestible, EventTypeTag, SaidEvent,
+        Typeable,
     },
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     state::IdentifierState,

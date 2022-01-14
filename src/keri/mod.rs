@@ -1,27 +1,36 @@
-use std::{convert::TryFrom, sync::{Arc, Mutex}};
+use std::{
+    convert::TryFrom,
+    sync::{Arc, Mutex},
+};
 
-use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivation::self_addressing::SelfAddressing, derivation::self_signing::SelfSigning, error::Error, event::sections::seal::{
-        DigestSeal,
-        Seal
-    }, event::{
-        event_data::EventData,
-        Event,
-        EventMessage,
-        SerializationFormats, receipt::Receipt
-    }, event::{
-        event_data::{
-            InteractionEvent,
+use crate::{
+    database::sled::SledEventDatabase,
+    derivation::basic::Basic,
+    derivation::self_addressing::SelfAddressing,
+    derivation::self_signing::SelfSigning,
+    error::Error,
+    event::sections::seal::{DigestSeal, Seal},
+    event::{event_data::EventData, receipt::Receipt, Event, EventMessage, SerializationFormats},
+    event::{event_data::InteractionEvent, sections::seal::EventSeal},
+    event_message::event_msg_builder::EventMsgBuilder,
+    event_message::{
+        key_event_message::KeyEvent,
+        signed_event_message::{
+            Message, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
-        sections::seal::EventSeal
-    }, event_message::{signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, Message}, EventTypeTag, key_event_message::KeyEvent}, event_message::{
-        event_msg_builder::EventMsgBuilder,
-    }, event_parsing::{SignedEventData, message::{signed_event_stream, signed_message}}, keys::PublicKey, prefix::AttachedSignaturePrefix, prefix::{
-        BasicPrefix,
-        IdentifierPrefix, SelfSigningPrefix,
-    }, processor::EventProcessor, signer::KeyManager, state::{
-        EventSemantics,
-        IdentifierState
-    }};
+        EventTypeTag,
+    },
+    event_parsing::{
+        message::{signed_event_stream, signed_message},
+        SignedEventData,
+    },
+    keys::PublicKey,
+    prefix::AttachedSignaturePrefix,
+    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    processor::EventProcessor,
+    signer::KeyManager,
+    state::{EventSemantics, IdentifierState},
+};
 #[cfg(feature = "wallet")]
 use universal_wallet::prelude::{Content, UnlockedWallet};
 
@@ -106,7 +115,10 @@ impl<K: KeyManager> Keri<K> {
         }
     }
 
-    pub fn incept(&mut self, initial_witness: Option<Vec<BasicPrefix>>) -> Result<SignedEventMessage, Error> {
+    pub fn incept(
+        &mut self,
+        initial_witness: Option<Vec<BasicPrefix>>,
+    ) -> Result<SignedEventMessage, Error> {
         let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
         let icp = EventMsgBuilder::new(EventTypeTag::Icp)
             .with_prefix(&self.prefix)
@@ -115,14 +127,16 @@ impl<K: KeyManager> Keri<K> {
             .with_witness_list(&initial_witness.unwrap_or_default())
             .build()?;
 
-        let signed = icp.sign(vec![AttachedSignaturePrefix::new(
-            SelfSigning::Ed25519Sha512,
-            km.sign(&icp.serialize()?)?,
-            0,
-        )], None);
+        let signed = icp.sign(
+            vec![AttachedSignaturePrefix::new(
+                SelfSigning::Ed25519Sha512,
+                km.sign(&icp.serialize()?)?,
+                0,
+            )],
+            None,
+        );
 
-        self.processor
-            .process(Message::Event(signed.clone()))?;
+        self.processor.process(Message::Event(signed.clone()))?;
 
         self.prefix = icp.event.get_prefix();
 
@@ -139,31 +153,35 @@ impl<K: KeyManager> Keri<K> {
     ///  where `SignedEventMessage` is ICP event including all provided keys + directly fetched
     ///  verification key, signed with it's private key via KeyManager and serialized.
     ///
-    pub fn incept_with_extra_keys(&mut self, extra_keys: impl IntoIterator<Item = (Basic, PublicKey)>) 
-        -> Result<SignedEventMessage, Error> {
-            let mut keys: Vec<BasicPrefix> = extra_keys
-                .into_iter()
-                .map(|(key_type, key)| key_type.derive(key)).collect();
-            // Signing key must be first
-            let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
-            keys.insert(0, Basic::Ed25519.derive(km.public_key()));
-            let icp = EventMsgBuilder::new(EventTypeTag::Icp)
-                .with_prefix(&self.prefix)
-                .with_keys(keys)
-                .with_next_keys(vec!(Basic::Ed25519.derive(km.next_public_key())))
-                .build()?;
+    pub fn incept_with_extra_keys(
+        &mut self,
+        extra_keys: impl IntoIterator<Item = (Basic, PublicKey)>,
+    ) -> Result<SignedEventMessage, Error> {
+        let mut keys: Vec<BasicPrefix> = extra_keys
+            .into_iter()
+            .map(|(key_type, key)| key_type.derive(key))
+            .collect();
+        // Signing key must be first
+        let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
+        keys.insert(0, Basic::Ed25519.derive(km.public_key()));
+        let icp = EventMsgBuilder::new(EventTypeTag::Icp)
+            .with_prefix(&self.prefix)
+            .with_keys(keys)
+            .with_next_keys(vec![Basic::Ed25519.derive(km.next_public_key())])
+            .build()?;
 
-            let signed = icp.sign(vec!(
-                AttachedSignaturePrefix::new(
-                    SelfSigning::Ed25519Sha512,
-                    km.sign(&icp.serialize()?)?,
-                    0
-                )
-            ), None);
-            self.processor.process(Message::Event(signed.clone()))?;
-            self.prefix = icp.event.get_prefix();
+        let signed = icp.sign(
+            vec![AttachedSignaturePrefix::new(
+                SelfSigning::Ed25519Sha512,
+                km.sign(&icp.serialize()?)?,
+                0,
+            )],
+            None,
+        );
+        self.processor.process(Message::Event(signed.clone()))?;
+        self.prefix = icp.event.get_prefix();
 
-            Ok(signed)
+        Ok(signed)
     }
 
     /// Interacts with peer identifier via generation of a `Seal`
@@ -187,15 +205,12 @@ impl<K: KeyManager> Keri<K> {
                 ))
             }
         };
-        let event = 
-            Event::new(
-                self.prefix.clone(),
-                next_sn,
-                EventData::Ixn(InteractionEvent::new(pref, vec![seal])),
-            ).to_message(
-            SerializationFormats::JSON,
-            &SelfAddressing::Blake3_256,
-        )?;
+        let event = Event::new(
+            self.prefix.clone(),
+            next_sn,
+            EventData::Ixn(InteractionEvent::new(pref, vec![seal])),
+        )
+        .to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)?;
         let serialized = event.serialize()?;
         let signature = self
             .key_manager
@@ -207,8 +222,10 @@ impl<K: KeyManager> Keri<K> {
             signature,
             0, // TODO: what is this?
         );
-        let signed = SignedEventMessage::new(&event, vec!(asp), None);
-        self.processor.db.add_kel_finalized_event(signed.clone(), &self.prefix)?;
+        let signed = SignedEventMessage::new(&event, vec![asp], None);
+        self.processor
+            .db
+            .add_kel_finalized_event(signed.clone(), &self.prefix)?;
         Ok(signed)
     }
 
@@ -218,17 +235,19 @@ impl<K: KeyManager> Keri<K> {
             .map_err(|_| Error::MutexPoisoned)?
             .rotate()?;
         let rot = self.make_rotation()?;
-        let rot = rot.sign(vec![AttachedSignaturePrefix::new(
-            SelfSigning::Ed25519Sha512,
-            self.key_manager
+        let rot = rot.sign(
+            vec![AttachedSignaturePrefix::new(
+                SelfSigning::Ed25519Sha512,
+                self.key_manager
                     .lock()
                     .map_err(|_| Error::MutexPoisoned)?
                     .sign(&rot.serialize()?)?,
-            0,
-        )], None);
+                0,
+            )],
+            None,
+        );
 
-        self.processor
-            .process(Message::Event(rot.clone()))?;
+        self.processor.process(Message::Event(rot.clone()))?;
 
         Ok(rot)
     }
@@ -237,7 +256,7 @@ impl<K: KeyManager> Keri<K> {
         let state = self
             .processor
             .compute_state(&self.prefix)?
-            .ok_or(Error::SemanticError("There is no state".into()))?;
+            .ok_or_else(|| Error::SemanticError("There is no state".into()))?;
         match self.key_manager.lock() {
             Ok(kv) => EventMsgBuilder::new(EventTypeTag::Rot)
                 .with_prefix(&self.prefix)
@@ -262,7 +281,7 @@ impl<K: KeyManager> Keri<K> {
         let state = self
             .processor
             .compute_state(&self.prefix)?
-            .ok_or(Error::SemanticError("There is no state".into()))?;
+            .ok_or_else(|| Error::SemanticError("There is no state".into()))?;
 
         let ev = EventMsgBuilder::new(EventTypeTag::Ixn)
             .with_prefix(&self.prefix)
@@ -271,17 +290,19 @@ impl<K: KeyManager> Keri<K> {
             .with_seal(seal_list)
             .build()?;
 
-        let ixn = ev.sign(vec![AttachedSignaturePrefix::new(
-            SelfSigning::Ed25519Sha512,
-            self.key_manager
+        let ixn = ev.sign(
+            vec![AttachedSignaturePrefix::new(
+                SelfSigning::Ed25519Sha512,
+                self.key_manager
                     .lock()
                     .map_err(|_| Error::MutexPoisoned)?
                     .sign(&ev.serialize()?)?,
-            0,
-        )], None);
+                0,
+            )],
+            None,
+        );
 
-        self.processor
-            .process(Message::Event(ixn.clone()))?;
+        self.processor.process(Message::Event(ixn.clone()))?;
 
         Ok(ixn)
     }
@@ -292,12 +313,10 @@ impl<K: KeyManager> Keri<K> {
         let parsed = signed_message(msg).map_err(|e| Error::DeserializeError(e.to_string()))?;
         match Message::try_from(parsed.1) {
             Err(e) => Err(Error::DeserializeError(e.to_string())),
-            Ok(event) => {
-                match self.processor.process(event)? {
-                    None => Err(Error::InvalidIdentifierStat),
-                    Some(state) => Ok((state.prefix.clone(), serde_json::to_vec(&state)?)),
-                }
-            }
+            Ok(event) => match self.processor.process(event)? {
+                None => Err(Error::InvalidIdentifierStat),
+                Some(state) => Ok((state.prefix.clone(), serde_json::to_vec(&state)?)),
+            },
         }
     }
 
@@ -305,14 +324,12 @@ impl<K: KeyManager> Keri<K> {
         let events = signed_event_stream(msg)
             .map_err(|e| Error::DeserializeError(e.to_string()))?
             .1;
-        
+
         let (processed_ok, _processed_failed): (Vec<_>, Vec<_>) = events
             .into_iter()
             .map(|event| {
                 let message = Message::try_from(event)?;
-                self.processor
-                .process(message.clone())
-                .map(|_| message)
+                self.processor.process(message.clone()).map(|_| message)
             })
             .partition(Result::is_ok);
 
@@ -330,20 +347,17 @@ impl<K: KeyManager> Keri<K> {
                                 &ev.event_message.event.get_prefix(),
                             )? {
                                 buf.append(
-                                    &mut self
-                                        .processor
-                                        .get_kerl(&self.prefix)?
-                                        .ok_or(Error::SemanticError("KEL is empty".into()))?,
+                                    &mut self.processor.get_kerl(&self.prefix)?.ok_or_else(
+                                        || Error::SemanticError("KEL is empty".into()),
+                                    )?,
                                 )
                             }
                         }
                         let rcp: SignedEventData = self.make_rct(ev.event_message)?.into();
                         buf.append(&mut rcp.to_cesr().unwrap());
                         Ok(buf)
-                    },
-                    Message::TransferableRct(_rct) => {
-                        Ok(vec![])
                     }
+                    Message::TransferableRct(_rct) => Ok(vec![]),
                     // TODO: this should process properly
                     _ => todo!(),
                 }
@@ -354,7 +368,10 @@ impl<K: KeyManager> Keri<K> {
         Ok(response)
     }
 
-    pub fn make_rct(&self, event: EventMessage<KeyEvent>) -> Result<SignedTransferableReceipt, Error> {
+    pub fn make_rct(
+        &self,
+        event: EventMessage<KeyEvent>,
+    ) -> Result<SignedTransferableReceipt, Error> {
         let ser = event.serialize()?;
         let signature = self
             .key_manager
@@ -364,7 +381,7 @@ impl<K: KeyManager> Keri<K> {
         let validator_event_seal = self
             .processor
             .get_last_establishment_event_seal(&self.prefix)?
-            .ok_or(Error::SemanticError("No establishment event seal".into()))?;
+            .ok_or_else(|| Error::SemanticError("No establishment event seal".into()))?;
         let rcp = Receipt {
             prefix: event.event.get_prefix(),
             sn: event.event.get_sn(),
@@ -393,7 +410,10 @@ impl<K: KeyManager> Keri<K> {
     /// # Parameters
     /// * `message` - `EventMessage` we are to process
     ///
-    pub fn make_ntr(&self, message: EventMessage<KeyEvent>) -> Result<SignedNontransferableReceipt, Error> {
+    pub fn make_ntr(
+        &self,
+        message: EventMessage<KeyEvent>,
+    ) -> Result<SignedNontransferableReceipt, Error> {
         let our_bp = match &self.prefix {
             IdentifierPrefix::Basic(prefix) => prefix,
             _ => {
@@ -405,14 +425,14 @@ impl<K: KeyManager> Keri<K> {
         match &message.event.get_event_data() {
             // ICP requires check if we are in initial witnesses only
             EventData::Icp(evt) => {
-                if !evt.witness_config.initial_witnesses.contains(&our_bp) {
+                if !evt.witness_config.initial_witnesses.contains(our_bp) {
                     return Err(Error::SemanticError("we are not in a witness list.".into()));
                 }
                 self.generate_ntr(message)
             }
             EventData::Rot(evt) => {
-                if !evt.witness_config.prune.contains(&our_bp) {
-                    if evt.witness_config.graft.contains(&our_bp) {
+                if !evt.witness_config.prune.contains(our_bp) {
+                    if evt.witness_config.graft.contains(our_bp) {
                         // FIXME: logic for already witnessed identifier required
                         self.generate_ntr(message)
                     } else {
@@ -420,7 +440,7 @@ impl<K: KeyManager> Keri<K> {
                             "event does not change our status as a witness".into(),
                         ))
                     }
-                } else if evt.witness_config.prune.contains(&our_bp) {
+                } else if evt.witness_config.prune.contains(our_bp) {
                     self.processor
                         .db
                         .remove_receipts_nt(&message.event.get_prefix())?;
@@ -458,7 +478,10 @@ impl<K: KeyManager> Keri<K> {
         self.processor.compute_state_at_sn(&seal.prefix, seal.sn)
     }
 
-    fn generate_ntr(&self, message: EventMessage<KeyEvent>) -> Result<SignedNontransferableReceipt, Error> {
+    fn generate_ntr(
+        &self,
+        message: EventMessage<KeyEvent>,
+    ) -> Result<SignedNontransferableReceipt, Error> {
         let signature;
         let bp;
         match self.key_manager.lock() {
@@ -481,8 +504,6 @@ impl<K: KeyManager> Keri<K> {
             .add_receipt_nt(ntr.clone(), &message.event.get_prefix())?;
         Ok(ntr)
     }
-
-
 }
 // Non re-allocating random `String` generator with output length of 10 char string
 #[cfg(feature = "wallet")]

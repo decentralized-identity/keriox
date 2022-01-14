@@ -32,8 +32,8 @@ impl SelfAddressing {
     pub fn digest(&self, data: &[u8]) -> Vec<u8> {
         match self {
             Self::Blake3_256 => blake3_256_digest(data),
-            Self::Blake2B256(key) => blake2b_256_digest(data, &key),
-            Self::Blake2S256(key) => blake2s_256_digest(data, &key),
+            Self::Blake2B256(key) => blake2b_256_digest(data, key),
+            Self::Blake2S256(key) => blake2s_256_digest(data, key),
             Self::SHA3_256 => sha3_256_digest(data),
             Self::SHA2_256 => sha2_256_digest(data),
             Self::Blake3_512 => blake3_512_digest(data),
@@ -91,7 +91,10 @@ impl FromStr for SelfAddressing {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.get(..1).ok_or(Error::DeserializeError("Empty prefix".into()))? {
+        match s
+            .get(..1)
+            .ok_or_else(|| Error::DeserializeError("Empty prefix".into()))?
+        {
             "E" => Ok(Self::Blake3_256),
             "F" => Ok(Self::Blake2B256(vec![])),
             "G" => Ok(Self::Blake2S256(vec![])),
@@ -104,7 +107,9 @@ impl FromStr for SelfAddressing {
                 "G" => Ok(Self::SHA2_512),
                 _ => Err(Error::DeserializeError("Unknown hash code".into())),
             },
-            _ => Err(Error::DeserializeError("Unknown hash algorithm code".into())),
+            _ => Err(Error::DeserializeError(
+                "Unknown hash algorithm code".into(),
+            )),
         }
     }
 }

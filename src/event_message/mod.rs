@@ -1,17 +1,15 @@
+pub mod dummy_event;
 pub mod event_msg_builder;
+pub mod key_event_message;
 pub mod serialization_info;
 pub mod serializer;
-pub mod signed_event_message;
 pub mod signature;
-pub mod dummy_event;
-pub mod key_event_message;
+pub mod signed_event_message;
 
 use std::cmp::Ordering;
 
 use crate::{
-    error::Error,
-    prefix::SelfAddressingPrefix,
-    derivation::self_addressing::SelfAddressing,
+    derivation::self_addressing::SelfAddressing, error::Error, prefix::SelfAddressingPrefix,
 };
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize, Serializer};
@@ -50,16 +48,23 @@ pub struct SaidEvent<D> {
 
 impl<D: Serialize + Clone + Typeable> SaidEvent<D> {
     pub fn new(digest: SelfAddressingPrefix, content: D) -> Self {
-        Self {digest: digest, content}
+        Self { digest, content }
     }
-    pub(crate) fn to_message(event: D, format: SerializationFormats, derivation: &SelfAddressing) -> Result<EventMessage<SaidEvent<D>>, Error> {
-        let dummy_event = DummyEventMessage::dummy_event(event.clone(), format, &derivation)?;
+    pub(crate) fn to_message(
+        event: D,
+        format: SerializationFormats,
+        derivation: &SelfAddressing,
+    ) -> Result<EventMessage<SaidEvent<D>>, Error> {
+        let dummy_event = DummyEventMessage::dummy_event(event.clone(), format, derivation)?;
         let digest = derivation.derive(&dummy_event.serialize()?);
 
         Ok(EventMessage {
-                serialization_info: dummy_event.serialization_info,
-                event: Self { digest, content: event},
-            })
+            serialization_info: dummy_event.serialization_info,
+            event: Self {
+                digest,
+                content: event,
+            },
+        })
     }
 }
 
@@ -71,7 +76,7 @@ impl<D> Digestible for SaidEvent<D> {
 
 impl<D: Typeable> Typeable for SaidEvent<D> {
     fn get_type(&self) -> EventTypeTag {
-       self.content.get_type() 
+        self.content.get_type()
     }
 }
 
@@ -96,7 +101,8 @@ impl<D: Digestible> EventMessage<D> {
 impl<D: Digestible + Typeable + Serialize + Clone> Serialize for EventMessage<D> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: Serializer {
+        S: Serializer,
+    {
         // Helper struct for adding `t` field to EventMessage serialization
         #[derive(Serialize)]
         struct TypedEventMessage<D> {
@@ -108,10 +114,9 @@ impl<D: Digestible + Typeable + Serialize + Clone> Serialize for EventMessage<D>
             digest: SelfAddressingPrefix,
 
             #[serde(flatten)]
-            event: D
-
+            event: D,
         }
-        impl<D: Digestible + Typeable +  Clone> From<&EventMessage<D>> for TypedEventMessage<D> {
+        impl<D: Digestible + Typeable + Clone> From<&EventMessage<D>> for TypedEventMessage<D> {
             fn from(em: &EventMessage<D>) -> Self {
                 TypedEventMessage {
                     v: em.serialization_info,
@@ -147,10 +152,12 @@ impl PartialOrd for TimestampedEventMessage {
         Some(
             match self.event_message.event.get_sn() == other.event_message.event.get_sn() {
                 true => Ordering::Equal,
-                false => match self.event_message.event.get_sn() > other.event_message.event.get_sn() {
-                    true => Ordering::Greater,
-                    false => Ordering::Less,
-                },
+                false => {
+                    match self.event_message.event.get_sn() > other.event_message.event.get_sn() {
+                        true => Ordering::Greater,
+                        false => Ordering::Less,
+                    }
+                }
             },
         )
     }
@@ -201,19 +208,19 @@ impl<T: Clone + Serialize + Digestible + Typeable> EventMessage<T> {
 mod tests {
     mod test_utils;
 
-    use self::{test_utils::test_mock_event_sequence};
+    use self::test_utils::test_mock_event_sequence;
     use super::*;
     use crate::{
         derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
         event::{
-            Event,
             event_data::{inception::InceptionEvent, EventData},
             sections::KeyConfig,
             sections::{threshold::SignatureThreshold, InceptionWitnessConfig},
+            Event,
         },
-        state::IdentifierState,
         keys::{PrivateKey, PublicKey},
         prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix},
+        state::IdentifierState,
     };
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
@@ -266,7 +273,7 @@ mod tests {
 
         assert!(pref0.verify(&ser, &attached_sig.signature)?);
 
-        let signed_event = icp_m.sign( vec![attached_sig], None);
+        let signed_event = icp_m.sign(vec![attached_sig], None);
 
         let s_ = IdentifierState::default();
 
@@ -389,27 +396,16 @@ mod tests {
         ];
         assert!(test_mock_event_sequence(wrong_seq).is_err());
 
-        let ok_seq = vec![
-            EventTypeTag::Icp,
-            EventTypeTag::Rot,
-            EventTypeTag::Rot,
-        ];
+        let ok_seq = vec![EventTypeTag::Icp, EventTypeTag::Rot, EventTypeTag::Rot];
         assert!(test_mock_event_sequence(ok_seq).is_ok());
 
         // Wrong delegated events sequence.
-        let wrong_delegated_sequence = vec![
-            EventTypeTag::Dip,
-            EventTypeTag::Drt,
-            EventTypeTag::Rot,
-        ];
+        let wrong_delegated_sequence =
+            vec![EventTypeTag::Dip, EventTypeTag::Drt, EventTypeTag::Rot];
         assert!(test_mock_event_sequence(wrong_delegated_sequence).is_err());
 
         // Delegated events sequence.
-        let delegated_sequence = vec![
-            EventTypeTag::Dip,
-            EventTypeTag::Drt,
-            EventTypeTag::Ixn,
-        ];
+        let delegated_sequence = vec![EventTypeTag::Dip, EventTypeTag::Drt, EventTypeTag::Ixn];
         assert!(test_mock_event_sequence(delegated_sequence).is_ok());
 
         Ok(())
