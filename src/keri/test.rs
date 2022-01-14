@@ -1,10 +1,11 @@
 #[cfg(feature = "wallet")]
 use universal_wallet::prelude::UnlockedWallet;
 
+use crate::{event_parsing::message::signed_event_stream, event_message::signed_event_message::Message};
 #[cfg(test)]
 use crate::{database::sled::SledEventDatabase, error::Error, keri::Keri};
 
-use std::sync::{Arc, Mutex};
+use std::{sync::{Arc, Mutex}, convert::TryFrom};
 
 #[test]
 fn test_direct_mode() -> Result<(), Error> {
@@ -13,7 +14,13 @@ fn test_direct_mode() -> Result<(), Error> {
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     std::fs::create_dir_all(root.path()).unwrap();
-    let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+    let db_alice = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+
+    // Create test db and event processor.
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    std::fs::create_dir_all(root.path()).unwrap();
+    let db_bob = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+
 
     let alice_key_manager = {
         #[cfg(feature = "wallet")]
@@ -30,7 +37,7 @@ fn test_direct_mode() -> Result<(), Error> {
     };
 
     // Init alice.
-    let mut alice = Keri::new(Arc::clone(&db), alice_key_manager.clone())?;
+    let mut alice = Keri::new(Arc::clone(&db_alice), alice_key_manager.clone())?;
 
     assert_eq!(alice.get_state()?, None);
 
@@ -52,7 +59,7 @@ fn test_direct_mode() -> Result<(), Error> {
     //}
 
     // Init bob.
-    let mut bob = Keri::new(Arc::clone(&db), bob_key_manager.clone())?;
+    let mut bob = Keri::new(Arc::clone(&db_bob), bob_key_manager.clone())?;
 
     bob.incept(None).unwrap();
     let bob_state = bob.get_state()?;
@@ -65,6 +72,15 @@ fn test_direct_mode() -> Result<(), Error> {
     // Send it to bob.
     let mut msg_to_alice = bob.respond(&msg_to_bob)?;
 
+    // Check response
+    let mut events_in_response = signed_event_stream(&msg_to_alice)
+        .unwrap()
+        .1
+        .into_iter()
+        .map(|msg| Message::try_from(msg).unwrap());
+    assert!(matches!(events_in_response.next(), Some(Message::Event(_))));
+    assert!(matches!(events_in_response.next(), Some(Message::TransferableRct(_))));
+
     // Check if bob's state of alice is the same as current alice state.
     let alice_state_in_bob = bob.get_state_for_prefix(&alice.prefix)?.unwrap();
     assert_eq!(alice_state_in_bob, alice.get_state()?.unwrap());
@@ -72,12 +88,21 @@ fn test_direct_mode() -> Result<(), Error> {
     // Send message from bob to alice and get alice's receipts.
     msg_to_bob = alice.respond(&msg_to_alice)?;
 
+    // Check response. It should be transferable receipt message from alice.
+    let mut events_in_response = signed_event_stream(&msg_to_bob)
+        .unwrap()
+        .1
+        .into_iter()
+        .map(|msg| Message::try_from(msg).unwrap());
+    assert!(matches!(events_in_response.next(), Some(Message::TransferableRct(_))));
+
     // Check if alice's state of bob is the same as current bob state.
     let bob_state_in_alice = alice.get_state_for_prefix(&bob.prefix)?.unwrap();
     assert_eq!(bob_state_in_alice, bob.get_state()?.unwrap());
 
     // Send it to bob.
-    bob.respond(&msg_to_bob)?;
+    let bobs_res = bob.respond(&msg_to_bob)?;
+    assert!(bobs_res.is_empty());
 
     // Rotation event.
     let alice_rot = alice.rotate()?;
@@ -86,12 +111,22 @@ fn test_direct_mode() -> Result<(), Error> {
     // Send rotation event to bob.
     msg_to_bob = alice_rot.serialize()?;
     msg_to_alice = bob.respond(&msg_to_bob)?;
+
+    // Check response. It should be transferable receipt message from bob.
+    let mut events_in_response = signed_event_stream(&msg_to_alice)
+        .unwrap()
+        .1
+        .into_iter()
+        .map(|msg| Message::try_from(msg).unwrap());
+    assert!(matches!(events_in_response.next(), Some(Message::TransferableRct(_))));
+
     // Check if bob's state of alice is the same as current alice state.
     let alice_state_in_bob = bob.get_state_for_prefix(&alice.prefix)?.unwrap();
     assert_eq!(alice_state_in_bob, alice.get_state()?.unwrap());
 
     // Send bob's receipt to alice.
-    alice.respond(&msg_to_alice)?;
+    let alice_res = alice.respond(&msg_to_alice)?;
+    assert!(alice_res.is_empty());
 
     // Interaction event.
     let alice_ixn = alice.make_ixn(None)?;
@@ -100,6 +135,14 @@ fn test_direct_mode() -> Result<(), Error> {
     // Send interaction event to bob.
     msg_to_bob = alice_ixn.serialize()?;
     msg_to_alice = bob.respond(&msg_to_bob)?;
+
+    // Check response. It should be trnasferable receipt message from bob.
+    let mut events_in_response = signed_event_stream(&msg_to_alice)
+        .unwrap()
+        .1
+        .into_iter()
+        .map(|msg| Message::try_from(msg).unwrap());
+    assert!(matches!(events_in_response.next(), Some(Message::TransferableRct(_))));
 
     // Check if bob's state of alice is the same as current alice state.
     let alice_state_in_bob = bob.get_state_for_prefix(&alice.prefix)?.unwrap();

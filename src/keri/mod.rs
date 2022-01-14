@@ -305,14 +305,17 @@ impl<K: KeyManager> Keri<K> {
         let events = signed_event_stream(msg)
             .map_err(|e| Error::DeserializeError(e.to_string()))?
             .1;
+        
         let (processed_ok, _processed_failed): (Vec<_>, Vec<_>) = events
             .into_iter()
             .map(|event| {
+                let message = Message::try_from(event)?;
                 self.processor
-                    .process(Message::try_from(event.clone()).unwrap())
-                    .and_then(|_| Message::try_from(event))
+                .process(message.clone())
+                .map(|_| message)
             })
             .partition(Result::is_ok);
+
         let response: Vec<u8> = processed_ok
             .into_iter()
             .map(Result::unwrap)
@@ -337,9 +340,12 @@ impl<K: KeyManager> Keri<K> {
                         let rcp: SignedEventData = self.make_rct(ev.event_message)?.into();
                         buf.append(&mut rcp.to_cesr().unwrap());
                         Ok(buf)
+                    },
+                    Message::TransferableRct(_rct) => {
+                        Ok(vec![])
                     }
                     // TODO: this should process properly
-                    _ => Ok(vec![]),
+                    _ => todo!(),
                 }
             })
             .filter_map(|x| x.ok())
