@@ -84,7 +84,7 @@ fn test_delegated_inception_data_derivation() -> Result<(), Error> {
         .incept_self_addressing(SelfAddressing::Blake3_256, SerializationFormats::JSON)?;
 
     assert_eq!("Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI", dip_data.event.get_prefix().to_str());
-    assert_eq!("Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI", dip_data.event.get_digest().unwrap().to_str());
+    assert_eq!("Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI", dip_data.event.get_digest().to_str());
     assert_eq!("KERI10JSON000154_", dip_data.serialization_info.to_str());
     
     Ok(())

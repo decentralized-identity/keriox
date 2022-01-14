@@ -27,7 +27,7 @@ pub trait Typeable {
     fn get_type(&self) -> Option<String>;
 }
 pub trait Digestible {
-    fn get_digest(&self) -> Option<SelfAddressingPrefix>;
+    fn get_digest(&self) -> SelfAddressingPrefix;
 }
 
 pub type KeyEvent = SaidEvent<Event>;
@@ -55,7 +55,7 @@ impl EventSemantics for KeyEvent {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct SaidEvent<D> {
     #[serde(rename = "d", skip_serializing)]
-    digest: Option<SelfAddressingPrefix>,
+    digest: SelfAddressingPrefix,
 
     #[serde(flatten)]
     pub content: D,
@@ -63,11 +63,11 @@ pub struct SaidEvent<D> {
 
 impl<D: Serialize + Clone + Typeable> SaidEvent<D> {
     pub fn new(digest: SelfAddressingPrefix, content: D) -> Self {
-        Self {digest: Some(digest), content}
+        Self {digest: digest, content}
     }
     pub(crate) fn to_message(event: D, format: SerializationFormats, derivation: &SelfAddressing) -> Result<EventMessage<SaidEvent<D>>, Error> {
         let dummy_event = DummyEventMessage::dummy_event(event.clone(), format, &derivation)?;
-        let digest = Some(derivation.derive(&dummy_event.serialize()?));
+        let digest = derivation.derive(&dummy_event.serialize()?);
 
         Ok(EventMessage {
                 serialization_info: dummy_event.serialization_info,
@@ -77,7 +77,7 @@ impl<D: Serialize + Clone + Typeable> SaidEvent<D> {
 }
 
 impl<D> Digestible for SaidEvent<D> {
-    fn get_digest(&self) -> Option<SelfAddressingPrefix> {
+    fn get_digest(&self) -> SelfAddressingPrefix {
         self.digest.clone()
     }
 }
@@ -103,7 +103,7 @@ pub struct EventMessage<D> {
 
 impl<D: Digestible> EventMessage<D> {
     pub fn get_digest(&self) -> SelfAddressingPrefix {
-        self.event.get_digest().unwrap()
+        self.event.get_digest()
     }
 }
 
@@ -118,8 +118,8 @@ impl<D: Digestible + Typeable + Serialize + Clone> Serialize for EventMessage<D>
             #[serde(rename = "t", skip_serializing_if = "Option::is_none")]
             event_type: Option<String>,
 
-            #[serde(rename = "d", skip_serializing_if = "Option::is_none")]
-            digest: Option<SelfAddressingPrefix>,
+            #[serde(rename = "d")]
+            digest: SelfAddressingPrefix,
 
             #[serde(flatten)]
             event: D
@@ -216,7 +216,7 @@ impl Into<DummyEventMessage<Event>> for EventMessage<KeyEvent> {
         DummyEventMessage { 
             serialization_info: self.serialization_info, 
             event_type: self.event.get_type().unwrap(), 
-            digest: dummy_prefix(&self.event.digest.clone().unwrap().derivation), 
+            digest: dummy_prefix(&self.event.get_digest().derivation), 
             data: self.event.content,
         }
     }
@@ -232,7 +232,7 @@ impl EventMessage<KeyEvent> {
     }
 
     pub fn check_digest(&self, sai: &SelfAddressingPrefix) -> Result<bool, Error> {
-        let self_dig = self.event.get_digest().unwrap();
+        let self_dig = self.event.get_digest();
         if self_dig.derivation == sai.derivation {
             Ok(&self_dig == sai)
         } else {

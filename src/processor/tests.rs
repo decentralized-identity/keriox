@@ -287,7 +287,7 @@ fn test_validate_seal() -> Result<(), Error> {
 	let parsed = signed_message(dip_raw).unwrap().1;
     let msg = Message::try_from(parsed).unwrap();
     if let Message::Event(dip) = msg {
-        let delegated_event_digest = dip.event_message.event.get_digest().unwrap();
+        let delegated_event_digest = dip.event_message.event.get_digest();
         // Construct delegating seal.
         let seal = EventSeal {
             prefix: delegator_id,

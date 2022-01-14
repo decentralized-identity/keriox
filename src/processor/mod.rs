@@ -386,7 +386,7 @@ impl EventProcessor {
         &self,
         rct: SignedNontransferableReceipt,
     ) -> Result<Option<IdentifierState>, Error> {
-        // get event wh            e?ipted
+        // get event which is being receipted
         let id = &rct.body.event.prefix.to_owned();
         if let Ok(Some(event)) =
             self.get_event_at_sn(&rct.body.event.prefix, rct.body.event.sn)

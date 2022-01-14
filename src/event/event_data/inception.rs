@@ -121,7 +121,7 @@ fn test_inception_data_derivation() -> Result<(), Error> {
         .incept_self_addressing(SelfAddressing::Blake3_256, SerializationFormats::JSON)?;
 
     assert_eq!("ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk", icp_data.event.get_prefix().to_str());
-    assert_eq!("ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk", icp_data.event.get_digest().unwrap().to_str());
+    assert_eq!("ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk", icp_data.event.get_digest().to_str());
     
     Ok(())
 }

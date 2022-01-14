@@ -61,12 +61,11 @@ impl EventMessage<ReplyEvent> {
         let dummy = DummyEventMessage::dummy_event(
             self.event.clone(),
             self.serialization_info.kind,
-            &self.event.get_digest().unwrap().derivation,
+            &self.event.get_digest().derivation,
         )?
         .serialize()?;
         self.event
             .get_digest()
-            .unwrap_or_default()
             .verify_binding(&dummy)
             .then(|| ())
             .ok_or(QueryError::IncorrectDigest.into())

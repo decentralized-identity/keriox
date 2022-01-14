@@ -51,15 +51,7 @@ impl Typeable for Receipt {
 }
 
 impl Digestible for Receipt {
-    fn get_digest(&self) -> Option<SelfAddressingPrefix> {
-        Some(self.receipted_event_digest.clone())
+    fn get_digest(&self) -> SelfAddressingPrefix {
+        self.receipted_event_digest.clone()
     }
 }
-
-// {
-//   "v": "KERI10JSON00011c_",
-//   "t": "rct",
-//   "d": "DZ-i0d8JZAoTNZH3ULvaU6JR2nmwyYAfSVPzhzS6b5CM",
-//   "i": "AaU6JR2nmwyZ-i0d8JZAoTNZH3ULvYAfSVPzhzS6b5CM",
-//   "s": "1"
-// }
