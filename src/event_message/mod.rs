@@ -250,7 +250,7 @@ impl EventSemantics for EventMessage<KeyEvent> {
             EventData::Icp(_) | EventData::Dip(_) => {
                 if verify_identifier_binding(self)? {
                     self.event.apply_to(IdentifierState {
-                        last: Some(self.clone()),
+                        last_event_digest: self.get_digest(),
                         ..state
                     })
                 } else {
@@ -270,9 +270,9 @@ impl EventSemantics for EventMessage<KeyEvent> {
                     // to the state. It will return EventOutOfOrderError or
                     // EventDuplicateError in that cases.
                     self.event.apply_to(state.clone()).and_then(|next_state| {
-                        if state.last.ok_or(Error::SemanticError("No last event in state".into()))?.check_digest(&rot.previous_event_hash)? {
+                        if rot.previous_event_hash.eq(&state.last_event_digest) {
                             Ok(IdentifierState {
-                                last: Some(self.clone()),
+                                last_event_digest: self.get_digest(),
                                 ..next_state
                             })
                         } else {
@@ -289,9 +289,9 @@ impl EventSemantics for EventMessage<KeyEvent> {
                         "Applying delegated rotation to non-delegated state.".into(),
                     ))
 
-                } else if state.last.ok_or(Error::SemanticError("No last event in state".into()))?.check_digest(&drt.previous_event_hash)? {
+                } else if drt.previous_event_hash.eq(&state.last_event_digest) {
                     Ok(IdentifierState {
-                        last: Some(self.clone()),
+                        last_event_digest: self.get_digest(),
                         ..next_state
                     })
                 } else {
@@ -302,9 +302,9 @@ impl EventSemantics for EventMessage<KeyEvent> {
             }),
             EventData::Ixn(ref inter) => {
                 self.event.apply_to(state.clone()).and_then(|next_state| {
-                    if state.last.ok_or(Error::SemanticError("No last event in state".into()))?.check_digest(&inter.previous_event_hash)? {
+                    if inter.previous_event_hash.eq(&state.last_event_digest) {
                         Ok(IdentifierState {
-                            last: Some(self.clone()),
+                            last_event_digest: self.get_digest(),
                             ..next_state
                         })
                     } else {
@@ -414,14 +414,13 @@ mod tests {
 
         assert_eq!(s0.prefix, IdentifierPrefix::Basic(pref0.clone()));
         assert_eq!(s0.sn, 0);
-        assert_eq!(s0.last, Some(icp_m));
+        assert!(icp_m.check_digest(&s0.last_event_digest)?);
         assert_eq!(s0.current.public_keys.len(), 1);
         assert_eq!(s0.current.public_keys[0], pref0);
         assert_eq!(s0.current.threshold, SignatureThreshold::Simple(1));
         assert_eq!(s0.current.threshold_key_digest, Some(nxt));
         assert_eq!(s0.witnesses, vec![]);
         assert_eq!(s0.tally, 0);
-        assert_eq!(s0.delegates, vec![]);
 
         Ok(())
     }
@@ -497,7 +496,7 @@ mod tests {
 
         assert_eq!(s0.prefix, icp.event.get_prefix());
         assert_eq!(s0.sn, 0);
-        assert_eq!(s0.last, Some(icp));
+        assert!(icp.check_digest(&s0.last_event_digest)?);
         assert_eq!(s0.current.public_keys.len(), 2);
         assert_eq!(s0.current.public_keys[0], sig_pref_0);
         assert_eq!(s0.current.public_keys[1], enc_pref_0);
@@ -505,7 +504,6 @@ mod tests {
         assert_eq!(s0.current.threshold_key_digest, Some(nexter_pref));
         assert_eq!(s0.witnesses, vec![]);
         assert_eq!(s0.tally, 0);
-        assert_eq!(s0.delegates, vec![]);
 
         Ok(())
     }

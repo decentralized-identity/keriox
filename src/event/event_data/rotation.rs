@@ -34,15 +34,9 @@ impl EventSemantics for RotationEvent {
                         .append(&mut self.witness_config.graft.clone());
                     prunned
                 } else { state.witnesses.clone() };
-            let rotation_digest = state
-                .last
-                .as_ref()
-                .map(|ev| ev.get_digest())
-                // should never happend because `last` should be set in previous applying rotation step.
-                .ok_or(Error::SemanticError("Missing last event in state".into()))?;
             let last_est = LastEstablishmentData { 
                 sn: state.sn, 
-                digest: rotation_digest, 
+                digest: state.last_event_digest.clone(), 
                 br: self.witness_config.graft.clone(), 
                 ba: self.witness_config.prune.clone(), 
             };

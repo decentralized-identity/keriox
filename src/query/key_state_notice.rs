@@ -4,8 +4,8 @@ use serde_hex::{Compact, SerHex};
 
 use crate::{
     event::SerializationFormats,
-    event_message::{serialization_info::SerializationInfo, Digestible}, prefix::SelfAddressingPrefix,
-    state::IdentifierState, error::Error,
+    event_message::serialization_info::SerializationInfo,
+    state::IdentifierState,
 };
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -22,9 +22,6 @@ pub struct KeyStateNotice {
     #[serde(rename = "dt")]
     pub timestamp: DateTime<FixedOffset>,
 
-    #[serde(rename = "d")]
-    pub digest: SelfAddressingPrefix, // digest of latest event from the state
-
     #[serde(rename = "c")]
     config: Vec<String>,
 }
@@ -39,7 +36,7 @@ impl Serialize for KeyStateNotice {
         em.serialize_field("i", &self.state.prefix)?;
         em.serialize_field("s", &self.state.sn.to_string())?;
         em.serialize_field("p", &self.state.last_previous.clone())?;
-        em.serialize_field("d", &self.digest)?;
+        em.serialize_field("d", &self.state.last_event_digest)?;
         em.serialize_field("f", &self.first_seen_sn.to_string())?;
         em.serialize_field(
             "dt",
@@ -68,19 +65,10 @@ impl KeyStateNotice {
     ) -> Self {
         let dt: DateTime<FixedOffset> = DateTime::from(Utc::now());
 
-        let last_digest = 
-            state
-                .last
-                .clone()
-                .ok_or(Error::SemanticError("Missing last event in the state".into()))
-                .unwrap()
-                .event
-                .get_digest().unwrap();
         let ksn = KeyStateNotice {
             serialization_info: SerializationInfo::new(serialization, 0),
             timestamp: dt,
             state,
-            digest: last_digest,
             first_seen_sn: 0,
             config: vec![],
         };

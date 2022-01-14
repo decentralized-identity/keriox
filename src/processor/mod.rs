@@ -598,19 +598,18 @@ impl EventProcessor {
         aid: &IdentifierPrefix,
     ) -> Result<Option<IdentifierState>, Error> {
         // check ksn digest
-        let sn = ksn.state.sn;
-        let pre = ksn.state.prefix.clone();
-        let digest = ksn.digest.clone();
+        let ksn_sn = ksn.state.sn;
+        let ksn_pre = ksn.state.prefix.clone();
         let event_from_db = self
-            .get_event_at_sn(&pre, sn)?
+            .get_event_at_sn(&ksn_pre, ksn_sn)?
             .ok_or(Error::QueryError(QueryError::OutOfOrderEventError))?
             .signed_event_message
             .event_message;
-        event_from_db.check_digest(&digest)?
+        event_from_db.check_digest(&ksn.state.last_event_digest)?
             .then(|| ())
             .ok_or::<Error>(QueryError::IncorrectDigest.into())?;
 
-        match self.check_timestamp_with_last_ksn(ksn.timestamp, &ksn.state.prefix, aid)
+        match self.check_timestamp_with_last_ksn(ksn.timestamp, &ksn_pre, aid)
         {
             Err(Error::QueryError(QueryError::OutOfOrderEventError)) => {
                 // no previous accepted ksn from that aid in db
@@ -621,11 +620,11 @@ impl EventProcessor {
 
         // check new ksn with actual database state for that prefix
         let state = self
-            .compute_state(&ksn.state.prefix)?
+            .compute_state(&ksn_pre)?
             .ok_or::<Error>(QueryError::OutOfOrderEventError.into())?;
-        if state.sn < ksn.state.sn {
+        if state.sn < ksn_sn {
             Err(QueryError::OutOfOrderEventError.into())
-        } else if state.sn == ksn.state.sn {
+        } else if state.sn == ksn_sn {
             Ok(Some(state))
         } else {
             Err(QueryError::StaleKsn.into())

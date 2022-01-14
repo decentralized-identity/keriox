@@ -70,15 +70,9 @@ impl InceptionEvent {
 
 impl EventSemantics for InceptionEvent {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
-        let inception_digest = state
-                .last
-                .as_ref()
-                .map(|ev| ev.get_digest())
-                // should never happened because `last` should be set in previous applying inception step.
-                .ok_or(Error::SemanticError("Missing last event in state".into()))?;
         let last_est = LastEstablishmentData { 
             sn: state.sn, 
-            digest: inception_digest, 
+            digest: state.last_event_digest.clone(), 
             br: vec![], 
             ba: vec![] 
         };

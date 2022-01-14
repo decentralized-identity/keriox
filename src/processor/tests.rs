@@ -349,8 +349,7 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
         .unwrap();
     assert_eq!(state_at_sn.sn, event_seal.sn);
     assert_eq!(state_at_sn.prefix, event_seal.prefix);
-    let ev_dig = state_at_sn.last.unwrap().get_digest();
-    assert_eq!(event_seal.event_digest, ev_dig);
+    assert_eq!(event_seal.event_digest, state_at_sn.last_event_digest);
 
     Ok(())
 }
