@@ -83,7 +83,7 @@ impl<'a> ser::Serializer for &'a mut KeriJsonSerializer {
 
     // for KERI master codes we skip adding quotes
     fn serialize_str(self, v: &str) -> Result<()> {
-        if v.starts_with("-") {
+        if v.starts_with('-') {
             self.output += v;
         } else {
             self.output += "\"";
@@ -335,7 +335,7 @@ impl<'a> ser::SerializeStruct for &'a mut KeriJsonSerializer {
     {
         // KERI master code
         // value must be concatenated with code upfront
-        if key.starts_with("-") {
+        if key.starts_with('-') {
             value.serialize(&mut **self)?;
         } else {
             // regular field here

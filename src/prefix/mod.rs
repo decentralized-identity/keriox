@@ -34,7 +34,7 @@ pub trait Prefix: FromStr<Err = Error> {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Hash)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum IdentifierPrefix {
     Basic(BasicPrefix),
     SelfAddressing(SelfAddressingPrefix),

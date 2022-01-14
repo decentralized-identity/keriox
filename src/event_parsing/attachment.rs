@@ -140,14 +140,14 @@ pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
                     if !extra.is_empty() {
                         // something is wrong, should not happend
                         Err(nom::Err::Incomplete(Needed::Size(
-                            ((sc * 4) as usize - rest.len()).into(),
+                            (sc * 4) as usize - rest.len(),
                         )))
                     } else {
                         Ok((rest, Attachment::Frame(atts)))
                     }
                 }
                 Err(nom::Err::Error((rest, _))) => Err(nom::Err::Incomplete(Needed::Size(
-                    ((sc * 4) as usize - rest.len()).into(),
+                    (sc * 4) as usize - rest.len(),
                 ))),
                 Err(e) => Err(e),
             }

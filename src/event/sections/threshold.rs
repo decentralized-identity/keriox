@@ -28,7 +28,7 @@ impl FromStr for ThresholdFraction {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let f: Vec<_> = s.split("/").collect();
+        let f: Vec<_> = s.split('/').collect();
         if f.len() > 2 {
             Err(Error::SemanticError("Improper threshold fraction".into()))
         } else if f.len() == 1 {
@@ -122,7 +122,7 @@ impl SignatureThreshold {
 
     pub fn enough_signatures(&self, sigs: &[AttachedSignaturePrefix]) -> Result<bool, Error> {
         match self {
-            SignatureThreshold::Simple(ref t) => Ok((sigs.len() as u64) >= t.to_owned()),
+            SignatureThreshold::Simple(ref t) => Ok((sigs.len() as u64) >= *t),
             SignatureThreshold::Weighted(ref thresh) => thresh.enough_signatures(sigs),
         }
     }
@@ -154,7 +154,7 @@ impl ThresholdClause {
         start_index: u16,
         sigs: &[AttachedSignaturePrefix],
     ) -> Result<bool, Error> {
-        Ok(sigs.into_iter().fold(Zero::zero(), |acc: Fraction, sig| {
+        Ok(sigs.iter().fold(Zero::zero(), |acc: Fraction, sig| {
             acc + self.0[(sig.index - start_index) as usize].fraction
         }) >= One::one())
     }
@@ -184,7 +184,7 @@ impl MultiClauses {
     pub fn new_from_tuples(fracs: Vec<Vec<(u64, u64)>>) -> Self {
         let wt = fracs
             .into_iter()
-            .map(|clause| ThresholdClause::new_from_tuples(clause))
+            .map(ThresholdClause::new_from_tuples)
             .collect();
         MultiClauses(wt)
     }

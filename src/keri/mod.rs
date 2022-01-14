@@ -256,7 +256,7 @@ impl<K: KeyManager> Keri<K> {
         let state = self
             .processor
             .compute_state(&self.prefix)?
-            .ok_or(Error::SemanticError("There is no state".into()))?;
+            .ok_or_else(|| Error::SemanticError("There is no state".into()))?;
         match self.key_manager.lock() {
             Ok(kv) => EventMsgBuilder::new(EventTypeTag::Rot)
                 .with_prefix(&self.prefix)
@@ -281,7 +281,7 @@ impl<K: KeyManager> Keri<K> {
         let state = self
             .processor
             .compute_state(&self.prefix)?
-            .ok_or(Error::SemanticError("There is no state".into()))?;
+            .ok_or_else(|| Error::SemanticError("There is no state".into()))?;
 
         let ev = EventMsgBuilder::new(EventTypeTag::Ixn)
             .with_prefix(&self.prefix)
@@ -347,10 +347,9 @@ impl<K: KeyManager> Keri<K> {
                                 &ev.event_message.event.get_prefix(),
                             )? {
                                 buf.append(
-                                    &mut self
-                                        .processor
-                                        .get_kerl(&self.prefix)?
-                                        .ok_or(Error::SemanticError("KEL is empty".into()))?,
+                                    &mut self.processor.get_kerl(&self.prefix)?.ok_or_else(
+                                        || Error::SemanticError("KEL is empty".into()),
+                                    )?,
                                 )
                             }
                         }
@@ -382,7 +381,7 @@ impl<K: KeyManager> Keri<K> {
         let validator_event_seal = self
             .processor
             .get_last_establishment_event_seal(&self.prefix)?
-            .ok_or(Error::SemanticError("No establishment event seal".into()))?;
+            .ok_or_else(|| Error::SemanticError("No establishment event seal".into()))?;
         let rcp = Receipt {
             prefix: event.event.get_prefix(),
             sn: event.event.get_sn(),
@@ -426,14 +425,14 @@ impl<K: KeyManager> Keri<K> {
         match &message.event.get_event_data() {
             // ICP requires check if we are in initial witnesses only
             EventData::Icp(evt) => {
-                if !evt.witness_config.initial_witnesses.contains(&our_bp) {
+                if !evt.witness_config.initial_witnesses.contains(our_bp) {
                     return Err(Error::SemanticError("we are not in a witness list.".into()));
                 }
                 self.generate_ntr(message)
             }
             EventData::Rot(evt) => {
-                if !evt.witness_config.prune.contains(&our_bp) {
-                    if evt.witness_config.graft.contains(&our_bp) {
+                if !evt.witness_config.prune.contains(our_bp) {
+                    if evt.witness_config.graft.contains(our_bp) {
                         // FIXME: logic for already witnessed identifier required
                         self.generate_ntr(message)
                     } else {
@@ -441,7 +440,7 @@ impl<K: KeyManager> Keri<K> {
                             "event does not change our status as a witness".into(),
                         ))
                     }
-                } else if evt.witness_config.prune.contains(&our_bp) {
+                } else if evt.witness_config.prune.contains(our_bp) {
                     self.processor
                         .db
                         .remove_receipts_nt(&message.event.get_prefix())?;

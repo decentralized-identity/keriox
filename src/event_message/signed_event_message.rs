@@ -190,7 +190,7 @@ impl SignedTransferableReceipt {
         sigs: Vec<AttachedSignaturePrefix>,
     ) -> Self {
         Self {
-            body: message.clone(),
+            body: message,
             validator_seal: event_seal,
             signatures: sigs,
         }

@@ -80,7 +80,8 @@ where
         T: ToOwned + Clone,
     {
         if let Ok(Some(mut set)) = self.get(key) {
-            Ok(set.append(&mut value.to_owned()))
+            set.append(&mut value.to_owned());
+            Ok(())
         } else {
             self.put(key, value)
         }
@@ -172,8 +173,7 @@ where
         self.tree
             .iter()
             .flatten()
-            .find(|(_, v)| serde_cbor::from_slice::<T>(&v).unwrap().eq(value))
-            .is_some()
+            .any(|(_, v)| serde_cbor::from_slice::<T>(&v).unwrap().eq(value))
     }
 
     /// insert `T` with given `key`

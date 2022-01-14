@@ -12,9 +12,7 @@ use serde::Serialize;
 use serde_hex::{Compact, SerHex};
 
 pub fn dummy_prefix(derivation: &SelfAddressing) -> String {
-    std::iter::repeat("#")
-        .take(derivation.code_len() + derivation.derivative_b64_len())
-        .collect::<String>()
+    "#".repeat(derivation.code_len() + derivation.derivative_b64_len())
 }
 
 /// Dummy Inception Event
@@ -76,7 +74,7 @@ impl DummyInceptionEvent {
             digest: dummy_prefix(derivation),
             prefix: dummy_prefix(derivation),
             sn: 0,
-            data: data,
+            data,
         })
     }
 

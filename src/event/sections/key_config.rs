@@ -60,11 +60,13 @@ impl KeyConfig {
             Ok(sigs
                 .iter()
                 .fold(Ok(true), |acc: Result<bool, Error>, sig| {
-                    Ok(acc? == true
+                    Ok(acc?
                         && self
                             .public_keys
                             .get(sig.index as usize)
-                            .ok_or(Error::SemanticError("Key index not present in set".into()))
+                            .ok_or_else(|| {
+                                Error::SemanticError("Key index not present in set".into())
+                            })
                             .and_then(|key: &BasicPrefix| key.verify(message, &sig.signature))?)
                 })?)
         } else {
@@ -129,7 +131,7 @@ mod empty_string_as_none {
         T: Deserialize<'d>,
     {
         let opt = Option::<String>::deserialize(de)?;
-        let opt = opt.as_ref().map(String::as_str);
+        let opt = opt.as_deref();
         match opt {
             None | Some("") => Ok(None),
             Some(s) => T::deserialize(s.into_deserializer()).map(Some),

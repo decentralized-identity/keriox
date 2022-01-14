@@ -27,7 +27,7 @@ impl SeedPrefix {
                 Ok((vk, sk))
             }
             Self::RandomSeed256ECDSAsecp256k1(seed) => {
-                let sk = SigningKey::from_bytes(&seed)?;
+                let sk = SigningKey::from_bytes(seed)?;
                 Ok((
                     PublicKey::new(VerifyingKey::from(&sk).to_bytes().to_vec()),
                     PrivateKey::new(sk.to_bytes().to_vec()),

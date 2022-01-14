@@ -29,7 +29,7 @@ impl EventSemantics for RotationEvent {
         if state.current.verify_next(&self.key_config) {
             // witness rotation processing
             let witnesses =
-                if self.witness_config.prune.len() > 0 || self.witness_config.graft.len() > 0 {
+                if !self.witness_config.prune.is_empty() || !self.witness_config.graft.is_empty() {
                     let mut prunned = state
                         .witnesses
                         .into_iter()

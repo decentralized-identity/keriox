@@ -75,9 +75,9 @@ impl EventSemantics for EventData {
     }
 }
 
-impl Into<EventTypeTag> for EventData {
-    fn into(self) -> EventTypeTag {
-        match self {
+impl From<EventData> for EventTypeTag {
+    fn from(ed: EventData) -> Self {
+        match ed {
             EventData::Icp(_) => EventTypeTag::Icp,
             EventData::Rot(_) => EventTypeTag::Rot,
             EventData::Ixn(_) => EventTypeTag::Ixn,

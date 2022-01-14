@@ -41,8 +41,8 @@ impl InceptionEvent {
     ) -> Self {
         Self {
             key_config,
-            witness_config: witness_config.map_or_else(|| InceptionWitnessConfig::default(), |w| w),
-            inception_configuration: inception_config.map_or_else(|| vec![], |c| c),
+            witness_config: witness_config.map_or_else(InceptionWitnessConfig::default, |w| w),
+            inception_configuration: inception_config.map_or_else(Vec::new, |c| c),
             data: vec![],
         }
     }

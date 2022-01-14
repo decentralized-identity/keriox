@@ -48,17 +48,14 @@ pub struct SaidEvent<D> {
 
 impl<D: Serialize + Clone + Typeable> SaidEvent<D> {
     pub fn new(digest: SelfAddressingPrefix, content: D) -> Self {
-        Self {
-            digest: digest,
-            content,
-        }
+        Self { digest, content }
     }
     pub(crate) fn to_message(
         event: D,
         format: SerializationFormats,
         derivation: &SelfAddressing,
     ) -> Result<EventMessage<SaidEvent<D>>, Error> {
-        let dummy_event = DummyEventMessage::dummy_event(event.clone(), format, &derivation)?;
+        let dummy_event = DummyEventMessage::dummy_event(event.clone(), format, derivation)?;
         let digest = derivation.derive(&dummy_event.serialize()?);
 
         Ok(EventMessage {

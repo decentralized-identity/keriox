@@ -125,12 +125,10 @@ impl EventProcessor {
         } else {
             return Ok(None);
         }
-        let seal = last_est.and_then(|event| {
-            Some(EventSeal {
-                prefix: event.event_message.event.get_prefix(),
-                sn: event.event_message.event.get_sn(),
-                event_digest: event.event_message.get_digest(),
-            })
+        let seal = last_est.map(|event| EventSeal {
+            prefix: event.event_message.event.get_prefix(),
+            sn: event.event_message.event.get_sn(),
+            event_digest: event.event_message.get_digest(),
         });
         Ok(seal)
     }
@@ -168,7 +166,7 @@ impl EventProcessor {
             if event
                 .signed_event_message
                 .event_message
-                .check_digest(&event_digest)?
+                .check_digest(event_digest)?
             {
                 // return the config or error if it's not an establishment event
                 Ok(Some(
@@ -183,7 +181,7 @@ impl EventProcessor {
                         EventData::Dip(dip) => dip.inception_data.key_config,
                         EventData::Drt(drt) => drt.key_config,
                         // the receipt has a binding but it's NOT an establishment event
-                        _ => Err(Error::SemanticError("Receipt binding incorrect".into()))?,
+                        _ => return Err(Error::SemanticError("Receipt binding incorrect".into())),
                     },
                 ))
             } else {
@@ -299,7 +297,7 @@ impl EventProcessor {
                     .ok_or_else(|| Error::SemanticError("Missing source seal".into()))?;
                 let seal = EventSeal {
                     prefix: dip.delegator,
-                    sn: sn,
+                    sn,
                     event_digest: dig,
                 };
                 self.validate_seal(seal, &signed_event.event_message)
@@ -311,7 +309,7 @@ impl EventProcessor {
                         Error::SemanticError("Missing state of delegated identifier".into())
                     })?
                     .delegator
-                    .ok_or(Error::SemanticError("Missing delegator".into()))?;
+                    .ok_or_else(|| Error::SemanticError("Missing delegator".into()))?;
                 let (sn, dig) = signed_event
                     .delegator_seal
                     .as_ref()
@@ -347,15 +345,8 @@ impl EventProcessor {
                     }) {
                     Ok(state) => Ok(Some(state)),
                     Err(e) => {
-                        match e {
-                            // should not happen anymore
-                            // Error::NotEnoughSigsError =>
-                            // should not happen anymore
-                            //Error::EventOutOfOrderError =>
-                            Error::EventDuplicateError => {
-                                self.db.add_duplicious_event(signed_event.clone(), id)?
-                            }
-                            _ => (),
+                        if let Error::EventDuplicateError = e {
+                            self.db.add_duplicious_event(signed_event.clone(), id)?
                         };
                         // remove last added event
                         self.db.remove_kel_finalized_event(id, signed_event)?;
@@ -419,16 +410,16 @@ impl EventProcessor {
                 .into_iter()
                 .map(|(witness, receipt)| witness.verify(&serialized_event, &receipt))
                 .partition(Result::is_ok);
-            if errors.len() == 0 {
-                self.db.add_receipt_nt(rct, &id)?
+            if errors.is_empty() {
+                self.db.add_receipt_nt(rct, id)?
             } else {
                 let e = errors.pop().unwrap().unwrap_err();
                 return Err(e);
             }
         } else {
-            self.db.add_escrow_nt_receipt(rct, &id)?
+            self.db.add_escrow_nt_receipt(rct, id)?
         }
-        self.compute_state(&id)
+        self.compute_state(id)
     }
 
     pub fn get_event_at_sn(
@@ -447,7 +438,7 @@ impl EventProcessor {
         // get state for id (TODO cache?)
         self.compute_state(&event.event.get_prefix())
             // get empty state if there is no state yet
-            .and_then(|opt| Ok(opt.map_or_else(|| IdentifierState::default(), |s| s)))
+            .map(|opt| opt.map_or_else(IdentifierState::default, |s| s))
             // process the event update
             .and_then(|state| event.apply_to(state))
     }

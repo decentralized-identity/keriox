@@ -31,13 +31,13 @@ impl EventSemantics for KeyEvent {
     }
 }
 
-impl Into<DummyEventMessage<Event>> for EventMessage<KeyEvent> {
-    fn into(self) -> DummyEventMessage<Event> {
+impl From<EventMessage<KeyEvent>> for DummyEventMessage<Event> {
+    fn from(em: EventMessage<KeyEvent>) -> Self {
         DummyEventMessage {
-            serialization_info: self.serialization_info,
-            event_type: self.event.get_type(),
-            digest: dummy_prefix(&self.event.get_digest().derivation),
-            data: self.event.content,
+            serialization_info: em.serialization_info,
+            event_type: em.event.get_type(),
+            digest: dummy_prefix(&em.event.get_digest().derivation),
+            data: em.event.content,
         }
     }
 }
@@ -105,7 +105,7 @@ impl EventSemantics for EventMessage<KeyEvent> {
             }
             EventData::Rot(ref rot) => {
                 check_event_digest(self)?;
-                if let Some(_) = state.delegator {
+                if state.delegator.is_some() {
                     Err(Error::SemanticError(
                         "Applying non-delegated rotation to delegated state.".into(),
                     ))
@@ -130,7 +130,7 @@ impl EventSemantics for EventMessage<KeyEvent> {
             }
             EventData::Drt(ref drt) => self.event.apply_to(state.clone()).and_then(|next_state| {
                 check_event_digest(self)?;
-                if let None = state.delegator {
+                if state.delegator.is_none() {
                     Err(Error::SemanticError(
                         "Applying delegated rotation to non-delegated state.".into(),
                     ))
@@ -171,7 +171,7 @@ pub fn verify_identifier_binding(icp_event: &EventMessage<KeyEvent>) -> Result<b
             IdentifierPrefix::Basic(bp) => Ok(icp.key_config.public_keys.len() == 1
                 && bp == icp.key_config.public_keys.first().unwrap()),
             IdentifierPrefix::SelfAddressing(sap) => {
-                Ok(icp_event.check_digest(sap)? && icp_event.get_digest().eq(&sap))
+                Ok(icp_event.check_digest(sap)? && icp_event.get_digest().eq(sap))
             }
             IdentifierPrefix::SelfSigning(_ssp) => todo!(),
         },

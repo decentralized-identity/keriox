@@ -55,10 +55,10 @@ pub struct IdentifierState {
 
 impl EventTypeTag {
     pub fn is_establishment_event(&self) -> bool {
-        match self {
-            EventTypeTag::Icp | EventTypeTag::Rot | EventTypeTag::Dip | EventTypeTag::Drt => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            EventTypeTag::Icp | EventTypeTag::Rot | EventTypeTag::Dip | EventTypeTag::Drt
+        )
     }
 }
 

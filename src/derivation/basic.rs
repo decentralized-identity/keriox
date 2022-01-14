@@ -62,7 +62,7 @@ impl FromStr for Basic {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s
             .get(..1)
-            .ok_or(Error::DeserializeError("Empty prefix".into()))?
+            .ok_or_else(|| Error::DeserializeError("Empty prefix".into()))?
         {
             "B" => Ok(Self::Ed25519NT),
             "C" => Ok(Self::X25519),
