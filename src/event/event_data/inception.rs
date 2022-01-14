@@ -5,8 +5,8 @@ use super::{
 use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
-    event::{sections::seal::Seal, Event, KeyEvent},
-    event_message::{serialization_info::SerializationFormats, EventMessage, dummy_event::DummyInceptionEvent, SaidEvent},
+    event::{sections::seal::Seal, Event},
+    event_message::{serialization_info::SerializationFormats, EventMessage, dummy_event::DummyInceptionEvent, SaidEvent, key_event_message::KeyEvent},
     prefix::IdentifierPrefix,
     state::{EventSemantics, IdentifierState, LastEstablishmentData},
 };

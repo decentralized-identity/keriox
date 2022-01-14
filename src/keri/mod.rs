@@ -13,7 +13,7 @@ use crate::{database::sled::SledEventDatabase, derivation::basic::Basic, derivat
             InteractionEvent,
         },
         sections::seal::EventSeal
-    }, event_message::{signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, Message}, KeyEvent, EventTypeTag}, event_message::{
+    }, event_message::{signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, Message}, EventTypeTag, key_event_message::KeyEvent}, event_message::{
         event_msg_builder::EventMsgBuilder,
     }, event_parsing::{SignedEventData, message::{signed_event_stream, signed_message}}, keys::PublicKey, prefix::AttachedSignaturePrefix, prefix::{
         BasicPrefix,

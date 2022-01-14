@@ -10,7 +10,7 @@ use serde::Deserialize;
 #[cfg(feature = "async")]
 use crate::event_message::serialization_info::SerializationInfo;
 
-use crate::{event::{EventMessage, receipt::Receipt}, event_parsing::{Attachment, SignedEventData, attachment::attachment, EventType}, event_message::{Digestible, KeyEvent}}; 
+use crate::{event::{EventMessage, receipt::Receipt}, event_parsing::{Attachment, SignedEventData, attachment::attachment, EventType}, event_message::{Digestible, key_event_message::KeyEvent}}; 
 #[cfg(feature = "query")]
 use serde::Serialize;
 #[cfg(feature = "query")]

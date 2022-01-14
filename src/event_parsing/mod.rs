@@ -5,7 +5,7 @@ use serde::Deserialize;
 use crate::event::receipt::Receipt;
 use crate::event::EventMessage;
 use crate::event::sections::seal::{EventSeal, SourceSeal};
-use crate::event_message::KeyEvent;
+use crate::event_message::key_event_message::KeyEvent;
 use crate::event_message::signed_event_message::{Message, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt};
 use crate::event_parsing::payload_size::PayloadType;
 use crate::prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix};

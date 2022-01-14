@@ -2,7 +2,7 @@ mod tables;
 
 use tables::{SledEventTree, SledEventTreeVec};
 use std::path::Path;
-use crate::{error::Error, event::EventMessage, event_message::{TimestampedEventMessage, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedSignedEventMessage}, KeyEvent}, prefix::IdentifierPrefix};
+use crate::{error::Error, event::EventMessage, event_message::{TimestampedEventMessage, signed_event_message::{SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt, TimestampedSignedEventMessage}, key_event_message::KeyEvent}, prefix::IdentifierPrefix};
 
 #[cfg(feature = "query")]
 use crate::query::reply::SignedReply;

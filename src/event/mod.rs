@@ -1,4 +1,5 @@
-use crate::event_message::{Typeable, SaidEvent, KeyEvent, EventTypeTag};
+use crate::event_message::key_event_message::KeyEvent;
+use crate::event_message::{Typeable, SaidEvent, EventTypeTag};
 pub use crate::event_message::{serialization_info::SerializationFormats, EventMessage};
 use crate::{prefix::IdentifierPrefix, derivation::self_addressing::SelfAddressing};
 use crate::state::IdentifierState;

@@ -19,7 +19,7 @@ use crate::{
     event_message::{signed_event_message::{
         Message, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         TimestampedSignedEventMessage,
-    }, signature::Signature, KeyEvent},    
+    }, signature::Signature, key_event_message::KeyEvent},    
     prefix::{IdentifierPrefix, SelfAddressingPrefix},
     state::{EventSemantics, IdentifierState},
 };    
