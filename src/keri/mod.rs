@@ -312,7 +312,7 @@ impl<K: KeyManager> Keri<K> {
                 let message = Message::try_from(event)?;
                 self.processor
                 .process(message.clone())
-                    .map(|_| message)
+                .map(|_| message)
             })
             .partition(Result::is_ok);
 
@@ -341,7 +341,7 @@ impl<K: KeyManager> Keri<K> {
                         buf.append(&mut rcp.to_cesr().unwrap());
                         Ok(buf)
                     },
-                    Message::TransferableRct(rct) => {
+                    Message::TransferableRct(_rct) => {
                         Ok(vec![])
                     }
                     // TODO: this should process properly
@@ -363,7 +363,7 @@ impl<K: KeyManager> Keri<K> {
             .sign(&ser)?;
         let validator_event_seal = self
             .processor
-            .get_last_establishment_event_seal(&self.prefix, SelfAddressing::Blake3_256)?
+            .get_last_establishment_event_seal(&self.prefix)?
             .ok_or(Error::SemanticError("No establishment event seal".into()))?;
         let rcp = Receipt {
             prefix: event.event.get_prefix(),

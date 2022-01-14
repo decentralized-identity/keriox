@@ -6,7 +6,6 @@ use chrono::{DateTime, FixedOffset};
 
 use crate::{
     database::sled::SledEventDatabase,
-    derivation::self_addressing::SelfAddressing,
     error::Error,
     event::{
         event_data::EventData,
@@ -101,7 +100,6 @@ impl EventProcessor {
     pub fn get_last_establishment_event_seal(
         &self,
         id: &IdentifierPrefix,
-        derivation: SelfAddressing,
     ) -> Result<Option<EventSeal>, Error> {
         let mut state = IdentifierState::default();
         let mut last_est = None;
@@ -119,12 +117,10 @@ impl EventProcessor {
             return Ok(None);
         }
         let seal = last_est.and_then(|event| {
-            let event_digest = derivation
-                .derive(&event.event_message.serialize().unwrap());
             Some(EventSeal {
                 prefix: event.event_message.event.get_prefix(),
                 sn: event.event_message.event.get_sn(),
-                event_digest,
+                event_digest: event.event_message.get_digest(),
             })
         });
         Ok(seal)
