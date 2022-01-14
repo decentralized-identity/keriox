@@ -116,11 +116,11 @@ fn test_qry_rpy() -> Result<(), Error> {
     use tempfile::Builder;
 
     use crate::{
-        derivation::self_signing::SelfSigning,
+        derivation::{self_signing::SelfSigning, self_addressing::SelfAddressing},
         event::SerializationFormats,
         prefix::AttachedSignaturePrefix,
         query::{
-            query::{Query, SignedQuery},
+            query::{SignedQuery, QueryEvent},
             Route, ReplyType,
         },
         signer::KeyManager,
@@ -167,7 +167,7 @@ fn test_qry_rpy() -> Result<(), Error> {
 
     // Bob asks about alices key state
     // construct qry message to ask of alice key state message
-    let qry = Query::new_query(Route::Ksn, alice_pref, SerializationFormats::JSON)?;
+    let qry = QueryEvent::new_query(Route::Ksn, alice_pref, SerializationFormats::JSON, &SelfAddressing::Blake3_256)?;
 
     // sign message by bob
     let signature = AttachedSignaturePrefix::new(
@@ -186,7 +186,7 @@ fn test_qry_rpy() -> Result<(), Error> {
    
     match rep {
         ReplyType::Rep(rep) => {
-            assert_eq!(&rep.reply.event.data.data.event.state, &alice.get_state().unwrap().unwrap())
+            assert_eq!(&rep.reply.event.get_state(), &alice.get_state().unwrap().unwrap())
         },
         ReplyType::Kel(_) => assert!(false),
     }

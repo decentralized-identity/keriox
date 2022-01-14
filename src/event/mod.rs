@@ -1,9 +1,12 @@
+use crate::event_message::key_event_message::KeyEvent;
+use crate::event_message::{Typeable, SaidEvent, EventTypeTag};
 pub use crate::event_message::{serialization_info::SerializationFormats, EventMessage};
-use crate::prefix::IdentifierPrefix;
+use crate::{prefix::IdentifierPrefix, derivation::self_addressing::SelfAddressing};
 use crate::state::IdentifierState;
 use serde::{Deserialize, Serialize};
 pub mod event_data;
 pub mod sections;
+pub mod receipt;
 use self::event_data::EventData;
 use crate::error::Error;
 use crate::state::EventSemantics;
@@ -31,8 +34,22 @@ impl Event {
             }
         }
 
-    pub fn to_message(self, format: SerializationFormats) -> Result<EventMessage<Event>, Error> {
-        EventMessage::new(self, format)
+    pub fn to_message(self, format: SerializationFormats, derivation: &SelfAddressing) -> Result<EventMessage<KeyEvent>, Error> {
+        match (&self.prefix, self.event_data.clone()) {
+            (IdentifierPrefix::SelfAddressing(_), EventData::Icp(icp)) => {
+               icp.incept_self_addressing(derivation.clone(), format) 
+            },
+            (IdentifierPrefix::SelfAddressing(_), EventData::Dip(dip)) => {
+               dip.incept_self_addressing(derivation.clone(), format) 
+            },
+            _ => SaidEvent::<Event>::to_message(self, format, derivation),
+        }
+    }
+}
+
+impl Typeable for Event {
+    fn get_type(&self) -> EventTypeTag {
+        self.event_data.get_type()
     }
 }
 
@@ -46,13 +63,6 @@ impl EventSemantics for Event {
                 }
                 if self.sn != 0 {
                     return Err(Error::SemanticError("SN is not correct".to_string()));
-                }
-            }
-            EventData::Rct(_) => {
-                if self.prefix != state.prefix {
-                    return Err(Error::SemanticError(
-                        "Invalid Identifier Prefix Binding".into(),
-                    ));
                 }
             }
             _ => {

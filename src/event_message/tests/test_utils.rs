@@ -1,5 +1,5 @@
 use super::event_msg_builder::EventMsgBuilder;
-use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning}, error::Error, event::sections::{key_config::nxt_commitment, threshold::SignatureThreshold}, keys::{PrivateKey, PublicKey}, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix }, state::{IdentifierState, KeyEventType}};
+use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning}, error::Error, event::sections::{key_config::nxt_commitment, threshold::SignatureThreshold}, keys::{PrivateKey, PublicKey}, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix }, state::IdentifierState, event_message::EventTypeTag};
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
 
@@ -38,7 +38,7 @@ fn get_initial_test_data() -> Result<TestStateData, Error> {
 /// Construct mock event message from `event_type` and `state_data`, apply it to
 /// `IdentifierState` in `state_data.state` and check if it was updated correctly.
 fn test_update_identifier_state(
-    event_type: KeyEventType,
+    event_type: EventTypeTag,
     state_data: TestStateData,
 ) -> Result<TestStateData, Error> {
     // Get current and next key_pairs from argument.
@@ -72,7 +72,7 @@ fn test_update_identifier_state(
         .with_keys(vec![current_key_pref.clone()])
         .with_next_keys(vec![next_key_prefix])
         .build()?;
-    let prefix = event_msg.event.prefix.clone();
+    let prefix = event_msg.event.get_prefix();
 
     // Serialize event message before signing.
     let sed = event_msg.serialize()?;
@@ -107,14 +107,13 @@ fn test_update_identifier_state(
     // Check if state is updated correctly.
     assert_eq!(new_state.prefix, prefix.clone());
     assert_eq!(new_state.sn, state_data.sn);
-    assert_eq!(new_state.last, event_msg.serialize()?);
+    assert_eq!(new_state.last_event_digest, event_msg.get_digest());
     assert_eq!(new_state.current.public_keys.len(), 1);
     assert_eq!(new_state.current.public_keys[0], current_key_pref);
     assert_eq!(new_state.current.threshold, SignatureThreshold::Simple(1));
     assert_eq!(new_state.current.threshold_key_digest, Some(next_dig));
     assert_eq!(new_state.witnesses, vec![]);
     assert_eq!(new_state.tally, 0);
-    assert_eq!(new_state.delegates, vec![]);
 
     let mut new_history = state_data.keys_history.clone();
     // If event_type is establishment event, append current key to keys
@@ -123,7 +122,7 @@ fn test_update_identifier_state(
         new_history.push(current_key_pref);
     }
     // Current event will be previous event for the next one, so return its hash.
-    let prev_event_hash = SelfAddressing::Blake3_256.derive(&sed);
+    let prev_event_hash = event_msg.get_digest();
     // Compute sn for next event.
     let next_sn = state_data.sn + 1;
 
@@ -140,7 +139,7 @@ fn test_update_identifier_state(
 
 /// For given sequence of EventTypes check wheather `IdentifierState` is updated correctly
 /// by applying `test_update_identifier_state` sequentially.
-pub fn test_mock_event_sequence(sequence: Vec<KeyEventType>) -> Result<TestStateData, Error> {
+pub fn test_mock_event_sequence(sequence: Vec<EventTypeTag>) -> Result<TestStateData, Error> {
     let mut st = get_initial_test_data();
 
     let step = |event_type, state_data: Result<TestStateData, Error>| {

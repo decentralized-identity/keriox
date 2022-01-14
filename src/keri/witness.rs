@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::query::reply::{Reply, SignedReply};
+use crate::query::reply::{SignedReply, ReplyEvent};
 use crate::query::{
     query::{QueryData, SignedQuery},
     ReplyType,
@@ -12,7 +12,7 @@ use crate::{
     database::sled::SledEventDatabase,
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
-    event::{EventMessage, SerializationFormats},
+    event::SerializationFormats,
     prefix::{BasicPrefix, IdentifierPrefix},
     processor::EventProcessor,
     signer::{CryptoBox, KeyManager},
@@ -41,17 +41,16 @@ impl Witness {
 
     pub fn get_ksn_for_prefix(&self, prefix: &IdentifierPrefix) -> Result<SignedReply, Error> {
         let state = self.processor.compute_state(prefix).unwrap().unwrap();
-        let ksn = EventMessage::<KeyStateNotice>::new_ksn(
+        let ksn = KeyStateNotice::new_ksn(
             state,
             SerializationFormats::JSON,
-            SelfAddressing::Blake3_256,
         );
-        let rpy = Reply::new_reply(
+        let rpy = ReplyEvent::new_reply(
             ksn,
             Route::ReplyKsn(IdentifierPrefix::Basic(self.prefix.clone())),
             SelfAddressing::Blake3_256,
             SerializationFormats::JSON,
-        );
+        )?;
 
         let signature =
             SelfSigning::Ed25519Sha512.derive(self.signer.sign(&rpy.serialize()?).unwrap());
@@ -74,8 +73,8 @@ impl Witness {
         if kc.verify(&qr.envelope.serialize().unwrap(), &signatures)? {
             // TODO check timestamps
             // unpack and check what's inside
-            let route = qr.envelope.event.route;
-            self.process_query(route, qr.envelope.event.data)
+            let route = qr.envelope.event.get_route();
+            self.process_query(route, qr.envelope.event.get_query_data())
         } else {
             Err(Error::SignatureVerificationError)
         }
@@ -84,7 +83,7 @@ impl Witness {
     #[cfg(feature = "query")]
     fn process_query(&self, route: Route, qr: QueryData) -> Result<ReplyType, Error> {
         match route {
-            Route::Logs => {
+            Route::Log => {
                 Ok(ReplyType::Kel(self.processor.get_kerl(&qr.data.i)?.ok_or(
                     Error::SemanticError("No identifier in db".into()),
                 )?))
@@ -97,17 +96,16 @@ impl Witness {
                     .compute_state(&i)
                     .unwrap()
                     .ok_or(Error::SemanticError("No id in database".into()))?;
-                let ksn = EventMessage::new_ksn(
+                let ksn = KeyStateNotice::new_ksn(
                     state,
                     SerializationFormats::JSON,
-                    SelfAddressing::Blake3_256,
                 );
-                let rpy = Reply::new_reply(
+                let rpy = ReplyEvent::new_reply(
                     ksn,
                     Route::ReplyKsn(IdentifierPrefix::Basic(self.prefix.clone())),
                     SelfAddressing::Blake3_256,
                     SerializationFormats::JSON,
-                );
+                )?;
                 let signature = self.signer.sign(&rpy.serialize()?)?;
                 let rpy = SignedReply::new_nontrans(
                     rpy,

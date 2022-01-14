@@ -271,12 +271,12 @@ fn test_verify() -> Result<(), Error> {
 
     // test data taken from keripy
     // (keripy/tests/core/test_weighted_threshold.py::test_weighted)
-    let ev = br#"{"v":"KERI10JSON00015b_","i":"EX0WJtv6vc0IWzOqa92Pv9v9pgs1f0BfIVrSch648Zf0","s":"0","t":"icp","kt":["1/2","1/2","1/2"],"k":["DK4OJI8JOr6oEEUMeSF_X-SbKysfwpKwW-ho5KARvH5c","D1RZLgYke0GmfZm-CH8AsW4HoTU4m-2mFgu8kbwp8jQU","DBVwzum-jPfuUXUcHEWdplB4YcoL3BWGXK0TMoF_NeFU"],"n":"EhJGhyJQTpSlZ9oWfQT-lHNl1woMazLC42O89fRHocTI","bt":"0","b":[],"c":[],"a":[]}-AADAAKWMK8k4Po2A0rBrUBjBom73DfTCNg_biwR-_LWm6DMHZHGDfCuOmEyR8sEdp7cPxhsavq4istIZ_QQ42yyUcDAABeTClYkN-yjbW3Kz3ot6MvAt5Se-jmcjhu-Cfsv4m_GKYgc_qwel1SbAcqF0TiY0EHFdjNKvIkg3q19KlhSbuBgACA6QMnsnZuy66xrZVg3c84mTodZCEvOFrAIDQtm8jeXeCTg7yFauoQECZyNIlUnnxVHuk2_Fqi5xK_Lu9Pt76Aw"#;
+    let ev = br#"{"v":"KERI10JSON00018e_","t":"icp","d":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","i":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","s":"0","kt":["1/2","1/2","1/2"],"k":["DK4OJI8JOr6oEEUMeSF_X-SbKysfwpKwW-ho5KARvH5c","D1RZLgYke0GmfZm-CH8AsW4HoTU4m-2mFgu8kbwp8jQU","DBVwzum-jPfuUXUcHEWdplB4YcoL3BWGXK0TMoF_NeFU"],"n":"EhJGhyJQTpSlZ9oWfQT-lHNl1woMazLC42O89fRHocTI","bt":"0","b":[],"c":[],"a":[]}-AADAAo74mzRNAT5WEVRYaUWs4apfEY9oblVL2MtNSORwsEVFNoyH8Vh_w_WC9TGfH-_zqN8dISIy102JtmBwllvHnBAABYQAmtsf2yhqi0zvF--TVWp7kfzVRy3BQkTdYmJrfOZFnvp0kbXlG-PCXPO7OXbKM0ZLJ1Ga_qVJ_y-ERIMacCwACInxprKSzFp2-LNPn7eVAAc8z0XO0KbUE26vv_PXt5IMwyx6S5A1nCC4DQrv6bYHmmXP0YQpkOIm-tRHrPCOuDg'"#;
     let parsed = signed_message(ev).unwrap().1;
     let signed_msg = Message::try_from(parsed).unwrap();
     match signed_msg {
         Message::Event(ref e) => {
-            if let EventData::Icp(icp) = e.to_owned().event_message.event.event_data {
+            if let EventData::Icp(icp) = e.to_owned().event_message.event.get_event_data() {
                 let kc = icp.key_config;
                 let msg = e.event_message.serialize()?;
                 assert!(kc.verify(&msg, &e.signatures)?);
@@ -285,12 +285,12 @@ fn test_verify() -> Result<(), Error> {
         _ => (),
     };
     
-    let ev = br#"{"v":"KERI10JSON0001fe_","i":"EX0WJtv6vc0IWzOqa92Pv9v9pgs1f0BfIVrSch648Zf0","s":"4","t":"rot","p":"EVfMO5GK8tg4KE8XCelX1s_TG_Hqr_kzb3ghIBYvzC6U","kt":[["1/2","1/2","1/2"],["1/1","1/1"]],"k":["DToUWoemnetqJoLFIqDI7lxIJEfF0W7xG5ZlqAseVUQc","Drz-IZjko61q-sPMDIW6n-0NGFubbXiZhzWZrO_BZ0Wc","DiGwL3hjQqiUgQlFPeA6kRR1EBXX0vSLm9b6QhPS8IkQ","Dxj5pcStgZ6CbQ2YktNaj8KLE_g9YAOZF6AL9fyLcWQw","DE5zr5eH8EUVQXyAaxWfQUWkGCId-QDCvvxMT77ibj2Q"],"n":"E3in3Z14va0kk4Wqd3vcCAojKNtQq7ZTrQaavR8x0yu4","bt":"0","br":[],"ba":[],"a":[]}-AAFAAdxx4UfoNYdXckLY9nSYvqYLJzvIRhixshBbqkQ6uwvqaVmwPqmvck0V9xl5x3ssVclasm8Ga3FTkcbmbV2jXDgABBWUhku-qDq8wYn5XMQuKzidAsA6bth8-EsCx9WwTIqWBR-AecW-3X1haAyJshqplDsS9MnZfVgmSHokwdLnRCQACp2tB0pFRv_C7nUXPf9rFKvlWUllrsY6Y1_F4bAOMvyCU-PES4HwyUQv3kQnLxEqnf0fbOYdHJNGosXi-UqL9BAADW89YpsS5m3IASAtXvXEPez-0y11JRP8bAiUUBdIxGB9ms79jPZnQtF3045byf3m0Dvi91Y9d4sh-xkzZ15v9DAAE6QR9qNXnHXLisg4Mbadav9AdMjS4uz6jNG1AL6UCa7P90Y53v1V6VRaOPu_RTWXcXYRGqA9BHJ2rLNYWJTJTBA"#;
+    let ev = br#"{"v":"KERI10JSON000231_","t":"rot","d":"EDK-dx1__PH_ZJXeZBfxVnodjUsaczSocKCNluEV6Cec","i":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","s":"4","p":"Ebhb0Fnink_-r0JfJQIVr15G0Ew8upPjo94-cT3SzdlU","kt":[["1/2","1/2","1/2"],["1/1","1/1"]],"k":["DToUWoemnetqJoLFIqDI7lxIJEfF0W7xG5ZlqAseVUQc","Drz-IZjko61q-sPMDIW6n-0NGFubbXiZhzWZrO_BZ0Wc","DiGwL3hjQqiUgQlFPeA6kRR1EBXX0vSLm9b6QhPS8IkQ","Dxj5pcStgZ6CbQ2YktNaj8KLE_g9YAOZF6AL9fyLcWQw","DE5zr5eH8EUVQXyAaxWfQUWkGCId-QDCvvxMT77ibj2Q"],"n":"E3in3Z14va0kk4Wqd3vcCAojKNtQq7ZTrQaavR8x0yu4","bt":"0","br":[],"ba":[],"a":[]}-AAFAAt2EjEPyJOMqtUdrp2EaRenlwriXviQ0hJ4Wx0agCok1sU3QMFS5hRdwX_NEFca9OnKGVjOag6K_F4yOs1BiuDQABN30bxBTVoemwfv6bPMqi9aIBKAuqm5IjcXFpS6vdnSdcQiz5VWb5DzpjhBztZyTiBbmxihl4tGyJ8xMTlIcmAwACq5YQaTJ45Smm2UwhyX5YLVkvxeJxt9oewmGAhOxyp-_tu0KAe2mehFHa6s9BlcqE-401mQh5EcniFbdHx3eAAQADR8Mtsn-7UKC-LjWq45-tKJfV8QVTaAXGiQsXye6DC7cf5iKQeUw7NXIcuxb-CXLL3AIMg3ZfhYy44-wW6pq6BgAEPtQg63EnWDfhwQjqgIlAHGupkeE_2hZhEp2Lcx0m5x4w0S6XqR9_Lx86RMnrzc3G9W3CJ_V5iEJhNQAqdTFqCw"#;
     let parsed = signed_message(ev).unwrap().1;
     let signed_msg = Message::try_from(parsed).unwrap();
     match signed_msg {
         Message::Event(ref e) => {
-            if let EventData::Icp(icp) = e.to_owned().event_message.event.event_data {
+            if let EventData::Icp(icp) = e.to_owned().event_message.event.get_event_data() {
                 let kc = icp.key_config;
                 let msg = e.event_message.serialize()?;
                 assert!(kc.verify(&msg, &e.signatures)?);

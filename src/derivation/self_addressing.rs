@@ -91,7 +91,7 @@ impl FromStr for SelfAddressing {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match &s[..1] {
+        match s.get(..1).ok_or(Error::DeserializeError("Empty prefix".into()))? {
             "E" => Ok(Self::Blake3_256),
             "F" => Ok(Self::Blake2B256(vec![])),
             "G" => Ok(Self::Blake2S256(vec![])),

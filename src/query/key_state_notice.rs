@@ -3,14 +3,16 @@ use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use serde_hex::{Compact, SerHex};
 
 use crate::{
-    derivation::self_addressing::SelfAddressing,
-    event::{EventMessage, SerializationFormats},
-    prefix::SelfAddressingPrefix,
+    event::SerializationFormats,
+    event_message::serialization_info::SerializationInfo,
     state::IdentifierState,
 };
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct KeyStateNotice {
+    #[serde(rename = "v")]
+    pub serialization_info: SerializationInfo,
+
     #[serde(flatten)]
     pub state: IdentifierState,
 
@@ -19,9 +21,6 @@ pub struct KeyStateNotice {
 
     #[serde(rename = "dt")]
     pub timestamp: DateTime<FixedOffset>,
-
-    #[serde(rename = "d")]
-    pub digest: SelfAddressingPrefix, // digest of latest event from the state
 
     #[serde(rename = "c")]
     config: Vec<String>,
@@ -33,10 +32,11 @@ impl Serialize for KeyStateNotice {
         S: Serializer,
     {
         let mut em = serializer.serialize_struct("Envelope", 15)?;
+        em.serialize_field("v", &self.serialization_info)?;
         em.serialize_field("i", &self.state.prefix)?;
         em.serialize_field("s", &self.state.sn.to_string())?;
         em.serialize_field("p", &self.state.last_previous.clone())?;
-        em.serialize_field("d", &self.digest)?;
+        em.serialize_field("d", &self.state.last_event_digest)?;
         em.serialize_field("f", &self.first_seen_sn.to_string())?;
         em.serialize_field(
             "dt",
@@ -58,23 +58,21 @@ impl Serialize for KeyStateNotice {
     }
 }
 
-impl EventMessage<KeyStateNotice> {
+impl KeyStateNotice {
     pub fn new_ksn(
         state: IdentifierState,
         serialization: SerializationFormats,
-        derivation: SelfAddressing,
     ) -> Self {
         let dt: DateTime<FixedOffset> = DateTime::from(Utc::now());
 
-        let last_digest = derivation.derive(&state.last);
         let ksn = KeyStateNotice {
+            serialization_info: SerializationInfo::new(serialization, 0),
             timestamp: dt,
             state,
-            digest: last_digest,
             first_seen_sn: 0,
             config: vec![],
         };
 
-        EventMessage::new(ksn.clone(), serialization).unwrap()
+        ksn.clone()
     }
 }

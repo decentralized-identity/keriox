@@ -1,6 +1,6 @@
 use super::EventProcessor;
-use crate::derivation::self_addressing::SelfAddressing;
 use crate::event::sections::seal::EventSeal;
+use crate::event_message::Digestible;
 use crate::event_message::signed_event_message::Message;
 use crate::event_parsing::message::{signed_event_stream, signed_message};
 use crate::{database::sled::SledEventDatabase, error::Error};
@@ -24,12 +24,12 @@ fn test_process() -> Result<(), Error> {
     // Events and sigs are from keripy `test_multisig_digprefix` test.
     // (keripy/tests/core/test_eventing.py#1138)
 
-    let icp_raw = br#"{"v":"KERI10JSON00014b_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"0","t":"icp","kt":"2","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"E9izzBkXX76sqt0N-tfLzJeRqj0W56p4pDQ_ZqNCDpyw","bt":"0","b":[],"c":[],"a":[]}-AADAAhcaP-l0DkIKlJ87iIVcDx-m0iKPdSArEu63b-2cSEn9wXVGNpWw9nfwxodQ9G8J3q_Pm-AWfDwZGD9fobWuHBAAB6mz7zP0xFNBEBfSKG4mjpPbeOXktaIyX8mfsEa1A3Psf7eKxSrJ5Woj3iUB2AhhLg412-zkk795qxsK2xfdxBAACj5wdW-EyUJNgW0LHePQcSFNxW3ZyPregL4H2FoOrsPxLa3MZx6xYTh6i7YRMGY50ezEjV81hkI1Yce75M_bPCQ"#;
+    let icp_raw = br#"{"v":"KERI10JSON00017e_","t":"icp","d":"ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk","i":"ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk","s":"0","kt":"2","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"E9izzBkXX76sqt0N-tfLzJeRqj0W56p4pDQ_ZqNCDpyw","bt":"0","b":[],"c":[],"a":[]}-AADAA39j08U7pcU66OPKsaPExhBuHsL5rO1Pjq5zMgt_X6jRbezevis6YBUg074ZNKAGdUwHLqvPX_kse4buuuSUpAQABphobpuQEZ6EhKLhBuwgJmIQu80ZUV1GhBL0Ht47Hsl1rJiMwE2yW7-yi8k3idw2ahlpgdd9ka9QOP9yQmMWGAQACM7yfK1b86p1H62gonh1C7MECDCFBkoH0NZRjHKAEHebvd2_LLz6cpCaqKWDhbM2Rq01f9pgyDTFNLJMxkC-fAQ"#;
 	let parsed = signed_message(icp_raw).unwrap().1;
     let deserialized_icp = Message::try_from(parsed).unwrap();
 
     let id = match &deserialized_icp {
-        Message::Event(e) => e.event_message.event.prefix.clone(),
+        Message::Event(e) => e.event_message.event.get_prefix(),
         _ => Err(Error::SemanticError("bad deser".into()))?,
     };
 
@@ -41,7 +41,7 @@ fn test_process() -> Result<(), Error> {
     let re_serialized = icp_from_db.unwrap().signed_event_message.serialize().unwrap();
     assert_eq!(icp_raw.to_vec(), re_serialized);
 
-    let rot_raw = br#"{"v":"KERI10JSON000180_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"1","t":"rot","p":"ElIKmVhsgDtxLhFqsWPASdq9J2slLqG-Oiov0rEG4s-w","kt":"2","k":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ","D1kcBE7h0ImWW6_Sp7MQxGYSshZZz6XM7OiUE5DXm0dU","D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM"],"n":"EQpRYqbID2rW8X5lB6mOzDckJEIFae6NbJISXgJSN9qg","bt":"0","br":[],"ba":[],"a":[]}-AADAAOA7_2NfORAD7hnavnFDhIQ_1fX1zVjNzFLYLOqW4mLdmNlE4745-o75wtaPX1Reg27YP0lgrCFW_3Evz9ebNAQAB6CJhTEANFN8fAFEdxwbnllsUd3jBTZHeeR-KiYe0yjCdOhbEnTLKTpvwei9QsAP0z3xc6jKjUNJ6PoxNnmD7AQAC4YfEq1tZPteXlH2cLOMjOAxqygRgbDsFRvjEQCHQva1K4YsS3ErQjuKd5Z57Uac-aDaRjeH8KdSSDvtNshIyBw"#;
+    let rot_raw = br#"{"v":"KERI10JSON0001b3_","t":"rot","d":"E0UUmo4JsLq9C6LDnerxTjV0PcegpXcPsT_m2J4SeQbE","i":"ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk","s":"1","p":"ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk","kt":"2","k":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ","D1kcBE7h0ImWW6_Sp7MQxGYSshZZz6XM7OiUE5DXm0dU","D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM"],"n":"EQpRYqbID2rW8X5lB6mOzDckJEIFae6NbJISXgJSN9qg","bt":"0","br":[],"ba":[],"a":[]}-AADAATWNmB15NNCgCUeFmDv9HbSkPzZ3hK1oS4DAnBVvA1hSkBm1biGDGPIVRPMLqB_MhAy516DV7B7AQs7eoS5b1DgABOXlDXb4TktNyn_Iindz3GLwRkH_lRo3rfez107T1GfoHFetzbpx3uQExyiuiQM2JRWuHCe3wUFdhzjqQ2_MpAgACVMBC6elfrKOfs2ZQxyXrzkuxNCgpgDBPmstysWo2P6GA2epCGnKwUPq83S_g6RC6oCl9N0-DEWf7tgaD0aTcCg"#;
 	let parsed = signed_message(rot_raw).unwrap().1;
     let deserialized_rot = Message::try_from(parsed).unwrap();
 
@@ -58,7 +58,7 @@ fn test_process() -> Result<(), Error> {
     assert!(id_state.is_err());
     assert!(matches!(id_state, Err(Error::EventDuplicateError)));
 
-    let ixn_raw = br#"{"v":"KERI10JSON000098_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"2","t":"ixn","p":"EFLtKYQZIoCFdSEjP7D5OgqElY2WwFB5vQD0Uvtp4RmI","a":[]}-AADAAip7QM2tvcyC4vbSX4A4avT03hHrJTTlkjQujOZRMroRL897wojcI4DIyxejOqsZcjrZHlU4S3RLYGmVbDEoPDgAB3NZj06_KCwxdTdIgCMETTHVJQa5AB8-dtqoD7ltaFIQxmC2K_ESp6DFLOrGQ2xTr97a-By1beM66YyBThjV8DQAC50owTQUxkyJ78vato0HuX9Edx-OxvBoepr61KknIfCjXKnlZrf-s_L0XFbz_0k8t3c9gmPkaI2vI-ZhzP31jBA"#;
+    let ixn_raw = br#"{"v":"KERI10JSON0000cb_","t":"ixn","d":"E2R3qlKVg96GqkpGGaIVgjEDy_3Zklm5l0JJaI2g7lqY","i":"ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk","s":"2","p":"E0UUmo4JsLq9C6LDnerxTjV0PcegpXcPsT_m2J4SeQbE","a":[]}-AADAAUHrvRANKmre1dXRNpBeJFTRBouy4Wmj72QHjBrv74JtKBq7_JzYz17A5Kem6wk5IjOi7Q3gtoxQc4a3xDXHkBwABnHvoCVgqyZZxxdVRY74SHItB8IDVK9udSY8eID7m-oktOm6mtRSbazNRq0gsCh0IwzH_-7REtFvO7CO-noQgCwACr7Re0-LgCMTtBpsq5wK7YqwSpqP6-YLu1m9IOQWv5O9zGAp-z6Qbp1x9cpMGrpTEJTHLp2PNtdTzffvztWuBBQ"#;
 	let parsed = signed_message(ixn_raw).unwrap().1;
     let deserialized_ixn = Message::try_from(parsed).unwrap();
 
@@ -76,7 +76,7 @@ fn test_process() -> Result<(), Error> {
     }
 
     // Construct partially signed interaction event.
-    let ixn_raw_2 = br#"{"v":"KERI10JSON000098_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"3","t":"ixn","p":"ElB_2LYB2i5wus2Dscnmc6e302HK-pgxLIe7iJhftzl0","a":[]}-AADAA18DLkJf2G--KOpRW2aD6ZAXR4koYdj0_OzEfDF5PFP3Y5vx8MSY3UwRBN97AT1pIkDVGqVbBg6nFi-0Bg5RTBQABZq5Kn6sML7NRTEyFKfyHez1YQJ4gzSqGsf1nyOxrXl5h0gwJllyNwTCzQhoyVT2fFAKtt9N_vaP9f90wB2ugCAACLsZcJWVrb1hL7EqL0wuzdtEJOSr-5-7EL0ae_nzvfCO6fw4q0PjgzCgFtoeDbAqUQbhzjfaybDwF9z9MVelWBg"#;
+    let ixn_raw_2 = br#"{"v":"KERI10JSON0000cb_","t":"ixn","d":"E1dzN2DTAXoC3HsdbUuiGB8nDOCYMeAtAeulBT0ljDgs","i":"ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk","s":"3","p":"E2R3qlKVg96GqkpGGaIVgjEDy_3Zklm5l0JJaI2g7lqY","a":[]}-AADAAMXFghkY_dHBEDE5tHvbPu3NNwYEE8lVyYQrxvpbuXRq50jGOekJ8JoSj-_ysjD6j5Yd6fwS_h92Ie0jP-4epCQAB3CJfe8LDC3FP7RsIt4Weu0ks8IyuqeqJ_g_uko5436TONysurOp76RKisehot0SQBUcFPZ5Yp90XFb5dq661DwACJnPkO6ypAZAEkj7Wn6w0Re0Nym2mvNpxefwANJbRZPoBdAn94nKrxJW9S8jePZ49EBihU8R5j6j7Bc2rMMD7AA"#;
 	let parsed = signed_message(ixn_raw_2).unwrap().1;
     let deserialized_ixn = Message::try_from(parsed).unwrap();
     // Make event partially signed.
@@ -98,7 +98,7 @@ fn test_process() -> Result<(), Error> {
     assert!(matches!(ixn_from_db, Ok(None)));
 
     // // Out of order event.
-    let out_of_order_rot_raw = br#"{"v":"KERI10JSON000154_","i":"EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8","s":"4","t":"rot","p":"EacZ-dpgav8rilfpmIDsTvH4vWzc9Tm_3p7Vxjmb7iG0","kt":"2","k":["D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM","DVjWcaNX2gCkHOjk6rkmqPBCxkRCqwIJ-3OjdYmMwxf4","DT1nEDepd6CSAMCE7NY_jlLdG6_mKUlKS_mW-2HJY1hg"],"n":"","bt":"0","br":[],"ba":[],"a":[]}-AADAAt2KPgLzJvXorePSDjHLAStyJG9CakJuGau8QczgtdKPR3JHAOob5wPtTUJD2gHcZXH3wZ6ALM0mZSS6UdocsBwAB50HQHN2JHgj7dNfPQhqiDogbuT5WEx5Mi2Y5cefA6IHgrrQ3WSjZ3Bqai8t5vYfxg_xqcSRJTLkLRNSHZUzMCwACOMQNUmOXYHiHe9cxFie7Yr1y0lJ1tyQEbJnwa1Mr65LmnBIiVuGISDJXy74TZnv0PAnNCJF6TMtltX7nHf7LBw"#;
+    let out_of_order_rot_raw = br#"{"v":"KERI10JSON000187_","t":"rot","d":"E5QnF__pQnqFHkHfIjZr4saPnEnzNelDRM9jEENN6WQs","i":"ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk","s":"4","p":"E1dzN2DTAXoC3HsdbUuiGB8nDOCYMeAtAeulBT0ljDgs","kt":"2","k":["D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM","DVjWcaNX2gCkHOjk6rkmqPBCxkRCqwIJ-3OjdYmMwxf4","DT1nEDepd6CSAMCE7NY_jlLdG6_mKUlKS_mW-2HJY1hg"],"n":"","bt":"0","br":[],"ba":[],"a":[]}-AADAADjTnTZ5cisTrUXSgnYJpbKoNra2IRRSglzwn2b-WtF99gUixNUIl1KNilQJn0pQlRngPZUKbAxhBgqRvXqWFAgABX0mBBLQ1IMtlzDzEYXDPwztt-ySMFQszQAY7TGSrwzuSMFFA5mBBxxg_muulDClcNAYVt3iKdUodT8N0q-33CwACAyzq3lRXJonJl1X2f9IXBZZiiyIhyetWhNETXjiRbKZKJohfuhSVXsnigwWGscc0S1t_hRTbdB1ijq6fJ4UhBg"#;
 	let parsed = signed_message(out_of_order_rot_raw).unwrap().1;
     let out_of_order_rot = Message::try_from(parsed).unwrap();
 
@@ -110,7 +110,7 @@ fn test_process() -> Result<(), Error> {
     let raw_from_db = event_processor.get_event_at_sn(&id, 4);
     assert!(matches!(raw_from_db, Ok(None)));
 
-    let id: IdentifierPrefix = "EsiHneigxgDopAidk_dmHuiUJR3kAaeqpgOAj9ZZd4q8".parse()?;
+    let id: IdentifierPrefix = "ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk".parse()?;
     let mut kel = Vec::new();
     kel.extend(icp_raw);
     kel.extend(rot_raw);
@@ -134,16 +134,16 @@ fn test_process_receipt() -> Result<(), Error> {
     let event_processor = EventProcessor::new(Arc::clone(&db));
 
     // Events and sigs are from keripy `test_direct_mode` test.
-    // (keripy/tests/core/test_eventing.py#1855)
+    // (keripy/tests/core/test_eventing.py)
     // Parse and process controller's inception event.
-    let icp_raw = br#"{"v":"KERI10JSON0000ed_","i":"EQf1hzB6s5saaQPdDAsEzSMEFoQx_WLsq93bjPu5wuqA","s":"0","t":"icp","kt":"1","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"n":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","bt":"0","b":[],"c":[],"a":[]}-AABAAvA7i3r6vs3ckxEZ2zVO8AtbjnaLKE_gwu0XNtzwB9p0fLKnC05cA07FWVx-mqoLDUO8mF1RcnoQvXWkVv_dtBA"#;
+    let icp_raw = br#"{"v":"KERI10JSON000120_","t":"icp","d":"EsZuhYAPBDnexP3SOl9YsGvWBrYkjYcRjomUYmCcLAYY","i":"EsZuhYAPBDnexP3SOl9YsGvWBrYkjYcRjomUYmCcLAYY","s":"0","kt":"1","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"n":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","bt":"0","b":[],"c":[],"a":[]}-AABAAWKO9bl3OhABTaevxYiXQ1poRIGfM9ndMPq4bvrKmU_3pTN3VLNDYOI8pJBeAQxRtajQn4CSWOqgdGnmeG6fBCQ"#;
 	let parsed =  signed_message(icp_raw).unwrap().1;
     let icp = Message::try_from(parsed).unwrap();
 
     let controller_id_state = event_processor.process(icp)?;
 
     // Parse receipt of controller's inception event.
-    let vrc_raw = br#"{"v":"KERI10JSON000091_","i":"EQf1hzB6s5saaQPdDAsEzSMEFoQx_WLsq93bjPu5wuqA","s":"0","t":"rct","d":"EXeKMHPw0ql8vHiBOpo72AOrOsWZ3bRDL-DKkYHo4v6w"}-FABED9EB3sA5u2vCPOEmX3d7bEyHiSh7Xi8fjew2KMl3FQM0AAAAAAAAAAAAAAAAAAAAAAAEeGqW24EnxUgO_wfuFo6GR_vii-RNv5iGo8ibUrhe6Z0-AABAAocy9m9ToxeeZk-FkgjFh1x839Ims4peTy2C5MdawIwoa9wlIDbD-wGmiGO4QdrQ1lSntqUAUMkcGAzB0Q6SsAA"#;
+    let vrc_raw = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EsZuhYAPBDnexP3SOl9YsGvWBrYkjYcRjomUYmCcLAYY","i":"EsZuhYAPBDnexP3SOl9YsGvWBrYkjYcRjomUYmCcLAYY","s":"0"}-FABE7pB5IKuaYh3aIWKxtexyYFhpSjDNTEGSQuxeJbWiylg0AAAAAAAAAAAAAAAAAAAAAAAE7pB5IKuaYh3aIWKxtexyYFhpSjDNTEGSQuxeJbWiylg-AABAAlIts3z2kNyis9l0Pfu54HhVN_yZHEV7NWIVoSTzl5IABelbY8xi7VRyW42ZJvBaaFTGtiqwMOywloVNpG_ZHAQ'"#;
 	let parsed = signed_message(vrc_raw).unwrap().1;
     let rcp = Message::try_from(parsed).unwrap();
 
@@ -152,7 +152,7 @@ fn test_process_receipt() -> Result<(), Error> {
     assert!(id_state.is_err());
 
     // Parse and process validator's inception event.
-    let val_icp_raw = br#"{"v":"KERI10JSON0000ed_","i":"ED9EB3sA5u2vCPOEmX3d7bEyHiSh7Xi8fjew2KMl3FQM","s":"0","t":"icp","kt":"1","k":["D8KY1sKmgyjAiUDdUBPNPyrSz_ad_Qf9yzhDNZlEKiMc"],"n":"EOWDAJvex5dZzDxeHBANyaIoUG3F4-ic81G6GwtnC4f4","bt":"0","b":[],"c":[],"a":[]}-AABAArFZxr-FnvQVZFX8WSipIxCGVCJjT6fj6qkZ-ei9UAGshPsqdX7scy0zNIB4_AfIjdSLLRWgL33AJmC2neaxuDg"#;
+    let val_icp_raw = br#"{"v":"KERI10JSON000120_","t":"icp","d":"E7pB5IKuaYh3aIWKxtexyYFhpSjDNTEGSQuxeJbWiylg","i":"E7pB5IKuaYh3aIWKxtexyYFhpSjDNTEGSQuxeJbWiylg","s":"0","kt":"1","k":["D8KY1sKmgyjAiUDdUBPNPyrSz_ad_Qf9yzhDNZlEKiMc"],"n":"EOWDAJvex5dZzDxeHBANyaIoUG3F4-ic81G6GwtnC4f4","bt":"0","b":[],"c":[],"a":[]}-AABAAsnbd4AkK3mlX2Z3quAfTznEPmFJInT9CE9i0aisswqaSW7QNp6XlPHo3natTevQCmS0H9J4Kb-H_V-BtpqavBA"#;
 	let parsed = signed_message(val_icp_raw).unwrap().1;
     let val_icp = Message::try_from(parsed).unwrap();
 
@@ -177,15 +177,15 @@ fn test_process_delegated() -> Result<(), Error> {
 
     // Events and sigs are from keripy `test_delegation` test.
     // (keripy/tests/core/test_delegating.py)
-    let bobs_pref: IdentifierPrefix = "Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI".parse()?;
+    let bobs_pref: IdentifierPrefix = "Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8".parse()?;
 
-    let bobs_icp = br#"{"v":"KERI10JSON0000ed_","i":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI","s":"0","t":"icp","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","bt":"0","b":[],"c":[],"a":[]}-AABAAp8S6RgfLwdCEiz0jL9cXaDwTJF6MLuKyXp7EfJtrp2myOikOJVUB-w9UGZc1Y8dnURxhXPSca-ZEUAV73XOaAw"#;
+    let bobs_icp = br#"{"v":"KERI10JSON000120_","t":"icp","d":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"0","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","bt":"0","b":[],"c":[],"a":[]}-AABAAJEloPu7b4z8v1455StEJ1b7dMIz-P0tKJ_GBBCxQA8JEg0gm8qbS4TWGiHikLoZ2GtLA58l9dzIa2x_otJhoDA"#;
 	let parsed = signed_message(bobs_icp).unwrap().1;
     let msg = Message::try_from(parsed).unwrap();
     event_processor.process(msg)?;
 
     // Delegated inception event.
-    let dip_raw = br#"{"v":"KERI10JSON000121_","i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"0","t":"dip","kt":"1","k":["DuK1x8ydpucu3480Jpd1XBfjnCwb3dZ3x5b1CJmuUphA"],"n":"EWWkjZkZDXF74O2bOQ4H5hu4nXDlKg2m4CBEBkUxibiU","bt":"0","b":[],"c":[],"a":[],"di":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI"}-AABAA2_8Guj0Gf2JoNTq7hOs4u6eOOWhENALJWDfLxkVcS2uLh753FjtyE80lpeS3to1C9yvENyMnyN4q96ehA4exDA-GAB0AAAAAAAAAAAAAAAAAAAAAAQE3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII"#;
+    let dip_raw = br#"{"v":"KERI10JSON000154_","t":"dip","d":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI","i":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI","s":"0","kt":"1","k":["DuK1x8ydpucu3480Jpd1XBfjnCwb3dZ3x5b1CJmuUphA"],"n":"EWWkjZkZDXF74O2bOQ4H5hu4nXDlKg2m4CBEBkUxibiU","bt":"0","b":[],"c":[],"a":[],"di":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8"}-AABAA_zcT2-86Zll3FG-hwoQiVuFiT0X28Ft0t4fZGNFISgtZjH2DCrBGoceko604NDZ0QF0Z3bSgEkN_y0lBafD_Bw-GAB0AAAAAAAAAAAAAAAAAAAAAAQE1_-icBrwC_HhxyFwsQLV6hZEbApOc_McGUjhLONpQuc"#;
 	let parsed = signed_message(dip_raw).unwrap().1;
     let deserialized_dip = Message::try_from(parsed).unwrap();
 
@@ -193,14 +193,14 @@ fn test_process_delegated() -> Result<(), Error> {
     let state = event_processor.process(deserialized_dip.clone());
     assert!(matches!(state, Err(Error::EventOutOfOrderError)));
 
-    let child_prefix: IdentifierPrefix = "E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U".parse()?;
+    let child_prefix: IdentifierPrefix = "Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI".parse()?;
 
     // Check if processed dip is in kel.
     let dip_from_db = event_processor.get_event_at_sn(&child_prefix, 0);
     assert!(matches!(dip_from_db, Ok(None)));
 
     // Bob's ixn event with delegating event seal.
-    let bobs_ixn = br#"{"v":"KERI10JSON000107_","i":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI","s":"1","t":"ixn","p":"E1-QL0TCdsBTRaKoakLjFhjSlELK60Vv8WdRaG6zMnTM","a":[{"i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"0","d":"E1x1JOub6oEQkxAxTNFu1Pma6y-lrbprNsaILHJHoPmY"}]}-AABAAROVSK0qK2gqlr_OUsnHNW_ksCyLVmRaysRne2dI5dweECGIy3_ZuFHyOofiDRt5tRE09PlS0uZdot6byFNr-AA"#;
+    let bobs_ixn = br#"{"v":"KERI10JSON00013a_","t":"ixn","d":"E1_-icBrwC_HhxyFwsQLV6hZEbApOc_McGUjhLONpQuc","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"1","p":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","a":[{"i":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI","s":"0","d":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI"}]}-AABAA6h5mD5stIwO_rwV9apMuhHXjxrKp2ATa35u-H6DM2X-BKo5NkJ1khzBdHo-VLQ6Zw_yajj2Ul_WOL8pFSk_ZDg"#;
 	let parsed = signed_message(bobs_ixn).unwrap().1;
     let deserialized_ixn = Message::try_from(parsed).unwrap();
     event_processor.process(deserialized_ixn.clone())?;
@@ -228,12 +228,12 @@ fn test_process_delegated() -> Result<(), Error> {
     assert_eq!(dip_from_db.signed_event_message.event_message.serialize()?, raw_parsed(deserialized_dip.clone())?);
 
     // Bobs interaction event with delegated event seal.
-    let bob_ixn = br#"{"v":"KERI10JSON000107_","i":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI","s":"2","t":"ixn","p":"E3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII","a":[{"i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"1","d":"EPjLBcb4pp-3PGvSi_fTvLvsqUqFoJ0CVCHvIFfu93Xc"}]}-AABAAclMVE-bkIn-wPiAqfgR384nWmslQHQvmo2o3xQvd_4Bt6bflc4BAmfBa03KgrDVqmB7qG2VXQbOHevkzOgRdDA"#;
+    let bob_ixn = br#"{"v":"KERI10JSON00013a_","t":"ixn","d":"Eq-MPVuYTPXNUlQSHKfnPhiV3rWo7hkkLa7ui67OIG68","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"2","p":"E1_-icBrwC_HhxyFwsQLV6hZEbApOc_McGUjhLONpQuc","a":[{"i":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI","s":"1","d":"ELEnIYF_rAsluR9TI_jh5Dizq61dCXjos22AGN0hiVjw"}]}-AABAA-QDEYYQCDtosLkziTAaWTu3mfVdFUxa8tytwQVohRwBJEhefCIaCDIbFhrrEn17KMwGoOJKBrJ7Da4WqeWbtAA"#;
 	let parsed = signed_message(bob_ixn).unwrap().1;
     let deserialized_ixn_drt = Message::try_from(parsed).unwrap();
 
     // Delegated rotation event.
-    let drt_raw = br#"{"v":"KERI10JSON000122_","i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"1","t":"drt","p":"E1x1JOub6oEQkxAxTNFu1Pma6y-lrbprNsaILHJHoPmY","kt":"1","k":["DTf6QZWoet154o9wvzeMuNhLQRr8JaAUeiC6wjB_4_08"],"n":"E8kyiXDfkE7idwWnAZQjHbUZMz-kd_yIMH0miptIFFPo","bt":"0","br":[],"ba":[],"a":[]}-AABAAAVUMNfOl9Fcqx-C3fAYnaxvsiJJO3zG6rP0FQ2WVp__hMEaprrQbJL6-Esnny3U5zvMOqbso17rvecTwmVIwDw-GAB0AAAAAAAAAAAAAAAAAAAAAAgEbOI0OIIFv2VV5bmeSq1pwCn-6b2k6TdWcCbJHE6Ly7o"#;
+    let drt_raw = br#"{"v":"KERI10JSON000155_","t":"drt","d":"ELEnIYF_rAsluR9TI_jh5Dizq61dCXjos22AGN0hiVjw","i":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI","s":"1","p":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI","kt":"1","k":["DTf6QZWoet154o9wvzeMuNhLQRr8JaAUeiC6wjB_4_08"],"n":"E8kyiXDfkE7idwWnAZQjHbUZMz-kd_yIMH0miptIFFPo","bt":"0","br":[],"ba":[],"a":[]}-AABAAer7S2mRuHlXxmJxy6E5lgdBmh3eeKd2TnkyivHlEw83Xhq98h6RBjXRDc_S0Z-TrLUS2u-6FnIkP_yYsOeH0Dg-GAB0AAAAAAAAAAAAAAAAAAAAAAgEq-MPVuYTPXNUlQSHKfnPhiV3rWo7hkkLa7ui67OIG68"#;
 	let parsed = signed_message(drt_raw).unwrap().1;
     let deserialized_drt = Message::try_from(parsed).unwrap();
 
@@ -273,42 +273,46 @@ fn test_validate_seal() -> Result<(), Error> {
     let event_processor = EventProcessor::new(Arc::clone(&db));
 
     // Events and sigs are from keripy `test_delegation` test.
-    // (keripy/tests/core/test_delegating.py)
+    // (keripy/tests/core/test_delegating.py:#test_delegation)
 
     // Process icp.
-    let delegator_icp_raw = br#"{"v":"KERI10JSON0000ed_","i":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI","s":"0","t":"icp","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","bt":"0","b":[],"c":[],"a":[]}-AABAAp8S6RgfLwdCEiz0jL9cXaDwTJF6MLuKyXp7EfJtrp2myOikOJVUB-w9UGZc1Y8dnURxhXPSca-ZEUAV73XOaAw"#;
+    let delegator_icp_raw= br#"{"v":"KERI10JSON000120_","t":"icp","d":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"0","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","bt":"0","b":[],"c":[],"a":[]}-AABAAJEloPu7b4z8v1455StEJ1b7dMIz-P0tKJ_GBBCxQA8JEg0gm8qbS4TWGiHikLoZ2GtLA58l9dzIa2x_otJhoDA"#;
 	let parsed = signed_message(delegator_icp_raw).unwrap().1;
     let deserialized_icp = Message::try_from(parsed).unwrap();
     event_processor.process(deserialized_icp.clone())?.unwrap();
-    let delegator_id = "Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI".parse()?;
+    let delegator_id = "Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8".parse()?;
 
-    let dip_raw = r#"{"v":"KERI10JSON000121_","i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"0","t":"dip","kt":"1","k":["DuK1x8ydpucu3480Jpd1XBfjnCwb3dZ3x5b1CJmuUphA"],"n":"EWWkjZkZDXF74O2bOQ4H5hu4nXDlKg2m4CBEBkUxibiU","bt":"0","b":[],"c":[],"a":[],"di":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI"}"#; //-AABAA2_8Guj0Gf2JoNTq7hOs4u6eOOWhENALJWDfLxkVcS2uLh753FjtyE80lpeS3to1C9yvENyMnyN4q96ehA4exDA-GAB0AAAAAAAAAAAAAAAAAAAAAAQE3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII"#;
+    // Delegated inception event.
+    let dip_raw = br#"{"v":"KERI10JSON000154_","t":"dip","d":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI","i":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI","s":"0","kt":"1","k":["DuK1x8ydpucu3480Jpd1XBfjnCwb3dZ3x5b1CJmuUphA"],"n":"EWWkjZkZDXF74O2bOQ4H5hu4nXDlKg2m4CBEBkUxibiU","bt":"0","b":[],"c":[],"a":[],"di":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8"}-AABAA_zcT2-86Zll3FG-hwoQiVuFiT0X28Ft0t4fZGNFISgtZjH2DCrBGoceko604NDZ0QF0Z3bSgEkN_y0lBafD_Bw-GAB0AAAAAAAAAAAAAAAAAAAAAAQE1_-icBrwC_HhxyFwsQLV6hZEbApOc_McGUjhLONpQuc"#;
+	let parsed = signed_message(dip_raw).unwrap().1;
+    let msg = Message::try_from(parsed).unwrap();
+    if let Message::Event(dip) = msg {
+        let delegated_event_digest = dip.event_message.event.get_digest();
+        // Construct delegating seal.
+        let seal = EventSeal {
+            prefix: delegator_id,
+            sn: 1,
+            event_digest: delegated_event_digest,
+        };
 
-    // Compute delegated event digest
-    let delegated_event_digest = SelfAddressing::Blake3_256.derive(dip_raw.as_bytes());
-    // Construct delegating seal.
-    let seal = EventSeal {
-        prefix: delegator_id,
-        sn: 1,
-        event_digest: delegated_event_digest,
-    };
-    // Try to validate seal before processing delegating event
-    assert!(matches!(
-        event_processor.validate_seal(seal.clone(), dip_raw.as_bytes()),
-        Err(Error::EventOutOfOrderError)
-    ));
-
-    // Process delegating event.
-    let delegating_event_raw = br#"{"v":"KERI10JSON000107_","i":"Eta8KLf1zrE5n-HZpgRAnDmxLASZdXEiU9u6aahqR8TI","s":"1","t":"ixn","p":"E1-QL0TCdsBTRaKoakLjFhjSlELK60Vv8WdRaG6zMnTM","a":[{"i":"E-9tsnVcfUyXVQyBPGfntoL-xexf4Cldt_EPzHis2W4U","s":"0","d":"E1x1JOub6oEQkxAxTNFu1Pma6y-lrbprNsaILHJHoPmY"}]}-AABAAROVSK0qK2gqlr_OUsnHNW_ksCyLVmRaysRne2dI5dweECGIy3_ZuFHyOofiDRt5tRE09PlS0uZdot6byFNr-AA"#;
-	let parsed = signed_message(delegating_event_raw).unwrap().1;
-    let deserialized_ixn = Message::try_from(parsed).unwrap();
-    event_processor.process(deserialized_ixn.clone())?;
-
-    // Validate seal again.
-    assert!(event_processor
-        .validate_seal(seal, dip_raw.as_bytes())
-        .is_ok());
-
+        // Try to validate seal before processing delegating event
+        assert!(matches!(
+            event_processor.validate_seal(seal.clone(), &dip.event_message),
+            Err(Error::EventOutOfOrderError)
+        ));
+        
+        // Process delegating event.
+        let delegating_event_raw = br#"{"v":"KERI10JSON00013a_","t":"ixn","d":"E1_-icBrwC_HhxyFwsQLV6hZEbApOc_McGUjhLONpQuc","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"1","p":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","a":[{"i":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI","s":"0","d":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI"}]}-AABAA6h5mD5stIwO_rwV9apMuhHXjxrKp2ATa35u-H6DM2X-BKo5NkJ1khzBdHo-VLQ6Zw_yajj2Ul_WOL8pFSk_ZDg"#;
+        let parsed = signed_message(delegating_event_raw).unwrap().1;
+        let deserialized_ixn = Message::try_from(parsed).unwrap();
+        event_processor.process(deserialized_ixn.clone())?;
+        
+        // Validate seal again.
+        assert!(event_processor
+            .validate_seal(seal, &dip.event_message)
+            .is_ok());
+        };
+            
     Ok(())
 }
 
@@ -323,7 +327,7 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
     let event_processor = EventProcessor::new(Arc::clone(&db));
 
-    let kerl_str = br#"{"v":"KERI10JSON0000ed_","i":"DoQy7bwiYr80qXoISsMdGvfXmCCpZ9PUqetbR8e-fyTk","s":"0","t":"icp","kt":"1","k":["DoQy7bwiYr80qXoISsMdGvfXmCCpZ9PUqetbR8e-fyTk"],"n":"EGofBtQtAeDMOO3AA4QM0OHxKyGQQ1l2HzBOtrKDnD-o","bt":"0","b":[],"c":[],"a":[]}-AABAAxemWo-mppcRkiGSOXpVwh8CYeTSEJ-a0HDrCkE-TKJ-_76GX-iD7s4sbZ7j5fdfvOuTNyuFw3a797gwpnJ-NAg{"v":"KERI10JSON000122_","i":"DoQy7bwiYr80qXoISsMdGvfXmCCpZ9PUqetbR8e-fyTk","s":"1","t":"rot","p":"EvZY9w3fS1h98tJeysdNQqT70XLLec4oso8kIYjfu2Ks","kt":"1","k":["DLqde_jCw-C3y0fTvXMXX5W7QB0188bMvXVkRcedgTwY"],"n":"EW5MfLjWGOUCIV1tQLKNBu_WFifVK7ksthNDoHP89oOc","bt":"0","br":[],"ba":[],"a":[]}-AABAAuQcoYU04XYzJxOPp4cxmvXbqVpGADfQWqPOzo1S6MajUl1sEWEL1Ry30jNXaV3-izvHRNROYtPm2LIuIimIFDg{"v":"KERI10JSON000122_","i":"DoQy7bwiYr80qXoISsMdGvfXmCCpZ9PUqetbR8e-fyTk","s":"2","t":"rot","p":"EOi_KYKjP4hinuTfgtoYj5QBw_Q1ZrRtWFQDp0qsNuks","kt":"1","k":["De5pKs8wiP9bplyjspW9L62PEANoad-5Kum1uAllRxPY"],"n":"ERKagV0hID1gqZceLsOV3s7MjcoRmCaps2bPBHvVQPEQ","bt":"0","br":[],"ba":[],"a":[]}-AABAAPKIYNAm6nmz4cv37nvn5XMKRVzfKkVpJwMDt2DG-DqTJRCP8ehCeyDFJTdtvdJHjKqrnxE4Lfpll3iUzuQM4Aw{"v":"KERI10JSON000122_","i":"DoQy7bwiYr80qXoISsMdGvfXmCCpZ9PUqetbR8e-fyTk","s":"3","t":"rot","p":"EVK1FbLl7yWTxOzPwk7vo_pQG5AumFoeSE51KapaEymc","kt":"1","k":["D2M5V_e23Pa0IAqqhNDKzZX0kRIMkJyW8_M-gT_Kw9sc"],"n":"EYJkIfnCYcMFVIEi-hMMIjBQfXcTqH_lGIIqMw4LaeOE","bt":"0","br":[],"ba":[],"a":[]}-AABAAsrKFTSuA6tEzqV0C7fEbeiERLdZpStZMCTvgDvzNMfa_Tn26ejFRZ_rDmovoo8xh0dH7SdMQ5B_FvwCx9E98Aw{"v":"KERI10JSON000098_","i":"DoQy7bwiYr80qXoISsMdGvfXmCCpZ9PUqetbR8e-fyTk","s":"4","t":"ixn","p":"EY7VDg-9Gixr9rgH2VyWGvnnoebgTyT9oieHZIaiv2UA","a":[]}-AABAAqHtncya5PNnwSbMRegftJc1y8E4tMZwajVVj2-FmGmp82b2A7pY1vr7cv36m7wPRV5Dusf4BRa5moMlHUpSqDA"#;
+    let kerl_str = br#"{"v":"KERI10JSON000120_","t":"icp","d":"EFM_0I1yFtoKJPy8L9QCN9ZBHHR-qIBSxSwHZG6uljqc","i":"Ddhxr2UX8Xl55KvOd20cBYjj5QSCVqTiINgA_VJQul30","s":"0","kt":"1","k":["Ddhxr2UX8Xl55KvOd20cBYjj5QSCVqTiINgA_VJQul30"],"n":"ESY1L4c7pxgQBuq76wUjwLdOWVfX8XLfi4unqjzBs3A4","bt":"0","b":[],"c":[],"a":[]}-AABAAqVXfmQsyme65lXrnUdx701IClRnO14wvdP00-CnTyYHetVUQEpWCS787bSNWlPG9HnroeEzfuM7ZhzM5VRCQDw{"v":"KERI10JSON000155_","t":"rot","d":"EI_rE4U5HPnLtJ-kNRBZKyTzw9dYq0yffywEoGEZZE0E","i":"Ddhxr2UX8Xl55KvOd20cBYjj5QSCVqTiINgA_VJQul30","s":"1","p":"EFM_0I1yFtoKJPy8L9QCN9ZBHHR-qIBSxSwHZG6uljqc","kt":"1","k":["DhSM7Cy_qC1y7jmmIu8A3lYedssBAVpHKJDfVbUXo_Nc"],"n":"EAMjC1FxUcVlPHFBcgMOTjLmlRsRNkHtXzUTFD5VaaU4","bt":"0","br":[],"ba":[],"a":[]}-AABAA6TMhDKzjpD574-xzs0A0VwD5x_VzcYcK0y9h_ttkVYQOQlocK4QpsV2kHbAHptKQg74tZxxcKuiqDg1SO9MTAA{"v":"KERI10JSON0000cb_","t":"ixn","d":"EeAgPgw8ewxtbE0zVRB92K5bLC_nmVQBgA9Ajz7TPTg0","i":"Ddhxr2UX8Xl55KvOd20cBYjj5QSCVqTiINgA_VJQul30","s":"2","p":"EI_rE4U5HPnLtJ-kNRBZKyTzw9dYq0yffywEoGEZZE0E","a":[]}-AABAArJjuMeasjy7gcTSZrDaVa8shiYoH4syJPXPZQMRLyaxCBFFynsWVyWrq-ZJFoWJETyX3Hi5U7AmPfWZsZfaaCw{"v":"KERI10JSON000155_","t":"rot","d":"E7YSxhPZMwGRxIP4E1POsqS7gK9jO00cE0IOr002lVPI","i":"Ddhxr2UX8Xl55KvOd20cBYjj5QSCVqTiINgA_VJQul30","s":"3","p":"EeAgPgw8ewxtbE0zVRB92K5bLC_nmVQBgA9Ajz7TPTg0","kt":"1","k":["D4cFZmRliumCFW5RnHvDFYCRTvNvuGMLWO1CqTaNEZZI"],"n":"Ew9LxnzhZHC6wri0dFdC5OQ_uhpAaO-wjbMtdt5ld0HQ","bt":"0","br":[],"ba":[],"a":[]}-AABAAWaOtr_k3Jk0GQn39Pc7WoZEcpeZk1m5yMScDq0yp5L4biNkSnyOA7AYO5G2n-HxZ3lM2IGeTLwN4XAdyVxRrBg{"v":"KERI10JSON000155_","t":"rot","d":"E6OMBom_RgVCE7paXEvdUBzg2rt6QRmEQ2q7Dq4FOG9o","i":"Ddhxr2UX8Xl55KvOd20cBYjj5QSCVqTiINgA_VJQul30","s":"4","p":"E7YSxhPZMwGRxIP4E1POsqS7gK9jO00cE0IOr002lVPI","kt":"1","k":["Dnljgftiq3x7IuF4mmMYfOzWoMNh98QDCdEU2bRSqUAQ"],"n":"EnlyNgrbZhysJ8mxSxoVuVv9QBAcB25RtVmm2A7yW7oY","bt":"0","br":[],"ba":[],"a":[]}-AABAApnOXmrsbhdRUHEg-x9CqeVKQdJIau0fTnQ8WT2uv1ueUwj7zMfWstZYEpRPkc9DAg5XqRKyMVOR2kq4sjAIpAQ{"v":"KERI10JSON0000cb_","t":"ixn","d":"ECpHwQLdPSwHBGR_QAXhlyzwyB-z8vNYuVRtTWak5kQw","i":"Ddhxr2UX8Xl55KvOd20cBYjj5QSCVqTiINgA_VJQul30","s":"5","p":"E6OMBom_RgVCE7paXEvdUBzg2rt6QRmEQ2q7Dq4FOG9o","a":[]}-AABAAwj0JqH6ae5vCOCxiAWmA_FKzM1g7ydxQpfgQio0Yj2DhOPKBU8kdUh0zAM2n6qi32diaJHYM15nm62Re1sK7CQ"#;
     // Process kerl
     signed_event_stream(kerl_str)
         .unwrap()
@@ -334,9 +338,9 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
         });
 
     let event_seal = EventSeal {
-        prefix: "DoQy7bwiYr80qXoISsMdGvfXmCCpZ9PUqetbR8e-fyTk".parse()?,
+        prefix: "Ddhxr2UX8Xl55KvOd20cBYjj5QSCVqTiINgA_VJQul30".parse()?,
         sn: 2,
-        event_digest: "EVK1FbLl7yWTxOzPwk7vo_pQG5AumFoeSE51KapaEymc".parse()?,
+        event_digest: "EeAgPgw8ewxtbE0zVRB92K5bLC_nmVQBgA9Ajz7TPTg0".parse()?,
     };
 
     let state_at_sn = event_processor
@@ -344,8 +348,7 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
         .unwrap();
     assert_eq!(state_at_sn.sn, event_seal.sn);
     assert_eq!(state_at_sn.prefix, event_seal.prefix);
-    let ev_dig = event_seal.event_digest.derivation.derive(&state_at_sn.last);
-    assert_eq!(event_seal.event_digest, ev_dig);
+    assert_eq!(event_seal.event_digest, state_at_sn.last_event_digest);
 
     Ok(())
 }
@@ -354,29 +357,28 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
 #[test]
 pub fn test_reply_escrow() -> Result<(), Error> {
     use tempfile::Builder;
-
     use crate::query::QueryError;
-
+    
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
     let event_processor = EventProcessor::new(Arc::clone(&db));
 
-    let identifier: IdentifierPrefix = "DDp7bJnTiKEahNaJidXogL6ntasrkTJ4vxAilMi6nxCE".parse()?;
-    let icp_str = r#"{"v":"KERI10JSON00011b_","i":"DDp7bJnTiKEahNaJidXogL6ntasrkTJ4vxAilMi6nxCE","s":"0","t":"icp","kt":"1","k":["DDp7bJnTiKEahNaJidXogL6ntasrkTJ4vxAilMi6nxCE"],"n":"EY8dNfEnrzdG4RVrF87jc9qyh86DJ3HMOoce62eWWQbg","bt":"0","b":["Dqyfe0SecmOCRo3UtWu71cy-MUCWZH28prZx2HRm5I7M"],"c":[],"a":[]}-AABAA9wOislAprKi_8A6WcFp17TMwB8KHqV5RvYybsosAx8Rj11lwX-hrxgniaR66IreHv4DSSROVm6K62Uo9IhhiBg"#;
-    let parsed = signed_message(icp_str.as_bytes()).unwrap().1;
-    let deserialized_icp = Message::try_from(parsed).unwrap();
+    let identifier: IdentifierPrefix = "Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8".parse()?;
+    let kel = r#"{"v":"KERI10JSON000120_","t":"icp","d":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"0","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","bt":"0","b":[],"c":[],"a":[]}-AABAAJEloPu7b4z8v1455StEJ1b7dMIz-P0tKJ_GBBCxQA8JEg0gm8qbS4TWGiHikLoZ2GtLA58l9dzIa2x_otJhoDA{"v":"KERI10JSON000155_","t":"rot","d":"EoU_JzojCvenHLPza5-K7z59yU7efQVrzciNdXoVDmlk","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"1","p":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","kt":"1","k":["Dyb48eeVVXD7JAarHFAUffKcgYGvCQ4KWX00myzNLgzU"],"n":"ElBleBp2wS0n927E6W63imv-lRzU10uLYTRKzHNn19IQ","bt":"0","br":[],"ba":[],"a":[]}-AABAAXcEQQlT3id8LpTRDkFKVzF7n0d0w-3n__xgdf7rxTpAWUVsHthZcPtovCVr1kca1MD9QbfFAMpEtUZ02LTi3AQ{"v":"KERI10JSON000155_","t":"rot","d":"EYhzp9WCvSNFT2dVryQpVFiTzuWGbFNhVHNKCqAqBI8A","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"2","p":"EoU_JzojCvenHLPza5-K7z59yU7efQVrzciNdXoVDmlk","kt":"1","k":["DyN13SKiF1FsVoVR5C4r_15JJLUBxBXBmkleD5AYWplc"],"n":"Em4tcl6gRcT2OLjbON4iz-fsw0iWQGBtwWic0dJY4Gzo","bt":"0","br":[],"ba":[],"a":[]}-AABAAZgqx0nZk4y2NyxPGypIloZikDzaZMw8EwjisexXwn-nr08jdILP6wvMOKZcxmCbAHJ4kHL_SIugdB-_tEvhBDg{"v":"KERI10JSON000155_","t":"rot","d":"EsL4LnyvTGBqdYC_Ute3ag4XYbu8PdCj70un885pMYpA","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"3","p":"EYhzp9WCvSNFT2dVryQpVFiTzuWGbFNhVHNKCqAqBI8A","kt":"1","k":["DrcAz_gmDTuWIHn_mOQDeSK_aJIRiw5IMzPD7igzEDb0"],"n":"E_Y2NMHE0nqrTQLe57VPcM0razmxdxRVbljRCSetdjjI","bt":"0","br":[],"ba":[],"a":[]}-AABAAkk_Z4jS76LBiKrTs8tL32DNMndq5UQJ-NoteiTyOuMZfyP8jgxJQU7AiR7zWQZxzmiF0mT1JureItwDkPli5DA"#;
+    let parsed = signed_event_stream(kel.as_bytes()).unwrap().1;
+    let kel_events = parsed.into_iter().map(|ev| Message::try_from(ev).unwrap());
 
-    let rot_str = r#"{"v":"KERI10JSON000122_","i":"DDp7bJnTiKEahNaJidXogL6ntasrkTJ4vxAilMi6nxCE","s":"1","t":"rot","p":"Ed5hSLWDtjkWlrDeEoVBjytFHiqeC5aW15D3R_y5fcgs","kt":"1","k":["DDduXoG93VdAiH6tPToKKUj7rsgtW8YtGuJDdRw5H9Vg"],"n":"ElUH-qWtgP7AtcF0Qrjk8NYlCXuZXdW9nrczmBsCHtqM","bt":"0","br":[],"ba":[],"a":[]}-AABAAHD12g1ab3tsL_bOP0jRs53qh2gSGOxjPKo2lOmHC_Bs_lb2rWwJsl98OQ-jUo2xfgd2MeniJUE4D0SMInv-TAw"#;
-    let parsed = signed_message(rot_str.as_bytes()).unwrap().1;
-    let deserialized_rot = Message::try_from(parsed).unwrap();
+    let rest_of_kel = r#"{"v":"KERI10JSON000155_","t":"rot","d":"EChhtlv3ZbdRHk6UKxP2l6Uj1kPmloV4hSjvn7480Sks","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"4","p":"EsL4LnyvTGBqdYC_Ute3ag4XYbu8PdCj70un885pMYpA","kt":"1","k":["DcJ_93nB6lFRiuTCKLsP0P-LH2bxgnW7pzsp_i8KEHb4"],"n":"Ej3cpXIF_K6ZFnuoRn2sDz26O1YQzTqYhCpac4Lk7oo4","bt":"0","br":[],"ba":[],"a":[]}-AABAAEk-XVyuGkGtfC6MFUiSsk4o4eWGw-cBKhmZOV3DOy8b2tUB-4t6jY15vo26mn8tauvADPs321xkjX9rNBkhlCw{"v":"KERI10JSON000155_","t":"rot","d":"EfARz_ZQsxvwinu5iJ5ry0OQW8z-kSw0ULYi-EXidRpk","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"5","p":"EChhtlv3ZbdRHk6UKxP2l6Uj1kPmloV4hSjvn7480Sks","kt":"1","k":["Dw4Woc1Nto6vNe_oezp3Tw13-YujvCIf7zzy8Ua0VaZU"],"n":"EoKxnsSwdrZK9BSDKV0Am-inFCVwc0dQoco8ykRBNcbE","bt":"0","br":[],"ba":[],"a":[]}-AABAA-6rxkCizrb1fbMWzHAMbiyYqnPUBg_d6lN9Gzla49SZ9eHgxOjRxCE34N0FDObX9UuBGNLO7pIh59OMMtwKdDQ{"v":"KERI10JSON000155_","t":"rot","d":"EJyIhOR7NJjQuV_N6WsQ_qqZc5f09vVwqVnIbuiWxuFs","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"6","p":"EfARz_ZQsxvwinu5iJ5ry0OQW8z-kSw0ULYi-EXidRpk","kt":"1","k":["DjGxCjRAVaFiVffhQcPDf04bicivm2TL1LknCL3ujv50"],"n":"EE2EIFJ_RB8iHHWGdFVwxWUYOVryS9_0i-boEELGvg5U","bt":"0","br":[],"ba":[],"a":[]}-AABAAXVtZlgCbE7u5KwWe7Hmlv3NCCkVmccQUemIKand3AcYkoxQvS0KPn5WmlQjdLk6RyVCaK2enGqqeFMSOc01_Cg{"v":"KERI10JSON000155_","t":"rot","d":"EXWLIEK40fQjeYCri1Iy8sQxZzWnJdj1pHPkDBMaodoE","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"7","p":"EJyIhOR7NJjQuV_N6WsQ_qqZc5f09vVwqVnIbuiWxuFs","kt":"1","k":["DwTncFFLkqdfOx9ipPwjYMJ-Xqcw6uVgE38WbfAiH0zQ"],"n":"EZt3rYIvWZ3WuVankOuW34wSifHNx9tUjdaUImARVCyU","bt":"0","br":[],"ba":[],"a":[]}-AABAA8penO_Nr-KVvQyhDXK8KAWQfh1qoeDGNwCJ7fLmrYQ0Yx84Uh_vHX0kj41AYelgK0aNrHbaewBVqsASQsSBBDA{"v":"KERI10JSON000155_","t":"rot","d":"EArexnxpGFZv4BnXzj59FrFTxCUEU1Aq3Co2iP7tA5aA","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"8","p":"EXWLIEK40fQjeYCri1Iy8sQxZzWnJdj1pHPkDBMaodoE","kt":"1","k":["DOedRyfIQe4Z-GNSlbgA8txIKyx4Li2tJ1S0Yhy7l2T8"],"n":"EuiVoq5iFTwRutHDNJHbIY43bBj3EKmk7_lmZJdPj-PU","bt":"0","br":[],"ba":[],"a":[]}-AABAAkZNVe95o9nSNSP6ck_khDy1tfKJUzu430vAi_p6fEMqVzJB4yqa2fdRBJmqwbq5gPOHwd0bE_JcbTrgnVFAQBQ"#;
+    let parsed = signed_event_stream(rest_of_kel.as_bytes()).unwrap().1;
+    let rest_of_kel = parsed.into_iter().map(|ev| Message::try_from(ev).unwrap());
 
-    let old_rpy = r#"{"v":"KERI10JSON000293_","t":"rpy","d":"EvrNa0bfL94QZZby15DxquDBh-tJYRHRCZnJiUfevKLQ","dt":"2021-12-15T13:44:49.636691+00:00","r":"/ksn/Dqyfe0SecmOCRo3UtWu71cy-MUCWZH28prZx2HRm5I7M","a":{"v":"KERI10JSON0001d8_","i":"DDp7bJnTiKEahNaJidXogL6ntasrkTJ4vxAilMi6nxCE","s":"0","p":"","d":"Ed5hSLWDtjkWlrDeEoVBjytFHiqeC5aW15D3R_y5fcgs","f":"0","dt":"2021-12-15T13:44:49.636511+00:00","et":null,"kt":"1","k":["DDp7bJnTiKEahNaJidXogL6ntasrkTJ4vxAilMi6nxCE"],"n":"EY8dNfEnrzdG4RVrF87jc9qyh86DJ3HMOoce62eWWQbg","bt":"0","b":["Dqyfe0SecmOCRo3UtWu71cy-MUCWZH28prZx2HRm5I7M"],"c":[],"ee":{"s":"0","d":"Ed5hSLWDtjkWlrDeEoVBjytFHiqeC5aW15D3R_y5fcgs","br":[],"ba":[]},"di":""}}-CABDqyfe0SecmOCRo3UtWu71cy-MUCWZH28prZx2HRm5I7M0BZH1Gvky6vRRNd8rKmXv3TmFykM6Iw6cdnJ1zDQwwMjIwGMDpEC6dhnoRfb8KsvXTa_sp_WevL-YDEDnNE9quDQ"#;
+    let old_rpy = r#"{"v":"KERI10JSON000292_","t":"rpy","d":"E_v_Syz2Bhh1WCKx9GBSpU4g9FqqxtSNPI_M2KgMC1yI","dt":"2021-01-01T00:00:00.000000+00:00","r":"/ksn/Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","a":{"v":"KERI10JSON0001d7_","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"3","p":"EYhzp9WCvSNFT2dVryQpVFiTzuWGbFNhVHNKCqAqBI8A","d":"EsL4LnyvTGBqdYC_Ute3ag4XYbu8PdCj70un885pMYpA","f":"3","dt":"2021-01-01T00:00:00.000000+00:00","et":"rot","kt":"1","k":["DrcAz_gmDTuWIHn_mOQDeSK_aJIRiw5IMzPD7igzEDb0"],"n":"E_Y2NMHE0nqrTQLe57VPcM0razmxdxRVbljRCSetdjjI","bt":"0","b":[],"c":[],"ee":{"s":"3","d":"EsL4LnyvTGBqdYC_Ute3ag4XYbu8PdCj70un885pMYpA","br":[],"ba":[]}}}-FABEt78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV80AAAAAAAAAAAAAAAAAAAAAAwEsL4LnyvTGBqdYC_Ute3ag4XYbu8PdCj70un885pMYpA-AABAAycUrU33S2856nVTuKNbxmGzDwkR9XYY5cXGnpyz4NZsrvt8AdOxfQfYcRCr_URFU9UrEsLFIFJEPoiUEuTbcCg"#;
     let parsed = signed_message(old_rpy.as_bytes()).unwrap().1;
     let deserialized_old_rpy = Message::try_from(parsed).unwrap();
 
-    let new_rpy = r#"{"v":"KERI10JSON000293_","t":"rpy","d":"EGDlNsNtskLi4yj1Wq71CVq-sQkuIZvOs-xrzdOb7_XQ","dt":"2021-12-15T13:44:49.649955+00:00","r":"/ksn/Dqyfe0SecmOCRo3UtWu71cy-MUCWZH28prZx2HRm5I7M","a":{"v":"KERI10JSON0001d8_","i":"DDp7bJnTiKEahNaJidXogL6ntasrkTJ4vxAilMi6nxCE","s":"1","p":"","d":"EZv85DpuM6RjrhYgmhf_mJ1XwBNa2v1A_61MakC6c0MU","f":"0","dt":"2021-12-15T13:44:49.649828+00:00","et":null,"kt":"1","k":["DDduXoG93VdAiH6tPToKKUj7rsgtW8YtGuJDdRw5H9Vg"],"n":"ElUH-qWtgP7AtcF0Qrjk8NYlCXuZXdW9nrczmBsCHtqM","bt":"0","b":["Dqyfe0SecmOCRo3UtWu71cy-MUCWZH28prZx2HRm5I7M"],"c":[],"ee":{"s":"1","d":"Ed5hSLWDtjkWlrDeEoVBjytFHiqeC5aW15D3R_y5fcgs","br":[],"ba":[]},"di":""}}-CABDqyfe0SecmOCRo3UtWu71cy-MUCWZH28prZx2HRm5I7M0BWdegCMivxJBbLPMP3YLhQ9pzSOg6NzAlAxQxzGHphluA6n3VroA7pFN3-bN1jRW1k4ln0H5iR-PaNwR9tW7cBA"#;
+    let new_rpy = r#"{"v":"KERI10JSON000292_","t":"rpy","d":"ECMNs09Snruv7bRpgUGgwflF3ZIpby7_m3jgjdIXJRno","dt":"2021-01-01T00:00:00.000000+00:00","r":"/ksn/Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","a":{"v":"KERI10JSON0001d7_","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"8","p":"EXWLIEK40fQjeYCri1Iy8sQxZzWnJdj1pHPkDBMaodoE","d":"EArexnxpGFZv4BnXzj59FrFTxCUEU1Aq3Co2iP7tA5aA","f":"8","dt":"2021-01-01T00:00:00.000000+00:00","et":"rot","kt":"1","k":["DOedRyfIQe4Z-GNSlbgA8txIKyx4Li2tJ1S0Yhy7l2T8"],"n":"EuiVoq5iFTwRutHDNJHbIY43bBj3EKmk7_lmZJdPj-PU","bt":"0","b":[],"c":[],"ee":{"s":"8","d":"EArexnxpGFZv4BnXzj59FrFTxCUEU1Aq3Co2iP7tA5aA","br":[],"ba":[]}}}-VA0-FABEt78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV80AAAAAAAAAAAAAAAAAAAAACAEArexnxpGFZv4BnXzj59FrFTxCUEU1Aq3Co2iP7tA5aA-AABAA0o_SfwLPA1gA7pZxogj56Dx-n5xELQb0_Nghp7TTQh9-CIOfGQKGHk1FGQm-qRsLPQUEVya7SGKTH0QQjd6uCg"#;
     let parsed = signed_message(new_rpy.as_bytes()).unwrap().1;
     let deserialized_new_rpy = Message::try_from(parsed).unwrap();
 
@@ -388,9 +390,9 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     let accepted_rpys = event_processor.db.get_accepted_replys(&identifier);
     assert!(accepted_rpys.is_none());
 
-    // process icp event and update escrow
+    // process kel events and update escrow
     // reply event should be unescrowed and save as accepted
-    event_processor.process(deserialized_icp)?;
+    kel_events.for_each(|ev| {event_processor.process(ev).unwrap();});
     event_processor.process_escrow()?;
 
     let escrow = event_processor.db.get_escrowed_replys(&identifier);
@@ -410,9 +412,9 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     assert_eq!(Message::KeyStateNotice(accepted_rpys.next().unwrap()), deserialized_old_rpy);
     assert!(accepted_rpys.next().is_none());
 
-    // process rot event and update escrow
+    // process rest of kel and update escrow
     // reply event should be unescrowed and save as accepted
-    event_processor.process(deserialized_rot)?;
+    rest_of_kel.for_each(|ev| {event_processor.process(ev).unwrap();});
     event_processor.process_escrow()?;
 
     let escrow = event_processor.db.get_escrowed_replys(&identifier);
@@ -434,12 +436,12 @@ pub fn test_query() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     let witness = Witness::new(root.path())?;
 
-    let icp_str = r#"{"v":"KERI10JSON000179_","i":"Ezgv-1LmULy9ghlCP5Wt9mrQY-jJ-tQHcZZ9SteV7Hqo","s":"0","t":"icp","kt":"1","k":["DxH8nLaGIMllBp0mvGdN6JtbNuGRPyHb5i80bTojnP9A"],"n":"EmJ-3Y0pM0ogX8401rEziJhpql567YEdHDlylwfnxNIM","bt":"3","b":["BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo","BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c"],"c":[],"a":[]}-AABAA8f4SUjg8w4ax1bGIR7EctkwlHm2YIta58ikzGE4N2VKBSvJE-c4NBchj3kNeKRB3xQ59pH-BT6L_176aFGsBDw"#; //-BADAAgpH64zY45fbl6BWYQXx43Pq0uJtvPUHRnj5oeCF4tGP1Dz80LdRoA6IG2pSOVtOraJd783mortUXhI1BT-RiCwABWLV4unH4FkLwnLPj4tB0Z57wg8SY8UOeBI0nk7Sv6-HJDFBuGU-WBpR3N_gOx-EOkuZTILp0CwxZpXfGk0WlBQACFApU854wN8FmuIL8Nqspm2EshsAMTsCDd_VXpbezsHovcywErUXp2XzASZX74-wLSEcY8v8mMC8LGfY5nTfrAQ"#;
+    let icp_str = r#"{"v":"KERI10JSON0001ac_","t":"icp","d":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","i":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","s":"0","kt":"1","k":["DxH8nLaGIMllBp0mvGdN6JtbNuGRPyHb5i80bTojnP9A"],"n":"EmJ-3Y0pM0ogX8401rEziJhpql567YEdHDlylwfnxNIM","bt":"3","b":["BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo","BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c"],"c":[],"a":[]}-AABAAGwlsKbtQjGUoKlYsBRksx5KmAiXWtNakJkxmxizV0aoN4d_GwtmnbNwpuuggc3CmoftruHIo_Q9CbWw-lUitDA"#;
     let parsed = signed_message(icp_str.as_bytes()).unwrap().1;
     let deserialized_icp = Message::try_from(parsed).unwrap();
     witness.processor.process(deserialized_icp)?;
 
-    let qry_str = r#"{"v":"KERI10JSON000096_","t":"qry","dt":"2021-12-17T12:57:57.505540+00:00","r":"ksn","rr":"","q":{"i":"Ezgv-1LmULy9ghlCP5Wt9mrQY-jJ-tQHcZZ9SteV7Hqo"}}-VAj-HABEzgv-1LmULy9ghlCP5Wt9mrQY-jJ-tQHcZZ9SteV7Hqo-AABAA1FvESpebVoZJ5lvEgJRcq0vS1Bm4qGV7_SMNUH4w8-MeC2gV7uIW571VXmfy0DUHZGEQzBjqxEXPnIYN4YJEAg"#;
+    let qry_str = r#"{"v":"KERI10JSON0000c9_","t":"qry","d":"EEFpGGlsAGe51BgyebzDUAs4ewWYz1HO9rytYVaxDo3c","dt":"2022-01-13T15:53:32.020709+00:00","r":"ksn","rr":"","q":{"i":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk"}}-VAj-HABESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk-AABAAMOLeXG1ClCtSPP4hhtvyoWMLOvMvaiveHCepL3zh1OQcAyn2GzEh2TwjKFyKFGBXD6-blmvg8M8hDMr-yjv6Bw"#;
     let parsed = signed_message(qry_str.as_bytes()).unwrap().1;
     let deserialized_qy = Message::try_from(parsed).unwrap();
 
