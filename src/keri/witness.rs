@@ -31,7 +31,7 @@ impl Witness {
             let witness_db = Arc::new(SledEventDatabase::new(path).unwrap());
             EventProcessor::new(witness_db.clone())
         };
-        let prefix = Basic::Ed25519.derive(signer.public_key());
+        let prefix = Basic::Ed25519.derive(signer.public_key()?);
         Ok(Self {
             prefix,
             signer,
