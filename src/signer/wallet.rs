@@ -33,9 +33,7 @@ fn get_public_key(wallet: &UnlockedWallet, which: &str) -> Result<PublicKey, Err
                 }
                 Ok(PublicKey::new(pb_key))
             }
-            Content::Entropy(_) => {
-                return Err(Error::PublicKeyError("wrong content type".into()));
-            }
+            Content::Entropy(_) => Err(Error::PublicKeyError("wrong content type".into())),
             Content::PublicKey(pk) => {
                 if pk.public_key.is_empty() {
                     return Err(Error::PublicKeyError("empty public key".into()));
@@ -43,8 +41,9 @@ fn get_public_key(wallet: &UnlockedWallet, which: &str) -> Result<PublicKey, Err
                 Ok(PublicKey::new(pk.public_key))
             }
         }
+    } else {
+        Err(Error::PublicKeyError("content not found".into()))
     }
-    return Err(Error::PublicKeyError("content not found".into()));
 }
 
 impl KeyManager for UnlockedWallet {
