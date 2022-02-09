@@ -1,7 +1,11 @@
-use crate::{event_parsing::message::message, prefix::{
+use crate::{
+    event_parsing::message::message,
+    prefix::{
         AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
         SelfSigningPrefix,
-    }, state::IdentifierState};
+    },
+    state::IdentifierState,
+};
 #[cfg(feature = "lmdb")]
 pub mod lmdb;
 

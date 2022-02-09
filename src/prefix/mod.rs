@@ -29,12 +29,12 @@ pub trait Prefix: FromStr<Err = Error> {
                 let dc = self.derivation_code();
                 let ec = encode_config(self.derivative(), base64::URL_SAFE_NO_PAD);
                 [dc, ec].join("")
-            },
+            }
         }
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Hash)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum IdentifierPrefix {
     Basic(BasicPrefix),
     SelfAddressing(SelfAddressingPrefix),
@@ -145,8 +145,11 @@ pub fn derive(seed: &SeedPrefix, transferable: bool) -> Result<BasicPrefix, Erro
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{derivation::self_addressing::SelfAddressing, keys::{PrivateKey, PublicKey}};
-    use ed25519_dalek::{Keypair};
+    use crate::{
+        derivation::self_addressing::SelfAddressing,
+        keys::{PrivateKey, PublicKey},
+    };
+    use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
 
     #[test]
@@ -192,7 +195,9 @@ mod tests {
     #[test]
     fn simple_serialize() -> Result<(), Error> {
         let pref = Basic::Ed25519NT.derive(PublicKey::new(
-            ed25519_dalek::PublicKey::from_bytes(&[0; 32])?.to_bytes().to_vec(),
+            ed25519_dalek::PublicKey::from_bytes(&[0; 32])?
+                .to_bytes()
+                .to_vec(),
         ));
 
         assert_eq!(
@@ -284,7 +289,11 @@ mod tests {
         assert_eq!(
             BasicPrefix::new(
                 Basic::Ed25519NT,
-                PublicKey::new(ed25519_dalek::PublicKey::from_bytes(&[0; 32])?.to_bytes().to_vec())
+                PublicKey::new(
+                    ed25519_dalek::PublicKey::from_bytes(&[0; 32])?
+                        .to_bytes()
+                        .to_vec()
+                )
             )
             .to_str(),
             ["B".to_string(), "A".repeat(43)].join("")
@@ -292,7 +301,11 @@ mod tests {
         assert_eq!(
             BasicPrefix::new(
                 Basic::X25519,
-                PublicKey::new(ed25519_dalek::PublicKey::from_bytes(&[0; 32])?.to_bytes().to_vec())
+                PublicKey::new(
+                    ed25519_dalek::PublicKey::from_bytes(&[0; 32])?
+                        .to_bytes()
+                        .to_vec()
+                )
             )
             .to_str(),
             ["C".to_string(), "A".repeat(43)].join("")
@@ -300,7 +313,11 @@ mod tests {
         assert_eq!(
             BasicPrefix::new(
                 Basic::Ed25519,
-                PublicKey::new(ed25519_dalek::PublicKey::from_bytes(&[0; 32])?.to_bytes().to_vec())
+                PublicKey::new(
+                    ed25519_dalek::PublicKey::from_bytes(&[0; 32])?
+                        .to_bytes()
+                        .to_vec()
+                )
             )
             .to_str(),
             ["D".to_string(), "A".repeat(43)].join("")

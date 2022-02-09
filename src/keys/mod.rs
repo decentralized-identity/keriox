@@ -1,17 +1,19 @@
 use crate::error::Error;
 use ed25519_dalek::{ExpandedSecretKey, SecretKey};
-use k256::ecdsa::{VerifyingKey, signature::{Verifier as EcdsaVerifier}};
-use k256::ecdsa::{Signature as EcdsaSignature, SigningKey, signature::{Signer as EcdsaSigner}};
+use k256::ecdsa::{signature::Signer as EcdsaSigner, Signature as EcdsaSignature, SigningKey};
+use k256::ecdsa::{signature::Verifier as EcdsaVerifier, VerifyingKey};
 use zeroize::Zeroize;
 
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub struct PublicKey {
-    public_key: Vec<u8>
+    public_key: Vec<u8>,
 }
 
 impl PublicKey {
     pub fn new(key: Vec<u8>) -> Self {
-        PublicKey {public_key: key.to_vec()}
+        PublicKey {
+            public_key: key.to_vec(),
+        }
     }
 
     pub fn key(&self) -> Vec<u8> {
@@ -90,7 +92,7 @@ impl Drop for PrivateKey {
 
 #[test]
 fn libsodium_to_ed25519_dalek_compat() {
-    use ed25519_dalek::{Signature};
+    use ed25519_dalek::Signature;
     use rand::rngs::OsRng;
 
     let kp = ed25519_dalek::Keypair::generate(&mut OsRng);

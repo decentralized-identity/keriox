@@ -17,9 +17,9 @@ use nom::{bytes::complete::take, error::ErrorKind};
 pub fn attached_signature(s: &[u8]) -> nom::IResult<&[u8], AttachedSignaturePrefix> {
     let (more, type_c) = take(1u8)(s)?;
 
-    const a: &'static [u8] = "A".as_bytes();
-    const b: &'static [u8] = "B".as_bytes();
-    const z: &'static [u8] = "0".as_bytes();
+    const a: &[u8] = "A".as_bytes();
+    const b: &[u8] = "B".as_bytes();
+    const z: &[u8] = "0".as_bytes();
 
     match type_c {
         a => {
@@ -81,7 +81,7 @@ pub fn attached_signature(s: &[u8]) -> nom::IResult<&[u8], AttachedSignaturePref
 }
 
 pub fn basic_prefix(s: &[u8]) -> nom::IResult<&[u8], BasicPrefix> {
-    const EXT: &'static [u8] = "1".as_bytes();
+    const EXT: &[u8] = "1".as_bytes();
 
     let (_, type_c) = take(1u8)(s)?;
 
@@ -96,13 +96,15 @@ pub fn basic_prefix(s: &[u8]) -> nom::IResult<&[u8], BasicPrefix> {
         .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
 
     let (extra, b) = take(code.derivative_b64_len())(rest)?;
-    let pk = PublicKey::new(base64::decode_config(b.to_vec(), URL_SAFE)
-        .map_err(|_| nom::Err::Error((s, ErrorKind::IsNot)))?);
+    let pk = PublicKey::new(
+        base64::decode_config(b.to_vec(), URL_SAFE)
+            .map_err(|_| nom::Err::Error((s, ErrorKind::IsNot)))?,
+    );
     Ok((extra, code.derive(pk)))
 }
 
 pub fn self_addressing_prefix(s: &[u8]) -> nom::IResult<&[u8], SelfAddressingPrefix> {
-    const EXT: &'static [u8] = "0".as_bytes();
+    const EXT: &[u8] = "0".as_bytes();
     let (_, type_c) = take(1u8)(s)?;
 
     let (rest, code_str) = take(match type_c {
@@ -125,7 +127,7 @@ pub fn self_addressing_prefix(s: &[u8]) -> nom::IResult<&[u8], SelfAddressingPre
 }
 
 pub fn self_signing_prefix(s: &[u8]) -> nom::IResult<&[u8], SelfSigningPrefix> {
-    const EXT: &'static [u8] = "1".as_bytes();
+    const EXT: &[u8] = "1".as_bytes();
 
     let (_, type_c) = take(1u8)(s)?;
 
@@ -141,15 +143,15 @@ pub fn self_signing_prefix(s: &[u8]) -> nom::IResult<&[u8], SelfSigningPrefix> {
 
     let (extra, b) = take(code.derivative_b64_len())(rest)?;
 
-    let sig = base64::decode_config(b, URL_SAFE)
-    .map_err(|_| nom::Err::Error((s, ErrorKind::IsNot)))?;
+    let sig =
+        base64::decode_config(b, URL_SAFE).map_err(|_| nom::Err::Error((s, ErrorKind::IsNot)))?;
     Ok((extra, code.derive(sig)))
 }
 
 pub fn attached_sn(s: &[u8]) -> nom::IResult<&[u8], u64> {
     let (more, type_c) = take(2u8)(s)?;
 
-    const a: &'static [u8] = "0A".as_bytes();
+    const a: &[u8] = "0A".as_bytes();
 
     match type_c {
         a => {

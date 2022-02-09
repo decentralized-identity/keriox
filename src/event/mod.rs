@@ -1,8 +1,11 @@
+use crate::event_message::key_event_message::KeyEvent;
 pub use crate::event_message::{serialization_info::SerializationFormats, EventMessage};
-use crate::prefix::IdentifierPrefix;
+use crate::event_message::{EventTypeTag, SaidEvent, Typeable};
 use crate::state::IdentifierState;
+use crate::{derivation::self_addressing::SelfAddressing, prefix::IdentifierPrefix};
 use serde::{Deserialize, Serialize};
 pub mod event_data;
+pub mod receipt;
 pub mod sections;
 use self::event_data::EventData;
 use crate::error::Error;
@@ -22,17 +25,34 @@ pub struct Event {
 }
 
 impl Event {
-    pub fn new(prefix: IdentifierPrefix, sn: u64, event_data: EventData)
-        -> Self {
-            Event {
-                prefix,
-                sn,
-                event_data
-            }
+    pub fn new(prefix: IdentifierPrefix, sn: u64, event_data: EventData) -> Self {
+        Event {
+            prefix,
+            sn,
+            event_data,
         }
+    }
 
-    pub fn to_message(self, format: SerializationFormats) -> Result<EventMessage, Error> {
-        EventMessage::new(self, format)
+    pub fn to_message(
+        self,
+        format: SerializationFormats,
+        derivation: &SelfAddressing,
+    ) -> Result<EventMessage<KeyEvent>, Error> {
+        match (&self.prefix, self.event_data.clone()) {
+            (IdentifierPrefix::SelfAddressing(_), EventData::Icp(icp)) => {
+                icp.incept_self_addressing(derivation.clone(), format)
+            }
+            (IdentifierPrefix::SelfAddressing(_), EventData::Dip(dip)) => {
+                dip.incept_self_addressing(derivation.clone(), format)
+            }
+            _ => SaidEvent::<Event>::to_message(self, format, derivation),
+        }
+    }
+}
+
+impl Typeable for Event {
+    fn get_type(&self) -> EventTypeTag {
+        self.event_data.get_type()
     }
 }
 
@@ -48,13 +68,6 @@ impl EventSemantics for Event {
                     return Err(Error::SemanticError("SN is not correct".to_string()));
                 }
             }
-            EventData::Rct(_) => {
-                if self.prefix != state.prefix {
-                    return Err(Error::SemanticError(
-                        "Invalid Identifier Prefix Binding".into(),
-                    ));
-                }
-            }
             _ => {
                 // prefix must equal.
                 if self.prefix != state.prefix {
@@ -68,10 +81,10 @@ impl EventSemantics for Event {
                 }
             }
         };
-        Ok(IdentifierState {
+        self.event_data.apply_to(IdentifierState {
             sn: self.sn,
             prefix: self.prefix.clone(),
-            ..self.event_data.apply_to(state)?
+            ..state
         })
     }
 }

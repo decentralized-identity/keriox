@@ -1,38 +1,66 @@
 pub mod delegated;
 pub mod inception;
 pub mod interaction;
-pub mod receipt;
 pub mod rotation;
 
 use crate::{
-    derivation::{self_addressing::SelfAddressing, DerivationCode},
     error::Error,
-    event_message::serialization_info::{SerializationFormats, SerializationInfo},
+    event_message::{EventTypeTag, Typeable},
     state::{EventSemantics, IdentifierState},
 };
-use serde::{Deserialize, Serialize};
-use serde_hex::{Compact, SerHex};
+use serde::{de, Deserialize, Deserializer, Serialize};
+use serde_json::Value;
 
 pub use self::{
-    delegated::DelegatedInceptionEvent,
-    inception::InceptionEvent,
-    interaction::InteractionEvent,
-    receipt::Receipt,
+    delegated::DelegatedInceptionEvent, inception::InceptionEvent, interaction::InteractionEvent,
     rotation::RotationEvent,
 };
 
 /// Event Data
 ///
 /// Event Data conveys the semantic content of a KERI event.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[serde(tag = "t", rename_all = "lowercase")]
+#[derive(Serialize, Debug, Clone, PartialEq)]
+#[serde(untagged, rename_all = "lowercase")]
 pub enum EventData {
     Icp(InceptionEvent),
     Rot(RotationEvent),
     Ixn(InteractionEvent),
     Dip(DelegatedInceptionEvent),
     Drt(RotationEvent),
-    Rct(Receipt),
+}
+
+impl<'de> Deserialize<'de> for EventData {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Helper struct for adding tag to properly deserialize 't' field
+        #[derive(Deserialize)]
+        struct EventType {
+            t: EventTypeTag,
+        }
+
+        let v = Value::deserialize(deserializer)?;
+        let m = EventType::deserialize(&v).map_err(de::Error::custom)?;
+        match m.t {
+            EventTypeTag::Icp => Ok(EventData::Icp(
+                InceptionEvent::deserialize(&v).map_err(de::Error::custom)?,
+            )),
+            EventTypeTag::Rot => Ok(EventData::Rot(
+                RotationEvent::deserialize(&v).map_err(de::Error::custom)?,
+            )),
+            EventTypeTag::Ixn => Ok(EventData::Ixn(
+                InteractionEvent::deserialize(&v).map_err(de::Error::custom)?,
+            )),
+            EventTypeTag::Dip => Ok(EventData::Dip(
+                DelegatedInceptionEvent::deserialize(&v).map_err(de::Error::custom)?,
+            )),
+            EventTypeTag::Drt => Ok(EventData::Drt(
+                RotationEvent::deserialize(&v).map_err(de::Error::custom)?,
+            )),
+            _ => Err(Error::SemanticError("Not a key event".into())).map_err(de::Error::custom)?,
+        }
+    }
 }
 
 impl EventSemantics for EventData {
@@ -43,74 +71,24 @@ impl EventSemantics for EventData {
             Self::Ixn(e) => e.apply_to(state),
             Self::Dip(e) => e.apply_to(state),
             Self::Drt(e) => e.apply_to(state),
-            Self::Rct(e) => e.apply_to(state),
         }
     }
 }
 
-/// Dummy Event
-///
-/// Used only to encapsulate the prefix derivation process for inception and delegated inception
-#[derive(Serialize, Debug, Clone)]
-pub(crate) struct DummyEvent {
-    #[serde(rename = "v")]
-    serialization_info: SerializationInfo,
-    #[serde(rename = "i")]
-    prefix: String,
-    #[serde(rename = "s", with = "SerHex::<Compact>")]
-    sn: u8,
-    #[serde(flatten)]
-    data: EventData,
+impl From<EventData> for EventTypeTag {
+    fn from(ed: EventData) -> Self {
+        match ed {
+            EventData::Icp(_) => EventTypeTag::Icp,
+            EventData::Rot(_) => EventTypeTag::Rot,
+            EventData::Ixn(_) => EventTypeTag::Ixn,
+            EventData::Dip(_) => EventTypeTag::Dip,
+            EventData::Drt(_) => EventTypeTag::Drt,
+        }
+    }
 }
 
-impl DummyEvent {
-    pub fn derive_inception_data(
-        icp: InceptionEvent,
-        derivation: &SelfAddressing,
-        format: SerializationFormats,
-    ) -> Result<Vec<u8>, Error> {
-        Self::derive_data(EventData::Icp(icp), derivation, format)
-    }
-
-    pub fn derive_delegated_inception_data(
-        dip: DelegatedInceptionEvent,
-        derivation: &SelfAddressing,
-        format: SerializationFormats,
-    ) -> Result<Vec<u8>, Error> {
-        Self::derive_data(EventData::Dip(dip), derivation, format)
-    }
-
-    fn derive_data(
-        data: EventData,
-        derivation: &SelfAddressing,
-        format: SerializationFormats,
-    ) -> Result<Vec<u8>, Error> {
-        Ok(Self {
-            serialization_info: SerializationInfo::new(
-                format,
-                Self {
-                    serialization_info: SerializationInfo::new(format, 0),
-                    prefix: Self::dummy_prefix(derivation),
-                    sn: 0,
-                    data: data.clone(),
-                }
-                .serialize()?
-                .len(),
-            ),
-            prefix: Self::dummy_prefix(derivation),
-            sn: 0,
-            data: data,
-        }
-        .serialize()?)
-    }
-
-    fn serialize(&self) -> Result<Vec<u8>, Error> {
-        self.serialization_info.kind.encode(&self)
-    }
-
-    fn dummy_prefix(derivation: &SelfAddressing) -> String {
-        std::iter::repeat("#")
-            .take(derivation.code_len() + derivation.derivative_b64_len())
-            .collect::<String>()
+impl Typeable for EventData {
+    fn get_type(&self) -> EventTypeTag {
+        self.into()
     }
 }

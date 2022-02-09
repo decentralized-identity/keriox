@@ -1,28 +1,87 @@
+pub mod dummy_event;
 pub mod event_msg_builder;
+pub mod key_event_message;
 pub mod serialization_info;
 pub mod serializer;
+pub mod signature;
 pub mod signed_event_message;
 
 use std::cmp::Ordering;
 
 use crate::{
-    error::Error,
-    event::{
-        event_data::{DummyEvent, EventData},
-        Event,
-        sections::seal::SourceSeal,
-    },
-    prefix::{AttachedSignaturePrefix, IdentifierPrefix},
-    state::{EventSemantics, IdentifierState},
+    derivation::self_addressing::SelfAddressing, error::Error, prefix::SelfAddressingPrefix,
 };
 use chrono::{DateTime, Local};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use serialization_info::*;
 
-use self::{event_msg_builder::{EventMsgBuilder, EventType}, signed_event_message::SignedEventMessage};
+use self::{dummy_event::DummyEventMessage, key_event_message::KeyEvent};
 
+pub trait Typeable {
+    fn get_type(&self) -> EventTypeTag;
+}
+pub trait Digestible {
+    fn get_digest(&self) -> SelfAddressingPrefix;
+}
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum EventTypeTag {
+    Icp,
+    Rot,
+    Ixn,
+    Dip,
+    Drt,
+    Rct,
+    #[cfg(feature = "query")]
+    Rpy,
+    #[cfg(feature = "query")]
+    Qry,
+}
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct EventMessage {
+pub struct SaidEvent<D> {
+    #[serde(rename = "d", skip_serializing)]
+    digest: SelfAddressingPrefix,
+
+    #[serde(flatten)]
+    pub content: D,
+}
+
+impl<D: Serialize + Clone + Typeable> SaidEvent<D> {
+    pub fn new(digest: SelfAddressingPrefix, content: D) -> Self {
+        Self { digest, content }
+    }
+    pub(crate) fn to_message(
+        event: D,
+        format: SerializationFormats,
+        derivation: &SelfAddressing,
+    ) -> Result<EventMessage<SaidEvent<D>>, Error> {
+        let dummy_event = DummyEventMessage::dummy_event(event.clone(), format, derivation)?;
+        let digest = derivation.derive(&dummy_event.serialize()?);
+
+        Ok(EventMessage {
+            serialization_info: dummy_event.serialization_info,
+            event: Self {
+                digest,
+                content: event,
+            },
+        })
+    }
+}
+
+impl<D> Digestible for SaidEvent<D> {
+    fn get_digest(&self) -> SelfAddressingPrefix {
+        self.digest.clone()
+    }
+}
+
+impl<D: Typeable> Typeable for SaidEvent<D> {
+    fn get_type(&self) -> EventTypeTag {
+        self.content.get_type()
+    }
+}
+
+#[derive(Default, Deserialize, Debug, Clone, PartialEq)]
+pub struct EventMessage<D> {
     /// Serialization Information
     ///
     /// Encodes the version, size and serialization format of the event
@@ -30,28 +89,57 @@ pub struct EventMessage {
     pub serialization_info: SerializationInfo,
 
     #[serde(flatten)]
-    pub event: Event,
-    // Additional Data for forwards compat
-    //
-    // TODO: Currently seems to be bugged, it captures and duplicates every element in the event
-    // #[serde(flatten)]
-    // pub extra: HashMap<String, Value>,
+    pub event: D,
 }
 
-impl Default for EventMessage {
-    fn default() -> Self {
-        EventMsgBuilder::new(EventType::Inception).build().unwrap()
+impl<D: Digestible> EventMessage<D> {
+    pub fn get_digest(&self) -> SelfAddressingPrefix {
+        self.event.get_digest()
+    }
+}
+
+impl<D: Digestible + Typeable + Serialize + Clone> Serialize for EventMessage<D> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Helper struct for adding `t` field to EventMessage serialization
+        #[derive(Serialize)]
+        struct TypedEventMessage<D> {
+            v: SerializationInfo,
+            #[serde(rename = "t")]
+            event_type: EventTypeTag,
+
+            #[serde(rename = "d")]
+            digest: SelfAddressingPrefix,
+
+            #[serde(flatten)]
+            event: D,
+        }
+        impl<D: Digestible + Typeable + Clone> From<&EventMessage<D>> for TypedEventMessage<D> {
+            fn from(em: &EventMessage<D>) -> Self {
+                TypedEventMessage {
+                    v: em.serialization_info,
+                    event_type: em.event.get_type(),
+                    digest: em.event.get_digest(),
+                    event: em.event.clone(),
+                }
+            }
+        }
+
+        let tem: TypedEventMessage<_> = self.into();
+        tem.serialize(serializer)
     }
 }
 
 #[derive(Serialize, Deserialize, PartialEq)]
 pub struct TimestampedEventMessage {
     pub timestamp: DateTime<Local>,
-    pub event_message: EventMessage,
+    pub event_message: EventMessage<KeyEvent>,
 }
 
 impl TimestampedEventMessage {
-    pub fn new(event: EventMessage) -> Self {
+    pub fn new(event: EventMessage<KeyEvent>) -> Self {
         Self {
             timestamp: Local::now(),
             event_message: event,
@@ -62,12 +150,14 @@ impl TimestampedEventMessage {
 impl PartialOrd for TimestampedEventMessage {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(
-            match self.event_message.event.sn == other.event_message.event.sn {
+            match self.event_message.event.get_sn() == other.event_message.event.get_sn() {
                 true => Ordering::Equal,
-                false => match self.event_message.event.sn > other.event_message.event.sn {
-                    true => Ordering::Greater,
-                    false => Ordering::Less,
-                },
+                false => {
+                    match self.event_message.event.get_sn() > other.event_message.event.get_sn() {
+                        true => Ordering::Greater,
+                        false => Ordering::Less,
+                    }
+                }
             },
         )
     }
@@ -75,9 +165,9 @@ impl PartialOrd for TimestampedEventMessage {
 
 impl Ord for TimestampedEventMessage {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.event_message.event.sn == other.event_message.event.sn {
+        match self.event_message.event.get_sn() == other.event_message.event.get_sn() {
             true => Ordering::Equal,
-            false => match self.event_message.event.sn > other.event_message.event.sn {
+            false => match self.event_message.event.get_sn() > other.event_message.event.get_sn() {
                 true => Ordering::Greater,
                 false => Ordering::Less,
             },
@@ -87,36 +177,20 @@ impl Ord for TimestampedEventMessage {
 
 impl Eq for TimestampedEventMessage {}
 
-impl From<TimestampedEventMessage> for EventMessage {
-    fn from(event: TimestampedEventMessage) -> EventMessage {
+impl From<TimestampedEventMessage> for EventMessage<KeyEvent> {
+    fn from(event: TimestampedEventMessage) -> EventMessage<KeyEvent> {
         event.event_message
     }
 }
 
 /// WARNING: timestamp will change on conversion to current time
-impl From<EventMessage> for TimestampedEventMessage {
-    fn from(event: EventMessage) -> TimestampedEventMessage {
+impl From<EventMessage<KeyEvent>> for TimestampedEventMessage {
+    fn from(event: EventMessage<KeyEvent>) -> TimestampedEventMessage {
         TimestampedEventMessage::new(event)
     }
 }
 
-impl EventMessage {
-    pub fn new(event: Event, format: SerializationFormats) -> Result<Self, Error> {
-        Ok(Self {
-            serialization_info: SerializationInfo::new(format, Self::get_size(&event, format)?),
-            event,
-        })
-    }
-
-    fn get_size(event: &Event, format: SerializationFormats) -> Result<usize, Error> {
-        Ok(Self {
-            serialization_info: SerializationInfo::new(format, 0),
-            event: event.clone(),
-        }
-        .serialize()?
-        .len())
-    }
-
+impl<T: Clone + Serialize + Digestible + Typeable> EventMessage<T> {
     pub fn serialization(&self) -> SerializationFormats {
         self.serialization_info.kind
     }
@@ -128,127 +202,13 @@ impl EventMessage {
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         self.serialization().encode(self)
     }
-
-    pub fn sign(
-        &self,
-        sigs: Vec<AttachedSignaturePrefix>,
-        delegator_seal: Option<SourceSeal>,
-    ) -> SignedEventMessage {
-        SignedEventMessage::new(self, sigs, delegator_seal)
-    }
-}
-
-impl EventSemantics for EventMessage {
-    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
-        // Update state.last with serialized current event message.
-        match self.event.event_data {
-            EventData::Icp(_) | EventData::Dip(_) => {
-                if verify_identifier_binding(self)? {
-                    self.event.apply_to(IdentifierState {
-                        last: self.serialize()?,
-                        ..state
-                    })
-                } else {
-                    Err(Error::SemanticError(
-                        "Invalid Identifier Prefix Binding".into(),
-                    ))
-                }
-            }
-            EventData::Rot(ref rot) => {
-                if let Some(_) = state.delegator {
-                    Err(Error::SemanticError(
-                        "Applying non-delegated rotation to delegated state.".into(),
-                    ))
-                } else {
-                    // Event may be out of order or duplicated, so before checking
-                    // previous event hash binding and update state last, apply it
-                    // to the state. It will return EventOutOfOrderError or
-                    // EventDuplicateError in that cases.
-                    self.event.apply_to(state.clone()).and_then(|next_state| {
-                        if rot.previous_event_hash.verify_binding(&state.last) {
-                            Ok(IdentifierState {
-                                last: self.serialize()?,
-                                ..next_state
-                            })
-                        } else {
-                            Err(Error::SemanticError(
-                                "Last event does not match previous event".into(),
-                            ))
-                        }
-                    })
-                }
-            }
-            EventData::Drt(ref drt) => self.event.apply_to(state.clone()).and_then(|next_state| {
-                if let None = state.delegator {
-                    Err(Error::SemanticError(
-                        "Applying delegated rotation to non-delegated state.".into(),
-                    ))
-                } else if drt.previous_event_hash.verify_binding(&state.last) {
-                    Ok(IdentifierState {
-                        last: self.serialize()?,
-                        ..next_state
-                    })
-                } else {
-                    Err(Error::SemanticError(
-                        "Last event does not match previous event".into(),
-                    ))
-                }
-            }),
-            EventData::Ixn(ref inter) => {
-                self.event.apply_to(state.clone()).and_then(|next_state| {
-                    if inter.previous_event_hash.verify_binding(&state.last) {
-                        Ok(IdentifierState {
-                            last: self.serialize()?,
-                            ..next_state
-                        })
-                    } else {
-                        Err(Error::SemanticError(
-                            "Last event does not match previous event".to_string(),
-                        ))
-                    }
-                })
-            }
-
-            _ => self.event.apply_to(state),
-        }
-    }
-}
-
-pub fn verify_identifier_binding(icp_event: &EventMessage) -> Result<bool, Error> {
-    let event_data = &icp_event.event.event_data;
-    match event_data {
-        EventData::Icp(icp) => match &icp_event.event.prefix {
-            IdentifierPrefix::Basic(bp) => Ok(icp.key_config.public_keys.len() == 1
-                && bp == icp.key_config.public_keys.first().unwrap()),
-            // TODO update with new inception process
-            IdentifierPrefix::SelfAddressing(sap) => {
-                Ok(sap.verify_binding(&DummyEvent::derive_inception_data(
-                    icp.clone(),
-                    &sap.derivation,
-                    icp_event.serialization(),
-                )?))
-            }
-            IdentifierPrefix::SelfSigning(_ssp) => todo!(),
-        },
-        EventData::Dip(dip) => match &icp_event.event.prefix {
-            IdentifierPrefix::SelfAddressing(sap) => Ok(sap.verify_binding(
-                &DummyEvent::derive_delegated_inception_data(
-                    dip.clone(),
-                    &sap.derivation,
-                    icp_event.serialization(),
-                )?,
-            )),
-            _ => todo!(),
-        },
-        _ => Err(Error::SemanticError("Not an ICP or DIP event".into())),
-    }
 }
 
 #[cfg(test)]
 mod tests {
     mod test_utils;
 
-    use self::{event_msg_builder::EventType, test_utils::test_mock_event_sequence};
+    use self::test_utils::test_mock_event_sequence;
     use super::*;
     use crate::{
         derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
@@ -256,9 +216,11 @@ mod tests {
             event_data::{inception::InceptionEvent, EventData},
             sections::KeyConfig,
             sections::{threshold::SignatureThreshold, InceptionWitnessConfig},
+            Event,
         },
         keys::{PrivateKey, PublicKey},
         prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix},
+        state::IdentifierState,
     };
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
@@ -285,10 +247,10 @@ mod tests {
         let nxt = SelfAddressing::Blake3_256.derive(pref1.to_str().as_bytes());
 
         // create a simple inception event
-        let icp = Event {
-            prefix: IdentifierPrefix::Basic(pref0.clone()),
-            sn: 0,
-            event_data: EventData::Icp(InceptionEvent {
+        let icp = Event::new(
+            IdentifierPrefix::Basic(pref0.clone()),
+            0,
+            EventData::Icp(InceptionEvent {
                 key_config: KeyConfig::new(
                     vec![pref0.clone()],
                     Some(nxt.clone()),
@@ -298,12 +260,12 @@ mod tests {
                 inception_configuration: vec![],
                 data: vec![],
             }),
-        };
+        );
 
-        let icp_m = icp.to_message(SerializationFormats::JSON)?;
+        let icp_m = icp.to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)?;
 
         // serialised message
-        let ser = icp_m.serialize()?;
+        let ser: Vec<_> = icp_m.serialize()?;
 
         // sign
         let sig = priv_key0.sign_ed(&ser)?;
@@ -311,7 +273,7 @@ mod tests {
 
         assert!(pref0.verify(&ser, &attached_sig.signature)?);
 
-        let signed_event = icp_m.sign( vec![attached_sig], None);
+        let signed_event = icp_m.sign(vec![attached_sig], None);
 
         let s_ = IdentifierState::default();
 
@@ -321,14 +283,13 @@ mod tests {
 
         assert_eq!(s0.prefix, IdentifierPrefix::Basic(pref0.clone()));
         assert_eq!(s0.sn, 0);
-        assert_eq!(s0.last, ser);
+        assert!(icp_m.check_digest(&s0.last_event_digest)?);
         assert_eq!(s0.current.public_keys.len(), 1);
         assert_eq!(s0.current.public_keys[0], pref0);
         assert_eq!(s0.current.threshold, SignatureThreshold::Simple(1));
         assert_eq!(s0.current.threshold_key_digest, Some(nxt));
         assert_eq!(s0.witnesses, vec![]);
         assert_eq!(s0.tally, 0);
-        assert_eq!(s0.delegates, vec![]);
 
         Ok(())
     }
@@ -385,7 +346,7 @@ mod tests {
         .incept_self_addressing(SelfAddressing::Blake3_256, SerializationFormats::JSON)?;
 
         // serialised
-        let serialized = icp.serialize()?;
+        let serialized: Vec<_> = icp.serialize()?;
 
         // sign
         let sk = priv_key0;
@@ -402,9 +363,9 @@ mod tests {
 
         assert!(s0.current.verify(&serialized, &signed_event.signatures)?);
 
-        assert_eq!(s0.prefix, icp.event.prefix);
+        assert_eq!(s0.prefix, icp.event.get_prefix());
         assert_eq!(s0.sn, 0);
-        assert_eq!(s0.last, serialized);
+        assert!(icp.check_digest(&s0.last_event_digest)?);
         assert_eq!(s0.current.public_keys.len(), 2);
         assert_eq!(s0.current.public_keys[0], sig_pref_0);
         assert_eq!(s0.current.public_keys[1], enc_pref_0);
@@ -412,7 +373,6 @@ mod tests {
         assert_eq!(s0.current.threshold_key_digest, Some(nexter_pref));
         assert_eq!(s0.witnesses, vec![]);
         assert_eq!(s0.tally, 0);
-        assert_eq!(s0.delegates, vec![]);
 
         Ok(())
     }
@@ -420,43 +380,32 @@ mod tests {
     #[test]
     fn test_basic_establishment_sequence() -> Result<(), Error> {
         // Sequence should contain Inception Event.
-        let no_inception_seq = vec![EventType::Rotation, EventType::Rotation];
+        let no_inception_seq = vec![EventTypeTag::Rot, EventTypeTag::Rot];
         assert!(test_mock_event_sequence(no_inception_seq).is_err());
 
         // Sequence can't start with Rotation Event.
-        let rotation_first_seq = vec![EventType::Rotation, EventType::Inception];
+        let rotation_first_seq = vec![EventTypeTag::Rot, EventTypeTag::Icp];
         assert!(test_mock_event_sequence(rotation_first_seq).is_err());
 
         // Sequence should contain exacly one Inception Event.
         let wrong_seq = vec![
-            EventType::Inception,
-            EventType::Rotation,
-            EventType::Rotation,
-            EventType::Inception,
+            EventTypeTag::Icp,
+            EventTypeTag::Rot,
+            EventTypeTag::Rot,
+            EventTypeTag::Icp,
         ];
         assert!(test_mock_event_sequence(wrong_seq).is_err());
 
-        let ok_seq = vec![
-            EventType::Inception,
-            EventType::Rotation,
-            EventType::Rotation,
-        ];
+        let ok_seq = vec![EventTypeTag::Icp, EventTypeTag::Rot, EventTypeTag::Rot];
         assert!(test_mock_event_sequence(ok_seq).is_ok());
 
         // Wrong delegated events sequence.
-        let wrong_delegated_sequence = vec![
-            EventType::DelegatedInception,
-            EventType::DelegatedRotation,
-            EventType::Rotation,
-        ];
+        let wrong_delegated_sequence =
+            vec![EventTypeTag::Dip, EventTypeTag::Drt, EventTypeTag::Rot];
         assert!(test_mock_event_sequence(wrong_delegated_sequence).is_err());
 
         // Delegated events sequence.
-        let delegated_sequence = vec![
-            EventType::DelegatedInception,
-            EventType::DelegatedRotation,
-            EventType::Interaction,
-        ];
+        let delegated_sequence = vec![EventTypeTag::Dip, EventTypeTag::Drt, EventTypeTag::Ixn];
         assert!(test_mock_event_sequence(delegated_sequence).is_ok());
 
         Ok(())
@@ -465,20 +414,20 @@ mod tests {
     #[test]
     fn test_basic_sequence() -> Result<(), Error> {
         let ok_seq = vec![
-            EventType::Inception,
-            EventType::Interaction,
-            EventType::Interaction,
-            EventType::Interaction,
-            EventType::Rotation,
-            EventType::Interaction,
+            EventTypeTag::Icp,
+            EventTypeTag::Ixn,
+            EventTypeTag::Ixn,
+            EventTypeTag::Ixn,
+            EventTypeTag::Rot,
+            EventTypeTag::Ixn,
         ];
         assert!(test_mock_event_sequence(ok_seq).is_ok());
 
         let delegated_sequence = vec![
-            EventType::DelegatedInception,
-            EventType::DelegatedRotation,
-            EventType::Interaction,
-            EventType::DelegatedRotation,
+            EventTypeTag::Dip,
+            EventTypeTag::Drt,
+            EventTypeTag::Ixn,
+            EventTypeTag::Drt,
         ];
         assert!(test_mock_event_sequence(delegated_sequence).is_ok());
 

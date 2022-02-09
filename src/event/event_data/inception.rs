@@ -1,14 +1,17 @@
 use super::{
     super::sections::{InceptionWitnessConfig, KeyConfig},
-    DummyEvent, EventData,
+    EventData,
 };
 use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
     event::{sections::seal::Seal, Event},
-    event_message::{serialization_info::SerializationFormats, EventMessage},
+    event_message::{
+        dummy_event::DummyInceptionEvent, key_event_message::KeyEvent,
+        serialization_info::SerializationFormats, EventMessage, SaidEvent,
+    },
     prefix::IdentifierPrefix,
-    state::{EventSemantics, IdentifierState},
+    state::{EventSemantics, IdentifierState, LastEstablishmentData},
 };
 use serde::{Deserialize, Serialize};
 
@@ -38,8 +41,8 @@ impl InceptionEvent {
     ) -> Self {
         Self {
             key_config,
-            witness_config: witness_config.map_or_else(|| InceptionWitnessConfig::default(), |w| w),
-            inception_configuration: inception_config.map_or_else(|| vec![], |c| c),
+            witness_config: witness_config.map_or_else(InceptionWitnessConfig::default, |w| w),
+            inception_configuration: inception_config.map_or_else(Vec::new, |c| c),
             data: vec![],
         }
     }
@@ -53,27 +56,93 @@ impl InceptionEvent {
         self,
         derivation: SelfAddressing,
         format: SerializationFormats,
-    ) -> Result<EventMessage, Error> {
-        EventMessage::new(
-            Event {
-                prefix: IdentifierPrefix::SelfAddressing(derivation.derive(
-                    &DummyEvent::derive_inception_data(self.clone(), &derivation, format)?,
-                )),
-                sn: 0,
-                event_data: EventData::Icp(self),
-            },
-            format,
-        )
+    ) -> Result<EventMessage<KeyEvent>, Error> {
+        let dummy_event =
+            DummyInceptionEvent::dummy_inception_data(self.clone(), &derivation, format)?;
+        let digest = derivation.derive(&dummy_event.serialize()?);
+        let event = Event::new(
+            IdentifierPrefix::SelfAddressing(digest.clone()),
+            0,
+            EventData::Icp(self),
+        );
+        Ok(EventMessage {
+            serialization_info: dummy_event.serialization_info,
+            event: SaidEvent::new(digest, event),
+        })
     }
 }
 
 impl EventSemantics for InceptionEvent {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
+        let last_est = LastEstablishmentData {
+            sn: state.sn,
+            digest: state.last_event_digest.clone(),
+            br: vec![],
+            ba: vec![],
+        };
         Ok(IdentifierState {
             current: self.key_config.clone(),
             witnesses: self.witness_config.initial_witnesses.clone(),
             tally: self.witness_config.tally,
+            last_est,
             ..state
         })
     }
+}
+
+#[test]
+fn test_inception_data_derivation() -> Result<(), Error> {
+    use crate::event::sections::{
+        key_config::{nxt_commitment, KeyConfig},
+        threshold::SignatureThreshold,
+    };
+    use crate::event_message::Digestible;
+    use crate::prefix::{BasicPrefix, Prefix};
+
+    let keys: Vec<BasicPrefix> = vec![
+        "DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"
+            .parse()
+            .unwrap(),
+        "DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI"
+            .parse()
+            .unwrap(),
+        "DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"
+            .parse()
+            .unwrap(),
+    ];
+    let next_keys: Vec<BasicPrefix> = vec![
+        "DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ"
+            .parse()
+            .unwrap(),
+        "D1kcBE7h0ImWW6_Sp7MQxGYSshZZz6XM7OiUE5DXm0dU"
+            .parse()
+            .unwrap(),
+        "D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM"
+            .parse()
+            .unwrap(),
+    ];
+
+    let next_key_hash = nxt_commitment(
+        &SignatureThreshold::Simple(2),
+        &next_keys,
+        &SelfAddressing::Blake3_256,
+    );
+    let key_config = KeyConfig::new(
+        keys,
+        Some(next_key_hash),
+        Some(SignatureThreshold::Simple(2)),
+    );
+    let icp_data = InceptionEvent::new(key_config.clone(), None, None)
+        .incept_self_addressing(SelfAddressing::Blake3_256, SerializationFormats::JSON)?;
+
+    assert_eq!(
+        "ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk",
+        icp_data.event.get_prefix().to_str()
+    );
+    assert_eq!(
+        "ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk",
+        icp_data.event.get_digest().to_str()
+    );
+
+    Ok(())
 }

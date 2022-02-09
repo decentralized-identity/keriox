@@ -14,13 +14,12 @@ pub struct InteractionEvent {
 }
 
 impl InteractionEvent {
-    pub fn new(previous_event_hash: SelfAddressingPrefix, data: Vec<Seal>)
-        -> Self {
-            InteractionEvent {
-                previous_event_hash,
-                data
-            }
+    pub fn new(previous_event_hash: SelfAddressingPrefix, data: Vec<Seal>) -> Self {
+        InteractionEvent {
+            previous_event_hash,
+            data,
         }
+    }
 }
 
 impl EventSemantics for InteractionEvent {

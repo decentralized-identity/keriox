@@ -2,24 +2,39 @@ use chrono::{DateTime, Local};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use std::cmp::Ordering;
 
-use crate::{error::Error, event::sections::seal::{EventSeal, SourceSeal}, event_parsing::Attachment, prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix}, state::{EventSemantics, IdentifierState}};
-use super::serializer::to_string;
-
 use super::EventMessage;
+use super::{serializer::to_string, KeyEvent};
+use crate::{
+    error::Error,
+    event::{
+        receipt::Receipt,
+        sections::seal::{EventSeal, SourceSeal},
+    },
+    event_parsing::Attachment,
+    prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix},
+    state::{EventSemantics, IdentifierState},
+};
 
-#[derive(Clone, Debug)]
+#[cfg(feature = "query")]
+use crate::query::{query::SignedQuery, reply::SignedReply};
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum Message {
     Event(SignedEventMessage),
     // Rct's have an alternative appended signature structure,
     // use SignedNontransferableReceipt and SignedTransferableReceipt
     NontransferableRct(SignedNontransferableReceipt),
     TransferableRct(SignedTransferableReceipt),
+    #[cfg(feature = "query")]
+    KeyStateNotice(SignedReply),
+    #[cfg(feature = "query")]
+    Query(SignedQuery),
 }
 
 // KERI serializer should be used to serialize this
 #[derive(Debug, Clone, Deserialize)]
 pub struct SignedEventMessage {
-    pub event_message: EventMessage,
+    pub event_message: EventMessage<KeyEvent>,
     #[serde(skip_serializing)]
     pub signatures: Vec<AttachedSignaturePrefix>,
     #[serde(skip_serializing)]
@@ -96,13 +111,13 @@ impl PartialEq for TimestampedSignedEventMessage {
 impl PartialOrd for TimestampedSignedEventMessage {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(
-            match self.signed_event_message.event_message.event.sn
-                == other.signed_event_message.event_message.event.sn
+            match self.signed_event_message.event_message.event.get_sn()
+                == other.signed_event_message.event_message.event.get_sn()
             {
                 true => Ordering::Equal,
                 false => {
-                    match self.signed_event_message.event_message.event.sn
-                        > other.signed_event_message.event_message.event.sn
+                    match self.signed_event_message.event_message.event.get_sn()
+                        > other.signed_event_message.event_message.event.get_sn()
                     {
                         true => Ordering::Greater,
                         false => Ordering::Less,
@@ -115,12 +130,12 @@ impl PartialOrd for TimestampedSignedEventMessage {
 
 impl Ord for TimestampedSignedEventMessage {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.signed_event_message.event_message.event.sn
-            == other.signed_event_message.event_message.event.sn
+        match self.signed_event_message.event_message.event.get_sn()
+            == other.signed_event_message.event_message.event.get_sn()
         {
             true => Ordering::Equal,
-            false => match self.signed_event_message.event_message.event.sn
-                > other.signed_event_message.event_message.event.sn
+            false => match self.signed_event_message.event_message.event.get_sn()
+                > other.signed_event_message.event_message.event.get_sn()
             {
                 true => Ordering::Greater,
                 false => Ordering::Less,
@@ -133,14 +148,14 @@ impl Eq for TimestampedSignedEventMessage {}
 
 impl SignedEventMessage {
     pub fn new(
-        message: &EventMessage,
+        message: &EventMessage<KeyEvent>,
         sigs: Vec<AttachedSignaturePrefix>,
         delegator_seal: Option<SourceSeal>,
     ) -> Self {
         Self {
             event_message: message.clone(),
             signatures: sigs,
-            delegator_seal
+            delegator_seal,
         }
     }
 
@@ -163,19 +178,19 @@ impl EventSemantics for SignedEventMessage {
 /// Mostly intended for use by Validators
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SignedTransferableReceipt {
-    pub body: EventMessage,
+    pub body: EventMessage<Receipt>,
     pub validator_seal: EventSeal,
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
 
 impl SignedTransferableReceipt {
     pub fn new(
-        message: &EventMessage,
+        message: EventMessage<Receipt>,
         event_seal: EventSeal,
         sigs: Vec<AttachedSignaturePrefix>,
     ) -> Self {
         Self {
-            body: message.clone(),
+            body: message,
             validator_seal: event_seal,
             signatures: sigs,
         }
@@ -190,12 +205,15 @@ impl SignedTransferableReceipt {
 /// signatures
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SignedNontransferableReceipt {
-    pub body: EventMessage,
+    pub body: EventMessage<Receipt>,
     pub couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
 }
 
 impl SignedNontransferableReceipt {
-    pub fn new(message: &EventMessage, couplets: Vec<(BasicPrefix, SelfSigningPrefix)>) -> Self {
+    pub fn new(
+        message: &EventMessage<Receipt>,
+        couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
+    ) -> Self {
         Self {
             body: message.clone(),
             couplets,
