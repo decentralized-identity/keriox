@@ -122,8 +122,8 @@ impl<K: KeyManager> Keri<K> {
         let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
         let icp = EventMsgBuilder::new(EventTypeTag::Icp)
             .with_prefix(&self.prefix)
-            .with_keys(vec![Basic::Ed25519.derive(km.public_key())])
-            .with_next_keys(vec![Basic::Ed25519.derive(km.next_public_key())])
+            .with_keys(vec![Basic::Ed25519.derive(km.public_key()?)])
+            .with_next_keys(vec![Basic::Ed25519.derive(km.next_public_key()?)])
             .with_witness_list(&initial_witness.unwrap_or_default())
             .build()?;
 
@@ -163,11 +163,11 @@ impl<K: KeyManager> Keri<K> {
             .collect();
         // Signing key must be first
         let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
-        keys.insert(0, Basic::Ed25519.derive(km.public_key()));
+        keys.insert(0, Basic::Ed25519.derive(km.public_key()?));
         let icp = EventMsgBuilder::new(EventTypeTag::Icp)
             .with_prefix(&self.prefix)
             .with_keys(keys)
-            .with_next_keys(vec![Basic::Ed25519.derive(km.next_public_key())])
+            .with_next_keys(vec![Basic::Ed25519.derive(km.next_public_key()?)])
             .build()?;
 
         let signed = icp.sign(
@@ -262,8 +262,8 @@ impl<K: KeyManager> Keri<K> {
                 .with_prefix(&self.prefix)
                 .with_sn(state.sn + 1)
                 .with_previous_event(&state.last_event_digest)
-                .with_keys(vec![Basic::Ed25519.derive(kv.public_key())])
-                .with_next_keys(vec![Basic::Ed25519.derive(kv.next_public_key())])
+                .with_keys(vec![Basic::Ed25519.derive(kv.public_key()?)])
+                .with_next_keys(vec![Basic::Ed25519.derive(kv.next_public_key()?)])
                 .build(),
             Err(_) => Err(Error::MutexPoisoned),
         }
@@ -487,7 +487,7 @@ impl<K: KeyManager> Keri<K> {
         match self.key_manager.lock() {
             Ok(km) => {
                 signature = km.sign(&message.serialize()?)?;
-                bp = BasicPrefix::new(Basic::Ed25519, km.public_key());
+                bp = BasicPrefix::new(Basic::Ed25519, km.public_key()?);
             }
             Err(_) => return Err(Error::MutexPoisoned),
         }
@@ -505,6 +505,7 @@ impl<K: KeyManager> Keri<K> {
         Ok(ntr)
     }
 }
+
 // Non re-allocating random `String` generator with output length of 10 char string
 #[cfg(feature = "wallet")]
 fn generate_random_string() -> String {

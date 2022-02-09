@@ -9,8 +9,8 @@ pub mod wallet;
 
 pub trait KeyManager {
     fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error>;
-    fn public_key(&self) -> PublicKey;
-    fn next_public_key(&self) -> PublicKey;
+    fn public_key(&self) -> Result<PublicKey, Error>;
+    fn next_public_key(&self) -> Result<PublicKey, Error>;
     fn rotate(&mut self) -> Result<(), Error>;
 }
 
@@ -25,12 +25,12 @@ impl KeyManager for CryptoBox {
         self.signer.sign(msg)
     }
 
-    fn public_key(&self) -> PublicKey {
-        self.signer.pub_key.clone()
+    fn public_key(&self) -> Result<PublicKey, Error> {
+        Ok(self.signer.pub_key.clone())
     }
 
-    fn next_public_key(&self) -> PublicKey {
-        self.next_pub_key.clone()
+    fn next_public_key(&self) -> Result<PublicKey, Error> {
+        Ok(self.next_pub_key.clone())
     }
 
     fn rotate(&mut self) -> Result<(), Error> {
