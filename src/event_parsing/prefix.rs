@@ -239,7 +239,7 @@ fn test_self_signing() {
 
     assert_eq!(
         self_signing_prefix(string_to_parse.as_bytes()),
-        Ok(("more".as_bytes(), sig_prefix.clone()))
+        Ok(("more".as_bytes(), sig_prefix))
     );
 }
 

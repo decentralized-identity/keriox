@@ -20,11 +20,11 @@ use crate::query::{query::SignedQuery, reply::SignedReply};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Message {
-    Event(SignedEventMessage),
+    Event(Box<SignedEventMessage>),
     // Rct's have an alternative appended signature structure,
     // use SignedNontransferableReceipt and SignedTransferableReceipt
     NontransferableRct(SignedNontransferableReceipt),
-    TransferableRct(SignedTransferableReceipt),
+    TransferableRct(Box<SignedTransferableReceipt>),
     #[cfg(feature = "query")]
     KeyStateNotice(SignedReply),
     #[cfg(feature = "query")]

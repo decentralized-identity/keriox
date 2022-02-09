@@ -136,7 +136,8 @@ impl<K: KeyManager> Keri<K> {
             None,
         );
 
-        self.processor.process(Message::Event(signed.clone()))?;
+        self.processor
+            .process(Message::Event(Box::new(signed.clone())))?;
 
         self.prefix = icp.event.get_prefix();
 
@@ -178,7 +179,8 @@ impl<K: KeyManager> Keri<K> {
             )],
             None,
         );
-        self.processor.process(Message::Event(signed.clone()))?;
+        self.processor
+            .process(Message::Event(Box::new(signed.clone())))?;
         self.prefix = icp.event.get_prefix();
 
         Ok(signed)
@@ -247,7 +249,8 @@ impl<K: KeyManager> Keri<K> {
             None,
         );
 
-        self.processor.process(Message::Event(rot.clone()))?;
+        self.processor
+            .process(Message::Event(Box::new(rot.clone())))?;
 
         Ok(rot)
     }
@@ -302,7 +305,8 @@ impl<K: KeyManager> Keri<K> {
             None,
         );
 
-        self.processor.process(Message::Event(ixn.clone()))?;
+        self.processor
+            .process(Message::Event(Box::new(ixn.clone())))?;
 
         Ok(ixn)
     }
@@ -397,7 +401,7 @@ impl<K: KeyManager> Keri<K> {
         let signed_rcp = SignedTransferableReceipt::new(rcp, validator_event_seal, signatures);
 
         self.processor
-            .process(Message::TransferableRct(signed_rcp.clone()))?;
+            .process(Message::TransferableRct(Box::new(signed_rcp.clone())))?;
 
         Ok(signed_rcp)
     }

@@ -218,13 +218,13 @@ mod tests {
 
         let key_prefix = Basic::Ed25519NT.derive(pub_key);
 
-        let sig = priv_key.sign_ed(&data_string.as_bytes())?;
+        let sig = priv_key.sign_ed(data_string.as_bytes())?;
         let sig_prefix = SelfSigningPrefix {
             derivation: SelfSigning::Ed25519Sha512,
             signature: sig,
         };
 
-        let check = key_prefix.verify(&data_string.as_bytes(), &sig_prefix);
+        let check = key_prefix.verify(data_string.as_bytes(), &sig_prefix);
         assert!(check.is_ok());
         assert!(check.unwrap());
 

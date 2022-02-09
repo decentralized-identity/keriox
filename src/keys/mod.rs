@@ -107,7 +107,7 @@ fn libsodium_to_ed25519_dalek_compat() {
     assert!(sodium_pk.is_some());
     let sodium_pk = sodium_pk.unwrap();
     let mut sodium_sk_concat = kp.secret.to_bytes().to_vec();
-    sodium_sk_concat.append(&mut kp.public.to_bytes().to_vec().clone());
+    sodium_sk_concat.append(&mut kp.public.to_bytes().to_vec());
     let sodium_sk = sign::ed25519::SecretKey::from_slice(&sodium_sk_concat);
     assert!(sodium_sk.is_some());
     let sodium_sk = sodium_sk.unwrap();
@@ -115,7 +115,7 @@ fn libsodium_to_ed25519_dalek_compat() {
     let sodium_sig = sign::sign(msg, &sodium_sk);
 
     assert!(sign::verify_detached(
-        &sign::ed25519::Signature::new(dalek_sig.to_bytes()),
+        &sign::ed25519::Signature::from(dalek_sig.to_bytes()),
         msg,
         &sodium_pk
     ));
@@ -123,7 +123,7 @@ fn libsodium_to_ed25519_dalek_compat() {
     assert!(kp
         .verify(
             msg,
-            &Signature::new(arrayref::array_ref!(sodium_sig, 0, 64).to_owned())
+            &Signature::from(arrayref::array_ref!(sodium_sig, 0, 64).to_owned())
         )
         .is_ok());
 }

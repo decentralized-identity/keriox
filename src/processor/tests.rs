@@ -28,7 +28,7 @@ fn test_process() -> Result<(), Error> {
 
     let id = match &deserialized_icp {
         Message::Event(e) => e.event_message.event.get_prefix(),
-        _ => Err(Error::SemanticError("bad deser".into()))?,
+        _ => return Err(Error::SemanticError("bad deser".into())),
     };
 
     // Process icp event.
@@ -74,7 +74,7 @@ fn test_process() -> Result<(), Error> {
             ixn_from_db.signed_event_message.event_message.event,
             evt.event_message.event
         ),
-        _ => assert!(false),
+        _ => panic!(),
     }
 
     // Construct partially signed interaction event.
@@ -88,7 +88,7 @@ fn test_process() -> Result<(), Error> {
             e.signatures = vec![sigs];
             Message::Event(e)
         }
-        _ => Err(Error::SemanticError("bad deser".into()))?,
+        _ => return Err(Error::SemanticError("bad deser".into())),
     };
 
     // Process partially signed interaction event.
@@ -233,7 +233,7 @@ fn test_process_delegated() -> Result<(), Error> {
 
     assert_eq!(
         dip_from_db.signed_event_message.event_message.serialize()?,
-        raw_parsed(deserialized_dip.clone())?
+        raw_parsed(deserialized_dip)?
     );
 
     // Bobs interaction event with delegated event seal.
@@ -292,7 +292,7 @@ fn test_validate_seal() -> Result<(), Error> {
     let delegator_icp_raw= br#"{"v":"KERI10JSON000120_","t":"icp","d":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"0","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","bt":"0","b":[],"c":[],"a":[]}-AABAAJEloPu7b4z8v1455StEJ1b7dMIz-P0tKJ_GBBCxQA8JEg0gm8qbS4TWGiHikLoZ2GtLA58l9dzIa2x_otJhoDA"#;
     let parsed = signed_message(delegator_icp_raw).unwrap().1;
     let deserialized_icp = Message::try_from(parsed).unwrap();
-    event_processor.process(deserialized_icp.clone())?.unwrap();
+    event_processor.process(deserialized_icp)?.unwrap();
     let delegator_id = "Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8".parse()?;
 
     // Delegated inception event.
@@ -318,7 +318,7 @@ fn test_validate_seal() -> Result<(), Error> {
         let delegating_event_raw = br#"{"v":"KERI10JSON00013a_","t":"ixn","d":"E1_-icBrwC_HhxyFwsQLV6hZEbApOc_McGUjhLONpQuc","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"1","p":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","a":[{"i":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI","s":"0","d":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI"}]}-AABAA6h5mD5stIwO_rwV9apMuhHXjxrKp2ATa35u-H6DM2X-BKo5NkJ1khzBdHo-VLQ6Zw_yajj2Ul_WOL8pFSk_ZDg"#;
         let parsed = signed_message(delegating_event_raw).unwrap().1;
         let deserialized_ixn = Message::try_from(parsed).unwrap();
-        event_processor.process(deserialized_ixn.clone())?;
+        event_processor.process(deserialized_ixn)?;
 
         // Validate seal again.
         assert!(event_processor
@@ -348,7 +348,7 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
         .into_iter()
         .for_each(|event| {
             event_processor
-                .process(Message::try_from(event.clone()).unwrap())
+                .process(Message::try_from(event).unwrap())
                 .unwrap();
         });
 

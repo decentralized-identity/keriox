@@ -1,5 +1,13 @@
 use super::event_msg_builder::EventMsgBuilder;
-use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning}, error::Error, event::sections::{key_config::nxt_commitment, threshold::SignatureThreshold}, keys::{PrivateKey, PublicKey}, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix }, state::IdentifierState, event_message::EventTypeTag};
+use crate::{
+    derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
+    error::Error,
+    event::sections::{key_config::nxt_commitment, threshold::SignatureThreshold},
+    event_message::EventTypeTag,
+    keys::{PrivateKey, PublicKey},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
+    state::IdentifierState,
+};
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
 
@@ -85,7 +93,7 @@ fn test_update_identifier_state(
     };
 
     // Attach sign to event message.
-    let signed_event = event_msg.sign( vec![attached_sig.clone()], None);
+    let signed_event = event_msg.sign(vec![attached_sig.clone()], None);
 
     // Apply event to current IdentifierState.
     let new_state = state_data.state.apply(&signed_event)?;
@@ -105,7 +113,7 @@ fn test_update_identifier_state(
     };
 
     // Check if state is updated correctly.
-    assert_eq!(new_state.prefix, prefix.clone());
+    assert_eq!(new_state.prefix, prefix);
     assert_eq!(new_state.sn, state_data.sn);
     assert_eq!(new_state.last_event_digest, event_msg.get_digest());
     assert_eq!(new_state.current.public_keys.len(), 1);
@@ -128,7 +136,7 @@ fn test_update_identifier_state(
 
     Ok(TestStateData {
         state: new_state,
-        prefix: prefix,
+        prefix,
         keys_history: new_history,
         prev_event_hash,
         sn: next_sn,

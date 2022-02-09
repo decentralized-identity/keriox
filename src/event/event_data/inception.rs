@@ -132,7 +132,7 @@ fn test_inception_data_derivation() -> Result<(), Error> {
         Some(next_key_hash),
         Some(SignatureThreshold::Simple(2)),
     );
-    let icp_data = InceptionEvent::new(key_config.clone(), None, None)
+    let icp_data = InceptionEvent::new(key_config, None, None)
         .incept_self_addressing(SelfAddressing::Blake3_256, SerializationFormats::JSON)?;
 
     assert_eq!(
