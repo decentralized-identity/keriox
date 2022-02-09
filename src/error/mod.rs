@@ -109,6 +109,6 @@ pub enum Error {
     #[error(transparent)]
     QueryError(#[from] crate::query::QueryError),
 
-    #[error("cannot retrieve public key: {0}")]
+    #[error("Public Key Error: {0}")]
     PublicKeyError(String),
 }
