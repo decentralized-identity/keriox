@@ -11,17 +11,20 @@ pub struct PublicKey {
 
 impl PublicKey {
     pub fn new(key: Vec<u8>) -> Self {
-        PublicKey {
-            public_key: key.to_vec(),
-        }
+        PublicKey { public_key: key }
     }
 
     pub fn key(&self) -> Vec<u8> {
         self.public_key.clone()
     }
 
+    /// Return true if the public key is empty.
+    pub fn is_empty(&self) -> bool {
+        self.public_key.is_empty()
+    }
+
     pub fn verify_ed(&self, msg: &[u8], sig: &[u8]) -> bool {
-        if let Ok(key) = ed25519_dalek::PublicKey::from_bytes(&self.key()) {
+        if let Ok(key) = ed25519_dalek::PublicKey::from_bytes(&self.public_key) {
             use arrayref::array_ref;
             if sig.len() != 64 {
                 return false;
@@ -37,7 +40,7 @@ impl PublicKey {
     }
 
     pub fn verify_ecdsa(&self, msg: &[u8], sig: &[u8]) -> bool {
-        match VerifyingKey::from_sec1_bytes(&self.key()) {
+        match VerifyingKey::from_sec1_bytes(&self.public_key) {
             Ok(k) => {
                 use k256::ecdsa::Signature;
                 use std::convert::TryFrom;
