@@ -22,40 +22,47 @@ pub fn incept_keys(wallet: &mut UnlockedWallet) -> Result<(), Error> {
     Ok(())
 }
 
+/// Returns a public key for a wallet depending on the value of `which`
+fn get_public_key(wallet: &UnlockedWallet, which: &str) -> Result<PublicKey, Error> {
+    if let Some(key) = wallet.get_key(which) {
+        match key.content {
+            Content::KeyPair(keys) => {
+                let pb_key = keys.public_key.public_key;
+                if pb_key.is_empty() {
+                    return Err(Error::PublicKeyError("empty public key".into()));
+                }
+                Ok(PublicKey::new(pb_key))
+            }
+            Content::Entropy(_) => {
+                return Err(Error::PublicKeyError("wrong content type".into()));
+            }
+            Content::PublicKey(pk) => {
+                if pk.public_key.is_empty() {
+                    return Err(Error::PublicKeyError("empty public key".into()));
+                }
+                Ok(PublicKey::new(pk.public_key))
+            }
+        }
+    }
+    return Err(Error::PublicKeyError("content not found".into()));
+}
+
 impl KeyManager for UnlockedWallet {
     fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
         // FIXME: figure out how to fetch signing key with limited trait
-        Ok(UnlockedWallet::sign_raw(&self, CURRENT, msg)?)
+        Ok(UnlockedWallet::sign_raw(self, CURRENT, msg)?)
     }
 
-    // TODO: do we really need this trait not to fail or option out?
-    // Now to handle wrong key content we should check for empty vec...
-    fn public_key(&self) -> PublicKey {
-        match self.get_key(CURRENT) {
-            Some(key) => match key.content {
-                Content::KeyPair(keys) => PublicKey::new(keys.public_key.public_key),
-                Content::Entropy(_) => PublicKey::new(vec![]),
-                Content::PublicKey(pk) => PublicKey::new(pk.public_key),
-            },
-            None => PublicKey::new(vec![]),
-        }
+    fn public_key(&self) -> Result<PublicKey, Error> {
+        get_public_key(self, CURRENT)
     }
 
-    // TODO: do we really need this trait not to fail or option out?
-    // Now to handle wrong key content we should check for empty vec...
-    fn next_public_key(&self) -> crate::keys::PublicKey {
-        match self.get_key(NEXT) {
-            Some(key) => match key.content {
-                Content::KeyPair(keys) => PublicKey::new(keys.public_key.public_key),
-                Content::Entropy(_) => PublicKey::new(vec![]),
-                Content::PublicKey(pk) => PublicKey::new(pk.public_key),
-            },
-            None => PublicKey::new(vec![]),
-        }
+    fn next_public_key(&self) -> Result<PublicKey, Error> {
+        get_public_key(self, NEXT)
     }
 
     fn rotate(&mut self) -> Result<(), Error> {
-        if self.next_public_key().key().is_empty() {
+        if self.next_public_key()?.is_empty() {
             return Err(Error::WalletError(universal_wallet::Error::KeyNotFound));
         }
         if let Some(new_current_set) = self.get_content_by_controller(NEXT) {
