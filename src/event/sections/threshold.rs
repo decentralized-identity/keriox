@@ -228,7 +228,7 @@ fn test_enough_sigs() -> Result<(), Error> {
         .collect();
 
     // All signatures.
-    assert!(wt.enough_signatures(&dump_signatures.clone())?);
+    assert!(wt.enough_signatures(&dump_signatures)?);
 
     // Enough signatures.
     let enough = vec![
@@ -236,10 +236,10 @@ fn test_enough_sigs() -> Result<(), Error> {
         dump_signatures[1].clone(),
         dump_signatures[3].clone(),
     ];
-    assert!(wt.enough_signatures(&enough.clone())?);
+    assert!(wt.enough_signatures(&enough)?);
 
     let not_enough = vec![dump_signatures[0].clone()];
-    assert!(!wt.enough_signatures(&not_enough.clone())?);
+    assert!(!wt.enough_signatures(&not_enough)?);
 
     Ok(())
 }

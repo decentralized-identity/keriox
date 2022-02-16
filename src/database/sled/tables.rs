@@ -80,7 +80,8 @@ where
         T: ToOwned + Clone,
     {
         if let Ok(Some(mut set)) = self.get(key) {
-            set.append(&mut value.to_owned());
+            let mut value = value;
+            set.append(&mut value);
             Ok(())
         } else {
             self.put(key, value)

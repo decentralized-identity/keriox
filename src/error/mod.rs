@@ -108,4 +108,7 @@ pub enum Error {
     #[cfg(feature = "query")]
     #[error(transparent)]
     QueryError(#[from] crate::query::QueryError),
+
+    #[error("Public Key Error: {0}")]
+    PublicKeyError(String),
 }

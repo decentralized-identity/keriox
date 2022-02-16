@@ -135,7 +135,7 @@ pub struct SignedEventData {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum EventType {
-    KeyEvent(EventMessage<KeyEvent>),
+    KeyEvent(Box<EventMessage<KeyEvent>>),
     Receipt(EventMessage<Receipt>),
     #[cfg(feature = "query")]
     Qry(EventMessage<QueryEvent>),
@@ -180,7 +180,7 @@ impl From<&SignedEventMessage> for SignedEventData {
         };
 
         SignedEventData {
-            deserialized_event: EventType::KeyEvent(ev.event_message.clone()),
+            deserialized_event: EventType::KeyEvent(Box::new(ev.event_message.clone())),
             attachments,
         }
     }
@@ -233,7 +233,7 @@ impl TryFrom<SignedEventData> for Message {
 
     fn try_from(value: SignedEventData) -> Result<Self, Self::Error> {
         match value.deserialized_event {
-            EventType::KeyEvent(ev) => signed_key_event(ev, value.attachments),
+            EventType::KeyEvent(ev) => signed_key_event(*ev, value.attachments),
             EventType::Receipt(rct) => signed_receipt(rct, value.attachments),
             #[cfg(feature = "query")]
             EventType::Qry(qry) => signed_query(qry, value.attachments),
@@ -339,11 +339,11 @@ fn signed_key_event(
                 _ => Err(Error::SemanticError("Too many seals".into())),
             };
 
-            Ok(Message::Event(SignedEventMessage::new(
+            Ok(Message::Event(Box::new(SignedEventMessage::new(
                 &event_message,
                 sigs,
                 delegator_seal?,
-            )))
+            ))))
         }
         _ => {
             let sigs = attachments
@@ -351,11 +351,11 @@ fn signed_key_event(
                 .cloned()
                 .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
             if let Attachment::AttachedSignatures(sigs) = sigs {
-                Ok(Message::Event(SignedEventMessage::new(
+                Ok(Message::Event(Box::new(SignedEventMessage::new(
                     &event_message,
                     sigs.to_vec(),
                     None,
-                )))
+                ))))
             } else {
                 // Improper attachment type
                 Err(Error::SemanticError("Improper attachment type".into()))
@@ -386,10 +386,8 @@ fn signed_receipt(
                 .last()
                 .ok_or_else(|| Error::SemanticError("More than one seal".into()))?
                 .to_owned();
-            Ok(Message::TransferableRct(SignedTransferableReceipt::new(
-                event_message,
-                seal,
-                sigs,
+            Ok(Message::TransferableRct(Box::new(
+                SignedTransferableReceipt::new(event_message, seal, sigs),
             )))
         }
         Attachment::Frame(atts) => signed_receipt(event_message, atts),
@@ -422,7 +420,7 @@ fn test_stream1() {
             let stringified = String::from_utf8(serialized_again.unwrap()).unwrap();
             assert_eq!(stream, stringified.as_bytes())
         }
-        _ => assert!(false),
+        _ => panic!(),
     }
 }
 
@@ -449,7 +447,7 @@ fn test_stream2() {
             let stringified = String::from_utf8(serialized_again.unwrap()).unwrap();
             assert_eq!(stream, stringified.as_bytes())
         }
-        _ => assert!(false),
+        _ => panic!(),
     }
 }
 

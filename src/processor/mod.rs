@@ -253,7 +253,7 @@ impl EventProcessor {
         match data {
             Message::Event(e) => self.process_event(&e),
             Message::NontransferableRct(rct) => self.process_witness_receipt(rct),
-            Message::TransferableRct(rct) => self.process_validator_receipt(rct),
+            Message::TransferableRct(rct) => self.process_validator_receipt(*rct),
             #[cfg(feature = "query")]
             Message::KeyStateNotice(ksn_rpy) => self.process_signed_reply(&ksn_rpy),
             #[cfg(feature = "query")]

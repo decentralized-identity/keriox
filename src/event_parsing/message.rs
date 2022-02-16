@@ -56,7 +56,7 @@ pub fn message<'a, D: Deserialize<'a> + Digestible>(
 }
 
 pub fn key_event_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
-    message::<KeyEvent>(s).map(|d| (d.0, EventType::KeyEvent(d.1)))
+    message::<KeyEvent>(s).map(|d| (d.0, EventType::KeyEvent(Box::new(d.1))))
 }
 
 pub fn receipt_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {

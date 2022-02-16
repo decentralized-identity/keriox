@@ -84,7 +84,7 @@ fn test_delegated_inception_data_derivation() -> Result<(), Error> {
         Some(SignatureThreshold::Simple(1)),
     );
     let dip_data = DelegatedInceptionEvent {
-        inception_data: InceptionEvent::new(key_config.clone(), None, None),
+        inception_data: InceptionEvent::new(key_config, None, None),
         delegator: "Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8".parse()?,
     }
     .incept_self_addressing(SelfAddressing::Blake3_256, SerializationFormats::JSON)?;

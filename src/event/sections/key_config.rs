@@ -221,19 +221,19 @@ fn test_threshold() -> Result<(), Error> {
     let msg_to_sign = "message to signed".as_bytes();
 
     let mut signatures = vec![];
-    for i in 0..priv_keys.len() {
-        let sig = priv_keys[i].sign_ed(msg_to_sign)?;
+    for (index, key) in priv_keys.iter().enumerate() {
+        let sig = key.sign_ed(msg_to_sign)?;
         signatures.push(AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
             sig,
-            i as u16,
+            index as u16,
         ));
     }
 
     // All signatures.
     let st = key_config.verify(
         msg_to_sign,
-        &vec![
+        &[
             signatures[0].clone(),
             signatures[1].clone(),
             signatures[2].clone(),
@@ -242,23 +242,17 @@ fn test_threshold() -> Result<(), Error> {
     assert!(matches!(st, Ok(true)));
 
     // Not enough signatures.
-    let st = key_config.verify(
-        msg_to_sign,
-        &vec![signatures[0].clone(), signatures[2].clone()],
-    );
+    let st = key_config.verify(msg_to_sign, &[signatures[0].clone(), signatures[2].clone()]);
     assert!(matches!(st, Err(Error::NotEnoughSigsError)));
 
     // Enough signatures.
-    let st = key_config.verify(
-        msg_to_sign,
-        &vec![signatures[1].clone(), signatures[2].clone()],
-    );
+    let st = key_config.verify(msg_to_sign, &[signatures[1].clone(), signatures[2].clone()]);
     assert!(matches!(st, Ok(true)));
 
     // The same signatures.
     let st = key_config.verify(
         msg_to_sign,
-        &vec![
+        &[
             signatures[0].clone(),
             signatures[0].clone(),
             signatures[0].clone(),
@@ -281,30 +275,23 @@ fn test_verify() -> Result<(), Error> {
     let ev = br#"{"v":"KERI10JSON00018e_","t":"icp","d":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","i":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","s":"0","kt":["1/2","1/2","1/2"],"k":["DK4OJI8JOr6oEEUMeSF_X-SbKysfwpKwW-ho5KARvH5c","D1RZLgYke0GmfZm-CH8AsW4HoTU4m-2mFgu8kbwp8jQU","DBVwzum-jPfuUXUcHEWdplB4YcoL3BWGXK0TMoF_NeFU"],"n":"EhJGhyJQTpSlZ9oWfQT-lHNl1woMazLC42O89fRHocTI","bt":"0","b":[],"c":[],"a":[]}-AADAAo74mzRNAT5WEVRYaUWs4apfEY9oblVL2MtNSORwsEVFNoyH8Vh_w_WC9TGfH-_zqN8dISIy102JtmBwllvHnBAABYQAmtsf2yhqi0zvF--TVWp7kfzVRy3BQkTdYmJrfOZFnvp0kbXlG-PCXPO7OXbKM0ZLJ1Ga_qVJ_y-ERIMacCwACInxprKSzFp2-LNPn7eVAAc8z0XO0KbUE26vv_PXt5IMwyx6S5A1nCC4DQrv6bYHmmXP0YQpkOIm-tRHrPCOuDg'"#;
     let parsed = signed_message(ev).unwrap().1;
     let signed_msg = Message::try_from(parsed).unwrap();
-    match signed_msg {
-        Message::Event(ref e) => {
-            if let EventData::Icp(icp) = e.to_owned().event_message.event.get_event_data() {
-                let kc = icp.key_config;
-                let msg = e.event_message.serialize()?;
-                assert!(kc.verify(&msg, &e.signatures)?);
-            }
+    if let Message::Event(ref e) = signed_msg {
+        if let EventData::Icp(icp) = e.to_owned().event_message.event.get_event_data() {
+            let kc = icp.key_config;
+            let msg = e.event_message.serialize()?;
+            assert!(kc.verify(&msg, &e.signatures)?);
         }
-        _ => (),
     };
 
     let ev = br#"{"v":"KERI10JSON000231_","t":"rot","d":"EDK-dx1__PH_ZJXeZBfxVnodjUsaczSocKCNluEV6Cec","i":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","s":"4","p":"Ebhb0Fnink_-r0JfJQIVr15G0Ew8upPjo94-cT3SzdlU","kt":[["1/2","1/2","1/2"],["1/1","1/1"]],"k":["DToUWoemnetqJoLFIqDI7lxIJEfF0W7xG5ZlqAseVUQc","Drz-IZjko61q-sPMDIW6n-0NGFubbXiZhzWZrO_BZ0Wc","DiGwL3hjQqiUgQlFPeA6kRR1EBXX0vSLm9b6QhPS8IkQ","Dxj5pcStgZ6CbQ2YktNaj8KLE_g9YAOZF6AL9fyLcWQw","DE5zr5eH8EUVQXyAaxWfQUWkGCId-QDCvvxMT77ibj2Q"],"n":"E3in3Z14va0kk4Wqd3vcCAojKNtQq7ZTrQaavR8x0yu4","bt":"0","br":[],"ba":[],"a":[]}-AAFAAt2EjEPyJOMqtUdrp2EaRenlwriXviQ0hJ4Wx0agCok1sU3QMFS5hRdwX_NEFca9OnKGVjOag6K_F4yOs1BiuDQABN30bxBTVoemwfv6bPMqi9aIBKAuqm5IjcXFpS6vdnSdcQiz5VWb5DzpjhBztZyTiBbmxihl4tGyJ8xMTlIcmAwACq5YQaTJ45Smm2UwhyX5YLVkvxeJxt9oewmGAhOxyp-_tu0KAe2mehFHa6s9BlcqE-401mQh5EcniFbdHx3eAAQADR8Mtsn-7UKC-LjWq45-tKJfV8QVTaAXGiQsXye6DC7cf5iKQeUw7NXIcuxb-CXLL3AIMg3ZfhYy44-wW6pq6BgAEPtQg63EnWDfhwQjqgIlAHGupkeE_2hZhEp2Lcx0m5x4w0S6XqR9_Lx86RMnrzc3G9W3CJ_V5iEJhNQAqdTFqCw"#;
     let parsed = signed_message(ev).unwrap().1;
     let signed_msg = Message::try_from(parsed).unwrap();
-    match signed_msg {
-        Message::Event(ref e) => {
-            if let EventData::Icp(icp) = e.to_owned().event_message.event.get_event_data() {
-                let kc = icp.key_config;
-                let msg = e.event_message.serialize()?;
-                assert!(kc.verify(&msg, &e.signatures)?);
-            }
+    if let Message::Event(ref e) = signed_msg {
+        if let EventData::Icp(icp) = e.to_owned().event_message.event.get_event_data() {
+            let kc = icp.key_config;
+            let msg = e.event_message.serialize()?;
+            assert!(kc.verify(&msg, &e.signatures)?);
         }
-        _ => (),
-    };
-
+    }
     Ok(())
 }
