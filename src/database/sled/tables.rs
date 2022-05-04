@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use crate::error::Error;
 use arrayref::array_ref;
 use serde::{de::DeserializeOwned, Serialize};
@@ -6,13 +5,13 @@ use std::marker::PhantomData;
 
 /// Imitates collection table per key
 ///
-pub(crate) struct SledEventTreeVec<T> {
+pub struct SledEventTreeVec<T> {
     tree: sled::Tree,
     marker: PhantomData<T>,
 }
 
 impl<T> SledEventTreeVec<T> {
-    /// table constructor
+    /// Creates new table.
     ///
     pub fn new(tree: sled::Tree) -> Self {
         Self {
@@ -59,14 +58,15 @@ where
         }
     }
 
-    /// Removes value `T` if present
+    /// Removes value `value` if present.
     ///
     pub fn remove(&self, key: u64, value: &T) -> Result<(), Error>
     where
         T: PartialEq,
     {
-        if let Ok(Some(set)) = self.get(key) {
-            self.put(key, set.into_iter().filter(|e| e != value).collect())
+        if let Ok(Some(mut set)) = self.get(key) {
+            set.retain(|e| e != value);
+            self.put(key, set)
         } else {
             Ok(())
         }
@@ -120,15 +120,14 @@ where
             self.tree
                 .into_iter()
                 .flatten()
-                .map(|(_key, values)| serde_cbor::from_slice::<Vec<T>>(&values).unwrap())
-                .flatten(),
+                .flat_map(|(_key, values)| serde_cbor::from_slice::<Vec<T>>(&values).unwrap()),
         )
     }
 }
 
 /// Direct singular key-value of T table
 ///
-pub(crate) struct SledEventTree<T> {
+pub struct SledEventTree<T> {
     tree: sled::Tree,
     marker: PhantomData<T>,
 }
@@ -220,7 +219,7 @@ where
         }
     }
 
-    /// combination of `get_key_by_value()` and `get_next_key()`
+    /// Combine `get_key_by_value()` and `get_next_key()`
     /// also expensive...
     /// to be used when unsure if identifier is present in the db
     ///

@@ -1,4 +1,4 @@
-mod tables;
+pub mod tables;
 
 use crate::{
     error::Error,
@@ -21,7 +21,7 @@ use crate::query::reply::SignedReply;
 
 pub struct SledEventDatabase {
     // "iids" tree
-    // this thing is expensive, but everything else is cheeeeeep
+    // this thing is expensive, but everything else is cheap
     identifiers: SledEventTree<IdentifierPrefix>,
     // "kels" tree
     key_event_logs: SledEventTreeVec<TimestampedSignedEventMessage>,
