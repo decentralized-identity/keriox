@@ -97,8 +97,7 @@ pub fn basic_prefix(s: &[u8]) -> nom::IResult<&[u8], BasicPrefix> {
 
     let (extra, b) = take(code.derivative_b64_len())(rest)?;
     let pk = PublicKey::new(
-        base64::decode_config(b.to_vec(), URL_SAFE)
-            .map_err(|_| nom::Err::Error((s, ErrorKind::IsNot)))?,
+        base64::decode_config(b, URL_SAFE).map_err(|_| nom::Err::Error((s, ErrorKind::IsNot)))?,
     );
     Ok((extra, code.derive(pk)))
 }

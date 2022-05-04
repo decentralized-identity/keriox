@@ -196,8 +196,8 @@ impl MultiClauses {
             .fold(Ok((0, true)), |acc, clause| -> Result<_, Error> {
                 let (start, enough) = acc?;
                 let sigs: Vec<AttachedSignaturePrefix> = sigs
-                    .to_owned()
-                    .into_iter()
+                    .iter()
+                    .cloned()
                     .filter(|sig| sig.index >= start && sig.index < start + clause.0.len() as u16)
                     .collect();
                 Ok((
