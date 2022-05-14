@@ -1,5 +1,6 @@
 use super::KeyManager;
 use crate::{error::Error, keys::PublicKey};
+use std::sync::{Arc, Mutex};
 use universal_wallet::{contents::Content, prelude::*};
 
 pub const CURRENT: &str = "current";
@@ -46,34 +47,36 @@ fn get_public_key(wallet: &UnlockedWallet, which: &str) -> Result<PublicKey, Err
     }
 }
 
-impl KeyManager for UnlockedWallet {
+impl KeyManager for Arc<Mutex<UnlockedWallet>> {
     fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
         // FIXME: figure out how to fetch signing key with limited trait
-        Ok(UnlockedWallet::sign_raw(self, CURRENT, msg)?)
+        Ok(UnlockedWallet::sign_raw(&*self.lock()?, CURRENT, msg)?)
     }
 
     fn public_key(&self) -> Result<PublicKey, Error> {
-        get_public_key(self, CURRENT)
+        get_public_key(&*self.lock()?, CURRENT)
     }
 
     fn next_public_key(&self) -> Result<PublicKey, Error> {
-        get_public_key(self, NEXT)
+        get_public_key(&*self.lock()?, NEXT)
     }
 
     fn rotate(&mut self) -> Result<(), Error> {
         if self.next_public_key()?.is_empty() {
             return Err(Error::WalletError(universal_wallet::Error::KeyNotFound));
         }
-        if let Some(new_current_set) = self.get_content_by_controller(NEXT) {
+        let mut lock = self.lock()?;
+        if let Some(new_current_set) = lock.get_content_by_controller(NEXT) {
             let new_current_content = match new_current_set.clone() {
                 Content::KeyPair(kp) => kp.set_controller(vec![CURRENT.into()]),
                 _ => return Err(Error::WalletError(universal_wallet::Error::WrongKeyType)),
             };
             // set current to next
-            self.set_content(CURRENT, Content::KeyPair(new_current_content));
+            lock
+                .set_content(CURRENT, Content::KeyPair(new_current_content));
             // add new next
             let next = KeyPair::random_pair(KeyType::Ed25519VerificationKey2018)?;
-            self.set_content(
+            lock.set_content(
                 NEXT,
                 Content::KeyPair(next.set_controller(vec![NEXT.into()])),
             );

@@ -112,3 +112,9 @@ pub enum Error {
     #[error("Public Key Error: {0}")]
     PublicKeyError(String),
 }
+
+impl<T> From<std::sync::PoisonError<T>> for Error {
+    fn from(_: std::sync::PoisonError<T>) -> Self {
+        Error::MutexPoisoned
+    }
+}
